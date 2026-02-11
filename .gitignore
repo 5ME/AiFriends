@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.idea/
+db.sqlite3
+media/
+staticfiles/
+static/
+.venv/
+node_modules/
+dist/
