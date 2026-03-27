@@ -3,13 +3,29 @@ import {useUserStore} from '@/stores/user';
 import UserLogoutIcon from "@/components/navbar/icons/UserLogoutIcon.vue";
 import UserSpaceIcon from "@/components/navbar/icons/UserSpaceIcon.vue";
 import UserProfileIcon from "@/components/navbar/icons/UserProfileIcon.vue";
+import api from '@/js/http/api';
+import {useRouter} from "vue-router";
 
 const user = useUserStore()
+const router = useRouter()
 
 function closeMenu() {
   const element = document.activeElement
   if (element && element instanceof HTMLElement)
     element.blur()
+}
+
+async function handleLogout() {
+  try {
+    const response = await api.post('api/user/account/logout/')
+    const data = response.data
+    if (data.message === 'success') {
+      user.logout()
+      await router.push({name: 'homepage-index'})
+    }
+  } catch (e) {
+    console.log(e)
+  }
 }
 </script>
 
@@ -29,7 +45,7 @@ function closeMenu() {
               <img :src="user.photo" alt="avatar"/>
             </div>
           </div>
-          <span class="text-base font-bold line-clamp-1">{{ user.username }}</span>
+          <span class="text-base font-bold line-clamp-1 break-all">{{ user.username }}</span>
         </RouterLink>
       </li>
       <li>
@@ -48,7 +64,7 @@ function closeMenu() {
       </li>
       <li></li>
       <li>
-        <a @click="closeMenu" class="text-base py-3" style="color: firebrick">
+        <a @click="handleLogout" class="text-base py-3" style="color: firebrick">
           <UserLogoutIcon/>
           退出登录
         </a>

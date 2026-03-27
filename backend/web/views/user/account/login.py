@@ -17,7 +17,7 @@ class LoginView(APIView):
                                 status=status.HTTP_400_BAD_REQUEST)
             user = authenticate(username=username, password=password)
             if user:
-                user_profile = UserProfile.objects.get(username=username)
+                user_profile = UserProfile.objects.get(user=user)
                 refresh = RefreshToken.for_user(user)
                 response = Response({
                     'message': 'success',
@@ -32,7 +32,7 @@ class LoginView(APIView):
                 return response
             else:
                 return Response({'message': '用户名或密码错误'},
-                                status=status.HTTP_400_BAD_REQUEST)
+                                status=status.HTTP_200_OK)
         except:
             return Response({'message': '系统异常'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
