@@ -36,7 +36,7 @@ async function handleLogout() {
         <img :src="user.photo" alt="avatar"/>
       </div>
     </div>
-    <ul tabindex="-1" class="dropdown-content menu bg-base-100 rounded-box z-1 w-52 p-2 shadow-lg">
+    <ul tabindex="-1" class="dropdown-content menu bg-base-100 rounded-box z-1 w-50 p-2 shadow-lg">
       <li>
         <RouterLink :to="{name: 'user-space-index', params: {user_id: user.id}}"
                     @click="closeMenu">
