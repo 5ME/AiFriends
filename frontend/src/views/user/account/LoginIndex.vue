@@ -3,6 +3,8 @@ import api from "@/js/http/api";
 import {useUserStore} from "@/stores/user";
 import {ref} from "vue";
 import {useRouter} from "vue-router";
+import UsernameIcon from "@/views/user/account/conponents/icons/UsernameIcon.vue";
+import PasswordIcon from "@/views/user/account/conponents/icons/PasswordIcon.vue";
 
 const username = ref('')
 const password = ref('')
@@ -46,10 +48,27 @@ async function handleLogin() {
   <div class="flex justify-center mt-50">
     <form @submit.prevent="handleLogin" class="fieldset bg-base-200 border-base-300 rounded-box w-xs border p-4">
       <label class="label">用户名</label>
-      <input v-model="username" type="text" class="input" placeholder="用户名"/>
+      <label class="input">
+        <UsernameIcon/>
+        <input v-model="username"
+               type="text"
+               placeholder="用户名"
+               minlength="3"
+               maxlength="30"
+        />
+      </label>
 
       <label class="label">密码</label>
-      <input v-model="password" type="password" class="input" placeholder="密码"/>
+      <label class="input">
+        <PasswordIcon/>
+        <input v-model="password"
+               type="password"
+               placeholder="密码"
+               minlength="3"
+               maxlength="16"
+        />
+      </label>
+
 
       <p v-if="errorMessage" class="text-sm text-red-600">{{ errorMessage }}</p>
 
