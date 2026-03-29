@@ -71,7 +71,7 @@ defineExpose({
       <div v-if="myBackgroundImage" class="w-15 h-25 rounded-box">
         <img :src="myBackgroundImage" alt="聊天背景">
       </div>
-      <div v-else class="w-15 h-25 rounded-box bg-base-300"></div>
+      <div v-else class="w-15 h-25 rounded-box bg-base-200"></div>
       <div class="w-15 h-25 rounded-box absolute left-0 top-0 bg-black/20
                   flex justify-center items-center cursor-pointer"
            @click="fileInputRef.click()">
