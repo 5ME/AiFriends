@@ -3,6 +3,7 @@ import {useRoute, useRouter} from "vue-router";
 import UserInfoField from "@/views/user/space/components/UserInfoField.vue";
 import {nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef} from "vue";
 import api from "@/js/http/api";
+import Character from "@/components/character/Character.vue";
 
 const route = useRoute()
 // 注意与下面这行区分，两者用处不一样
@@ -76,17 +77,26 @@ onMounted(async () => {
   observer.observe(sentinelRef.value)
 })
 
+function removeCharacter(characterId) {
+  characters.value = characters.value.filter(c => c.id !== characterId)
+}
+
 onBeforeUnmount(() => {
   observer?.disconnect()
 })
 </script>
 
 <template>
-  空间：{{ route.params.user_id }}
+<!--  空间：{{ route.params.user_id }}-->
   <div class="flex flex-col items-center mb-12">
     <UserInfoField :userProfile="userProfile"/>
     <div class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-9 mt-12 justify-items-center w-full px-9">
-      哈哈哈
+      <Character v-for="character in characters"
+                 :key="character.id"
+                 :character="character"
+                 :canEdit="true"
+                 @remove="removeCharacter"
+      />
     </div>
 
     <!--定义一个哨兵，用于判断是否需要加载数据-->
@@ -95,7 +105,7 @@ onBeforeUnmount(() => {
     <div v-if="isLoading" class="text-gray-500 mt-4">
       <span class="loading loading-spinner loading-md"></span>
     </div>
-    <div v-else-if="hasCharacters" class="text-gray-500 mt-4">
+    <div v-else-if="!hasCharacters" class="text-gray-500 mt-4">
       没有更多角色啦
     </div>
   </div>
