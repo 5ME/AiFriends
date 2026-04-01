@@ -6,8 +6,30 @@ import CreateIcon from "@/components/navbar/icons/CreateIcon.vue";
 import SearchIcon from "@/components/navbar/icons/SearchIcon.vue";
 import {useUserStore} from "@/stores/user.js";
 import UserMenu from "@/components/navbar/UserMenu.vue";
+import {ref, watch} from "vue";
+import {useRoute, useRouter} from "vue-router";
+
+const router = useRouter()
+const route = useRoute()
 
 const user = useUserStore()
+const searchText = ref('')
+
+watch(() => route.query.q, newQ => {
+  searchText.value = newQ || ''
+})
+
+function handleSearch() {
+  if (searchText.value.trim() === '') {
+    return
+  }
+  router.push({
+    name: 'homepage-index',
+    query: {
+      q: searchText.value.trim(),
+    }
+  })
+}
 </script>
 
 <template>
@@ -24,22 +46,21 @@ const user = useUserStore()
           <div class="px-2 font-bold text-2xl">AI Friends</div>
         </div>
         <div class="navbar-center w-4/5 max-w-180 flex justify-center">
-          <div class="join w-4/5 flex justify-center">
-            <input class="input join-item rounded-l-full w-4/5" placeholder="搜索你感兴趣的内容"/>
+          <form @submit.prevent="handleSearch" class="join w-4/5 flex justify-center">
+            <input v-model="searchText" class="input join-item rounded-l-full w-4/5" placeholder="搜索你感兴趣的内容"/>
             <button class="btn join-item rounded-r-full gap-0">
               <SearchIcon/>
               搜索
             </button>
-          </div>
+          </form>
         </div>
         <div class="navbar-end">
-          <RouterLink v-if="user.isLogin()" :to="{name: 'create-index'}"
-                      active-class="btn-active" class="btn btn-ghost text-base mr-6">
+          <RouterLink v-if="user.isLogin()" :to="{ name: 'create-index' }" active-class="btn-active"
+                      class="btn btn-ghost text-base mr-6">
             <CreateIcon/>
             创作
           </RouterLink>
-          <RouterLink v-if="user.hasPulledUserInfo && !user.isLogin()"
-                      :to="{name: 'user-account-login-index'}"
+          <RouterLink v-if="user.hasPulledUserInfo && !user.isLogin()" :to="{ name: 'user-account-login-index' }"
                       active-class="btn-active" class="btn text-base mr-3">
             登录
           </RouterLink>
@@ -57,7 +78,7 @@ const user = useUserStore()
         <ul class="menu w-full grow">
           <!-- List item -->
           <li>
-            <RouterLink :to="{name: 'homepage-index'}" active-class="menu-focus"
+            <RouterLink :to="{ name: 'homepage-index' }" active-class="menu-focus"
                         class="is-drawer-close:tooltip is-drawer-close:tooltip-right py-3" data-tip="首页">
               <!-- Home icon -->
               <HomepageIcon/>
@@ -66,7 +87,7 @@ const user = useUserStore()
           </li>
           <!-- List item -->
           <li>
-            <RouterLink :to="{name: 'friend-index'}" active-class="menu-focus"
+            <RouterLink :to="{ name: 'friend-index' }" active-class="menu-focus"
                         class="is-drawer-close:tooltip is-drawer-close:tooltip-right py-3" data-tip="好友">
               <!-- Friend icon -->
               <FriendIcon/>
@@ -75,7 +96,7 @@ const user = useUserStore()
           </li>
           <!-- List item -->
           <li>
-            <RouterLink :to="{name: 'create-index'}" active-class="menu-focus"
+            <RouterLink :to="{ name: 'create-index' }" active-class="menu-focus"
                         class="is-drawer-close:tooltip is-drawer-close:tooltip-right py-3" data-tip="创作">
               <!-- Create icon -->
               <CreateIcon/>
@@ -88,6 +109,4 @@ const user = useUserStore()
   </div>
 </template>
 
-<style scoped>
-
-</style>
+<style scoped></style>

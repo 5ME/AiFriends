@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import api from '@/js/http/api';
-import {nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef} from 'vue';
+import {nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch} from 'vue';
 import Character from '@/components/character/Character.vue';
 import {useRoute} from 'vue-router';
 
@@ -29,7 +29,7 @@ async function loadMore() {
     const response = await api.get('/api/homepage/index/', {
       params: {
         items_count: characters.value.length,
-        user_id: route.params.user_id
+        search_text: route.query.q || ''
       }
     })
     const data = response.data
@@ -69,6 +69,17 @@ onMounted(async () => {
       {root: null, rootMargin: '2px', threshold: 0}
   )
   observer.observe(sentinelRef.value)
+})
+
+function reset() {
+  characters.value = []
+  isLoading.value = false
+  hasCharacters.value = true
+  loadMore()
+}
+
+watch(() => route.query.q, newQ => {
+  reset()
 })
 
 onBeforeUnmount(() => {
