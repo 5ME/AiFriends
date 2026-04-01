@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import {ref} from "vue";
+import {ref, useTemplateRef} from "vue";
 import UpdateIcon from "@/components/character/icons/UpdateIcon.vue";
 import RemoveIcon from "@/components/character/icons/RemoveIcon.vue";
 import {useUserStore} from "@/stores/user";
 import Character from "@/components/character/Character.vue";
 import api from "@/js/http/api";
+import ChatField from "@/components/character/chat_field/ChatField.vue";
+import {useRouter} from "vue-router";
 
 const props = defineProps(['character', 'canEdit'])
 const emit = defineEmits(['remove'])
 const isHover = ref(false)
+const router = useRouter()
 const user = useUserStore()
 
 async function handleRemoveCharacter() {
@@ -23,6 +26,28 @@ async function handleRemoveCharacter() {
     console.log(e)
   }
 }
+
+const chatFieldRef = useTemplateRef('chat-field-ref')
+const friend = ref(null)
+
+async function openChatField() {
+  if (!user.isLogin()) {
+    await router.push({name: 'user-account-login-index'})
+  } else {
+    try {
+      const response = await api.post('/api/friend/get_or_create/', {
+        character_id: props.character.id
+      })
+      const data = response.data
+      if (data.message === 'success') {
+        friend.value = data.friend
+        chatFieldRef.value.showModal()
+      }
+    } catch (e) {
+      console.log(e)
+    }
+  }
+}
 </script>
 
 <template>
@@ -30,7 +55,8 @@ async function handleRemoveCharacter() {
     <div v-if="character" class="card card-border bg-base-100 h-100 w-60 shadow-sm cursor-pointer
                                 transition-transform duration-300"
          :class="{'scale-105': isHover, 'shadow-2xl': isHover}"
-         @mouseover="isHover=true" @mouseout="isHover=false">
+         @mouseover="isHover=true" @mouseout="isHover=false"
+         @click="openChatField">
       <figure>
         <img :src="character.background_image" alt="bg"/>
       </figure>
@@ -72,6 +98,9 @@ async function handleRemoveCharacter() {
         {{ character.author.username }}
       </div>
     </RouterLink>
+
+    <!--聊天框-->
+    <ChatField ref="chat-field-ref" :friend="friend"/>
   </div>
 </template>
 

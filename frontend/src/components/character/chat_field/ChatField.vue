@@ -1,0 +1,47 @@
+<script setup lang="ts">
+import {computed, useTemplateRef} from "vue";
+import InputField from "@/components/character/chat_field/input_field/InputField.vue";
+import CharacterPhotoField from "@/components/character/chat_field/character_photo_field/CharacterPhotoField.vue";
+
+const props = defineProps(['friend'])
+
+const modalRef = useTemplateRef('modal-ref')
+
+function showModal() {
+  modalRef.value.showModal()
+}
+
+const modalStyle = computed(() => {
+  if (props.friend) {
+    return {
+      backgroundImage: `url(${props.friend.character.background_image})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    }
+  } else {
+    return {}
+  }
+})
+
+defineExpose({showModal})
+</script>
+
+<template>
+  <dialog ref="modal-ref" class="modal">
+    <div class="modal-box w-90 h-150" :style="modalStyle">
+      <form method="dialog">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+      </form>
+      <!--角色头像-->
+      <CharacterPhotoField v-if="friend" :character="friend.character"/>
+      <!--输入框-->
+      <InputField/>
+      <p class="py-4">Press ESC key or click on ✕ button to close</p>
+    </div>
+  </dialog>
+</template>
+
+<style scoped>
+
+</style>
