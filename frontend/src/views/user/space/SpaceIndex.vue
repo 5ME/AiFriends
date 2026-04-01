@@ -37,7 +37,7 @@ async function loadMore() {
       }
     })
     const data = response.data
-    console.log(data)
+    // console.log(data)
     if (data.message === 'success') {
       userProfile.value = data.user_profile
       newCharacters = data.characters
@@ -87,7 +87,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-<!--  空间：{{ route.params.user_id }}-->
+  <!--  空间：{{ route.params.user_id }}  -->
   <div class="flex flex-col items-center mb-12">
     <UserInfoField :userProfile="userProfile"/>
     <div class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-9 mt-12 justify-items-center w-full px-9">
@@ -100,7 +100,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!--定义一个哨兵，用于判断是否需要加载数据-->
-    <div ref="sentinel-ref" class="h-2 mt-8 w-100 bg-red-500"></div>
+    <div ref="sentinel-ref" class="h-2 mt-8"></div>
 
     <div v-if="isLoading" class="text-gray-500 mt-4">
       <span class="loading loading-spinner loading-md"></span>
