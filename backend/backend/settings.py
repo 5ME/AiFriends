@@ -156,3 +156,6 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
 ]
+
+from dotenv import load_dotenv
+load_dotenv()

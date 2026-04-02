@@ -19,7 +19,7 @@ class Friend(models.Model):
         return f'{self.character.name} - {self.user_profile.user.username} - {localtime(self.created_at).strftime("%Y-%m-%d %H:%M:%S")}'
 
 
-class ChatRecord(models.Model):
+class Message(models.Model):
     """
     用户与角色的聊天信息
     """
