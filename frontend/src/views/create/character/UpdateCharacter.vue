@@ -4,7 +4,7 @@ import Photo from "@/views/create/character/components/Photo.vue";
 import Name from "@/views/create/character/components/Name.vue";
 import Profile from "@/views/create/character/components/Profile.vue";
 import BackgroundImage from "@/views/create/character/components/BackgroundImage.vue";
-import {onMounted, ref, useTemplateRef} from "vue";
+import {onMounted, ref, useTemplateRef, watch} from "vue";
 import {base64ToFile} from "@/js/utils/base64_to_file";
 import api from "@/js/http/api";
 import {useRoute, useRouter} from "vue-router";
@@ -14,13 +14,12 @@ const router = useRouter()
 const user = useUserStore()
 const route = useRoute()
 
-const characterId = route.params.character_id
 const character = ref(null)
 
-onMounted(async () => {
+async function getCharacterData() {
   try {
     const response = await api.get('api/create/character/get_single/', {
-      params: {character_id: characterId}
+      params: {character_id: route.params.character_id}
     })
     const data = response.data
     if (data.message === 'success') {
@@ -29,6 +28,15 @@ onMounted(async () => {
   } catch (e) {
     console.log(e)
   }
+}
+
+onMounted(async () => {
+  await getCharacterData()
+})
+
+watch(() => route.params.character_id, async () => {
+  character.value = null
+  await getCharacterData()
 })
 
 const photoRef = useTemplateRef('photo-ref')
@@ -55,7 +63,7 @@ async function handleUpdate() {
     errorMessage.value = '聊天背景不能为空'
   } else {
     const formData = new FormData()
-    formData.append('character_id', characterId)
+    formData.append('character_id', route.params.character_id as string)
     formData.append('name', name)
     formData.append('profile', profile)
     if (photo !== character.value.photo) {

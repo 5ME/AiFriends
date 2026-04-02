@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {useRoute, useRouter} from "vue-router";
 import UserInfoField from "@/views/user/space/components/UserInfoField.vue";
-import {nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef} from "vue";
+import {nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch} from "vue";
 import api from "@/js/http/api";
 import Character from "@/components/character/Character.vue";
 
@@ -75,6 +75,14 @@ onMounted(async () => {
       {root: null, rootMargin: '2px', threshold: 0}
   )
   observer.observe(sentinelRef.value)
+})
+
+watch(() => route.params.user_id, async () => {
+  userProfile.value = null
+  characters.value = []
+  isLoading.value = false
+  hasCharacters.value = true
+  await loadMore()
 })
 
 function removeCharacter(characterId) {
