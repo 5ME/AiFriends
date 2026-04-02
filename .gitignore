@@ -8,3 +8,4 @@ static/
 .venv/
 node_modules/
 dist/
+*.env
