@@ -4,7 +4,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from web.models.friend import Friend
-from web.models.user import UserProfile
 
 
 class FriendGetListView(APIView):

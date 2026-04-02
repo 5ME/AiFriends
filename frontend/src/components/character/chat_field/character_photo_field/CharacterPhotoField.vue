@@ -3,7 +3,7 @@ defineProps(['character'])
 </script>
 
 <template>
-  <div class="absolute left-2 right-40 top-6 h-10 w-fit rounded-full bg-black/50 flex items-center gap-2 px-2">
+  <div class="absolute left-3 right-40 top-3 h-10 w-fit rounded-full bg-black/50 flex items-center gap-2 px-2">
     <div class="avatar">
       <div class="w-8 rounded-full">
         <img :src="character.photo" alt="">

@@ -31,13 +31,12 @@ defineExpose({showModal})
   <dialog ref="modal-ref" class="modal">
     <div class="modal-box w-90 h-150" :style="modalStyle">
       <form method="dialog">
-        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button>
       </form>
       <!--角色头像-->
       <CharacterPhotoField v-if="friend" :character="friend.character"/>
       <!--输入框-->
       <InputField/>
-      <p class="py-4">Press ESC key or click on ✕ button to close</p>
     </div>
   </dialog>
 </template>

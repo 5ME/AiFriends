@@ -3,12 +3,11 @@ import {ref, useTemplateRef} from "vue";
 import UpdateIcon from "@/components/character/icons/UpdateIcon.vue";
 import RemoveIcon from "@/components/character/icons/RemoveIcon.vue";
 import {useUserStore} from "@/stores/user";
-import Character from "@/components/character/Character.vue";
 import api from "@/js/http/api";
 import ChatField from "@/components/character/chat_field/ChatField.vue";
 import {useRouter} from "vue-router";
 
-const props = defineProps(['character', 'canEdit'])
+const props = defineProps(['character', 'canEdit', 'canRemoveFriend', 'friendId'])
 const emit = defineEmits(['remove'])
 const isHover = ref(false)
 const router = useRouter()
@@ -48,6 +47,19 @@ async function openChatField() {
     }
   }
 }
+
+async function handleRemoveFriend() {
+  try {
+    const response = await api.post('/api/friend/remove/', {
+      friend_id: props.friendId
+    })
+    if (response.data.message === 'success') {
+      emit('remove', props.friendId)
+    }
+  } catch (e) {
+    console.log(e)
+  }
+}
 </script>
 
 <template>
@@ -77,16 +89,29 @@ async function openChatField() {
         <div class="card-actions justify-end"
              v-if="canEdit && character.author.user_id === user.id">
           <RouterLink class="btn btn-ghost btn-sm btn-circle bg-neutral-700"
-                      :to="{name: 'update-character', params: {character_id: character.id}}">
+                      :to="{name: 'update-character', params: {character_id: character.id}}"
+                      @click.stop>
             <UpdateIcon/>
           </RouterLink>
           <button class="btn btn-ghost btn-sm btn-circle bg-red-700"
-                  @click="handleRemoveCharacter">
+                  @click.stop="handleRemoveCharacter">
             <RemoveIcon/>
+          </button>
+        </div>
+
+        <div v-if="canRemoveFriend" class="card-actions justify-end">
+          <!--          <button class="btn btn-ghost btn-sm btn-circle bg-red-700"-->
+          <!--                  @click="handleRemoveFriend">-->
+          <!--            <RemoveIcon/>-->
+          <!--          </button>-->
+          <!--@click.stop 阻止事件传播，防止触发父组件的 click 事件-->
+          <button @click.stop="handleRemoveFriend" class="btn btn-sm bg-red-700 text-white">
+            解除好友
           </button>
         </div>
       </div>
     </div>
+
     <RouterLink class="flex items-center mt-2 gap-2"
                 :to="{name: 'user-space-index', params: {user_id: character.author.user_id}}">
       <div class="avatar">
