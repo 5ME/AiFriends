@@ -14,6 +14,12 @@ class ChatGraph:
             model="deepseek-v3.2",
             api_key=os.getenv("API_KEY"),
             base_url=os.getenv("API_BASE"),
+            streaming=True,  # 流式输出
+            model_kwargs={
+                "stream_options": {
+                    "include_usage": True,  # 输出token消耗量
+                }
+            }
         )
 
         class AgentState(TypedDict):
