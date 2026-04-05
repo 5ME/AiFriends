@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import {computed, nextTick, useTemplateRef} from "vue";
+import {computed, nextTick, ref, useTemplateRef} from "vue";
 import InputField from "@/components/character/chat_field/input_field/InputField.vue";
 import CharacterPhotoField from "@/components/character/chat_field/character_photo_field/CharacterPhotoField.vue";
+import ChatHistory from "@/components/character/chat_field/chat_history/ChatHistory.vue";
 
 const props = defineProps(['friend'])
 
 const modalRef = useTemplateRef('modal-ref')
 const inputRef = useTemplateRef('input-ref')
+const chatHistoryRef = useTemplateRef('chat-history-ref')
+
+const history = ref([])
 
 async function showModal() {
   modalRef.value.showModal()
@@ -27,6 +31,20 @@ const modalStyle = computed(() => {
   }
 })
 
+function handlePushBackMessage(msg) {
+  history.value.push(msg)
+  chatHistoryRef.value.scrollToBottom()
+}
+
+function handleAppendToLastMessage(delta) {
+  history.value.at(-1).content += delta
+  chatHistoryRef.value.scrollToBottom()
+}
+
+function handlePushFrontMessage(msg) {
+  history.value.unshift(msg)
+}
+
 defineExpose({showModal})
 </script>
 
@@ -36,10 +54,29 @@ defineExpose({showModal})
       <form method="dialog">
         <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button>
       </form>
+
       <!--角色头像-->
-      <CharacterPhotoField v-if="friend" :character="friend.character"/>
+      <CharacterPhotoField v-if="friend"
+                           :character="friend.character"
+      />
+
+      <!--聊天记录-->
+      <ChatHistory v-if="friend"
+                   :friendId="friend.id"
+                   :character="friend.character"
+                   :history="history"
+                   ref="chat-history-ref"
+                   @pushFrontMessage="handlePushFrontMessage"
+      />
+
       <!--输入框-->
-      <InputField v-if="friend" ref="input-ref" :friendId="friend.id"/>
+      <InputField v-if="friend"
+                  ref="input-ref"
+                  :friendId="friend.id"
+                  @pushBackMessage="handlePushBackMessage"
+                  @appendToLastMessage="handleAppendToLastMessage"
+                  @pushFrontMessage="handlePushFrontMessage"
+      />
     </div>
   </dialog>
 </template>

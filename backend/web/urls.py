@@ -8,6 +8,7 @@ from web.views.create.character.update import UpdateCharacterView
 from web.views.friend.get_list import FriendGetListView
 from web.views.friend.get_or_create import FriendGetOrCreateView
 from web.views.friend.message.chat.chat import MessageChatView
+from web.views.friend.message.get_history import GetHistoryView
 from web.views.friend.remove import FriendRemoveView
 from web.views.homepage.index import HomepageIndexView
 from web.views.index import index
@@ -38,6 +39,7 @@ urlpatterns = [
     path('api/friend/remove/', FriendRemoveView.as_view()),
     path('api/friend/get_list/', FriendGetListView.as_view()),
     path('api/friend/message/chat/', MessageChatView.as_view()),
+    path('api/friend/message/get_history/', GetHistoryView.as_view()),
 
     path('', index, name='index'),
 

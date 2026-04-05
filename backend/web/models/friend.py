@@ -26,8 +26,8 @@ class Message(models.Model):
     # 好友关系
     friend = models.ForeignKey(Friend, on_delete=models.CASCADE)
     user_message = models.TextField(max_length=5000)
-    input = models.TextField(max_length=5000)
-    output = models.TextField(max_length=5000)
+    input = models.TextField(max_length=50000)
+    output = models.TextField(max_length=50000)
     input_tokens = models.IntegerField(default=0)
     output_tokens = models.IntegerField(default=0)
     total_tokens = models.IntegerField(default=0)
