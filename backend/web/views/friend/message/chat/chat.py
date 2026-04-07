@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from web.models.friend import Friend, Message, SystemPrompt
 from web.views.friend.message.chat.graph import ChatGraph
+from web.views.friend.message.memory import update
 
 
 class SSERenderer(BaseRenderer):
@@ -40,6 +41,7 @@ def add_system_prompt(
     for sp in system_prompts:
         prompts.append(sp.prompt)
     prompts.append(f'\n\n【角色性格】\n\n{friend.character.profile}\n')
+    prompts.append(f'【长期记忆】\n{friend.memory}\n')
     prompt = ''.join(prompts)
     return {'messages': [SystemMessage(prompt)] + msgs}
 
@@ -132,6 +134,8 @@ class MessageChatView(APIView):
                 output_tokens=output_tokens,
                 total_tokens=total_tokens,
             )
+            if Message.objects.filter(friend=friend).count() % 1 == 0:
+                update.update_memory(friend)
 
         response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
         response['Cache-Control'] = 'no-cache'
