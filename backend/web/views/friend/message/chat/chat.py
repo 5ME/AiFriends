@@ -50,21 +50,37 @@ def add_recent_messages(
         recent_count: int,
 ) -> dict[str, List[BaseMessage]]:
     """
-    添加最近对话记录到输入消息中
+    添加最近对话记录到输入消息中。
+    逻辑：将历史记录插入到系统提示词之后，当前用户消息之前。
 
     :param inputs:
     :param friend:
     :param recent_count: 指定最近对话记录的条数
     :return:
     """
-    msgs = inputs['messages']
+    msgs = list(inputs['messages'])  # 拷贝一份防止修改原引用
+    if not msgs:
+        return inputs
+
     messages_raw = list(Message.objects.filter(friend=friend).order_by('-id')[:recent_count])
     messages_raw.reverse()
-    messages = []
+
+    history = []
     for m in messages_raw:
-        messages.append(HumanMessage(m.user_message))
-        messages.append(AIMessage(m.output))
-    return {'messages': msgs[:1] + messages + msgs[-1:]}
+        if m.user_message:
+            history.append(HumanMessage(m.user_message))
+        if m.output:
+            history.append(AIMessage(m.output))
+
+    # 健壮性逻辑：
+    # 1. 如果第一条是 SystemMessage，则在它后面插入历史
+    # 2. 否则，直接在最前面插入历史
+    if isinstance(msgs[0], SystemMessage):
+        new_msgs = [msgs[0]] + history + msgs[1:]
+    else:
+        new_msgs = history + msgs
+
+    return {'messages': new_msgs}
 
 
 class MessageChatView(APIView):
