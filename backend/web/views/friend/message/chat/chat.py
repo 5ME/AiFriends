@@ -1,13 +1,14 @@
 import json
+from typing import List, Dict
 
 from django.http import StreamingHttpResponse
-from langchain_core.messages import HumanMessage, BaseMessageChunk
+from langchain_core.messages import HumanMessage, BaseMessageChunk, BaseMessage, SystemMessage, AIMessage
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from web.models.friend import Friend, Message
+from web.models.friend import Friend, Message, SystemPrompt
 from web.views.friend.message.chat.graph import ChatGraph
 
 
@@ -17,6 +18,53 @@ class SSERenderer(BaseRenderer):
 
     def render(self, data, accepted_media_type=None, renderer_context=None):
         return data
+
+
+def add_system_prompt(
+        inputs: Dict[str, List[BaseMessage]],
+        friend: Friend,
+) -> dict[str, List[BaseMessage]]:
+    """
+    添加系统提示到输入消息中
+
+    参数:
+    inputs: 包含消息列表的字典，格式为 {'messages': [BaseMessage(...)]}
+    friend: 验证通过的好友模型实例
+
+    返回:
+    更新后的inputs字典，包含添加的系统提示
+    """
+    msgs = inputs['messages']
+    system_prompts = SystemPrompt.objects.filter(title__exact='回复').order_by('order_number')
+    prompts = []
+    for sp in system_prompts:
+        prompts.append(sp.prompt)
+    prompts.append(f'\n\n【角色性格】\n\n{friend.character.profile}\n')
+    prompt = ''.join(prompts)
+    return {'messages': [SystemMessage(prompt)] + msgs}
+
+
+def add_recent_messages(
+        inputs: Dict[str, List[BaseMessage]],
+        friend: Friend,
+        recent_count: int,
+) -> dict[str, List[BaseMessage]]:
+    """
+    添加最近对话记录到输入消息中
+
+    :param inputs:
+    :param friend:
+    :param recent_count: 指定最近对话记录的条数
+    :return:
+    """
+    msgs = inputs['messages']
+    messages_raw = list(Message.objects.filter(friend=friend).order_by('-id')[:recent_count])
+    messages_raw.reverse()
+    messages = []
+    for m in messages_raw:
+        messages.append(HumanMessage(m.user_message))
+        messages.append(AIMessage(m.output))
+    return {'messages': msgs[:1] + messages + msgs[-1:]}
 
 
 class MessageChatView(APIView):
@@ -36,6 +84,10 @@ class MessageChatView(APIView):
         inputs = {
             'messages': [HumanMessage(message)]
         }
+        # 添加系统提示词
+        inputs = add_system_prompt(inputs, friend)
+        # 添加最近对话记录
+        inputs = add_recent_messages(inputs, friend, 10)
 
         # 定义流式生成器
         def event_stream():
