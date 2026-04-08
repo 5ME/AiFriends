@@ -19,7 +19,7 @@ const user = useUserStore()
         {{ character.name }}
         <!--<time class="text-xs opacity-50">12:45</time>-->
       </div>
-      <div class="chat-bubble whitespace-pre-wrap">
+      <div class="chat-bubble whitespace-pre-wrap break-all">
         {{ message.content }}
       </div>
       <!--<div class="chat-footer opacity-50">Delivered</div>-->
@@ -36,7 +36,7 @@ const user = useUserStore()
         {{ user.username }}
         <!--<time class="text-xs opacity-50">12:46</time>-->
       </div>
-      <div class="chat-bubble chat-bubble-success whitespace-pre-wrap">
+      <div class="chat-bubble chat-bubble-success whitespace-pre-wrap break-all">
         {{ message.content }}
       </div>
       <!--<div class="chat-footer opacity-50">Seen at 12:46</div>-->
