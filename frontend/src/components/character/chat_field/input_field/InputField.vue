@@ -4,29 +4,33 @@ import MicIcon from "@/components/character/icons/MicIcon.vue";
 import SendIcon from "@/components/character/icons/SendIcon.vue";
 import streamApi from "@/js/http/streamApi";
 import {ref, useTemplateRef} from "vue";
+import Microphone from "@/components/character/chat_field/input_field/Microphone.vue";
 
 const props = defineProps(['friendId'])
 const emits = defineEmits(['pushBackMessage', 'appendToLastMessage'])
 
 const inputRef = useTemplateRef('input-ref')
 const message = ref('')
-let isProcessing = false
+let processId = 0
+
+const showMic = ref(false)
 
 function focus() {
   inputRef.value.focus()
 }
 
-async function handleSend() {
-  const content = message.value.trim()
+async function handleSend(event, audioMsg) {
+  let content = ""
+  if (audioMsg) {
+    content = audioMsg.trim()
+  } else {
+    content = message.value.trim()
+  }
   if (!content) {
     return
   }
 
-  if (isProcessing) {
-    return
-  }
-  isProcessing = true
-
+  const curId = ++processId
   message.value = ''
 
   emits('pushBackMessage', {
@@ -47,39 +51,54 @@ async function handleSend() {
         message: content
       },
       onmessage(data, isDone) {
-        if (isDone) {
-          isProcessing = false
-        } else if (data.content) {
+        if (processId !== curId) {
+          // 实现输出打断
+          return
+        }
+        if (data.content) {
           emits('appendToLastMessage', data.content)
         }
       },
       onerror(err) {
-        isProcessing = false
         console.log(err)
       },
     })
   } catch (e) {
     console.log(e)
-    isProcessing = false
   }
 }
 
-defineExpose({focus,})
+function closeMic() {
+  ++processId
+  showMic.value = false
+}
+
+function handleStop() {
+  ++processId
+}
+
+defineExpose({focus, closeMic})
 </script>
 
 <template>
-  <form @submit.prevent="handleSend" class="absolute bottom-4 left-2 h-12 w-86 flex items-center">
+  <form v-if="!showMic" @submit.prevent="handleSend" class="absolute bottom-4 left-2 h-12 w-86 flex items-center">
     <input class="input bg-black/30 backdrop-blur text-base text-white w-full h-full rounded-md pr-20"
-           type="text" placeholder=""
+           type="text" placeholder="文本输入"
            ref="input-ref" v-model="message"/>
     <div class="absolute right-2 w-8 h-8 flex justify-center items-center cursor-pointer"
          @click="handleSend">
       <SendIcon/>
     </div>
-    <div class="absolute right-10 w-8 h-8 flex justify-center items-center cursor-pointer">
+    <div @click="showMic=true" class="absolute right-10 w-8 h-8 flex justify-center items-center cursor-pointer">
       <MicIcon/>
     </div>
   </form>
+  <!--麦克风组件-->
+  <Microphone v-else
+              @close="showMic=false"
+              @send="handleSend"
+              @stop="handleStop"
+  />
 </template>
 
 <style scoped>

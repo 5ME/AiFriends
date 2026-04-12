@@ -45,6 +45,11 @@ function handlePushFrontMessage(msg) {
   history.value.unshift(msg)
 }
 
+function handleClose() {
+  modalRef.value.close()
+  inputRef.value.closeMic()
+}
+
 defineExpose({showModal})
 </script>
 
@@ -52,7 +57,10 @@ defineExpose({showModal})
   <dialog ref="modal-ref" class="modal">
     <div class="modal-box w-90 h-150" :style="modalStyle">
       <form method="dialog">
-        <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button>
+        <button @click="handleClose"
+                class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">
+          ✕
+        </button>
       </form>
 
       <!--角色头像-->
