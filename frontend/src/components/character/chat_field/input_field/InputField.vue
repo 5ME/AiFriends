@@ -17,15 +17,16 @@ function focus() {
 }
 
 async function handleSend() {
+  const content = message.value.trim()
+  if (!content) {
+    return
+  }
+
   if (isProcessing) {
     return
   }
   isProcessing = true
 
-  const content = message.value.trim()
-  if (!console) {
-    return
-  }
   message.value = ''
 
   emits('pushBackMessage', {
