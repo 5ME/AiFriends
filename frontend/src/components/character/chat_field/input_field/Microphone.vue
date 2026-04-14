@@ -56,8 +56,9 @@ const sendToBackend = async (arrayBuffer) => {
   const formData = new FormData();
   formData.append("audio", blob, "voice.pcm")
   try {
-    const response = await api.post("", formData)
+    const response = await api.post("/api/friend/message/asr/asr/", formData)
     const data = response.data
+    // console.log("===> ", data)
     if (data.message === "success") {
       emits("send", null, data.text)
     }
