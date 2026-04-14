@@ -19,13 +19,18 @@ function focus() {
   inputRef.value.focus()
 }
 
-async function handleSend(event, audioMsg) {
+async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
   let content = ""
-  if (audioMsg) {
+  
+  // 逻辑优化：判断第一个参数是字符串（语音消息）还是事件对象
+  if (typeof eventOrMsg === 'string') {
+    content = eventOrMsg.trim()
+  } else if (typeof audioMsg === 'string') {
     content = audioMsg.trim()
   } else {
     content = message.value.trim()
   }
+
   if (!content) {
     return
   }
