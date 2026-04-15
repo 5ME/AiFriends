@@ -54,11 +54,10 @@ defineExpose({showModal})
 </script>
 
 <template>
-  <dialog ref="modal-ref" class="modal">
+  <dialog ref="modal-ref" class="modal" @close="handleClose">
     <div class="modal-box w-90 h-150" :style="modalStyle">
       <form method="dialog">
-        <button @click="handleClose"
-                class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">
           ✕
         </button>
       </form>
