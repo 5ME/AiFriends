@@ -1,12 +1,21 @@
+import asyncio
+import base64
 import json
+import os
+import queue
+import threading
+import uuid
 from typing import List, Dict
 
+import websockets
 from django.http import StreamingHttpResponse
 from langchain_core.messages import HumanMessage, BaseMessageChunk, BaseMessage, SystemMessage, AIMessage
+from langgraph.graph.state import CompiledStateGraph
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from websockets.client import ClientConnection
 
 from web.models.friend import Friend, Message, SystemPrompt
 from web.views.friend.message.chat.graph import ChatGraph
@@ -107,36 +116,162 @@ class MessageChatView(APIView):
         # 添加最近对话记录
         inputs = add_recent_messages(inputs, friend, 10)
 
-        # 定义流式生成器
-        def event_stream():
-            full_output = []
-            full_usage = {}
-            for msg, metadata in app.stream(inputs, stream_mode="messages"):
-                if isinstance(msg, BaseMessageChunk):
-                    if msg.content:
-                        full_output.append(msg.content)
-                        yield f'data: {json.dumps({'content': msg.content}, ensure_ascii=False)}\n\n'
-                    if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
-                        full_usage = msg.usage_metadata
-            yield 'data: [DONE]\n\n'
-            input_tokens = full_usage.get('input_tokens', 0)
-            output_tokens = full_usage.get('output_tokens', 0)
-            total_tokens = full_usage.get('total_tokens', 0)
-            Message.objects.create(
-                friend=friend,
-                user_message=message[:5000],
-                input=json.dumps(
-                    [m.model_dump() for m in inputs['messages']],
-                    ensure_ascii=False
-                )[:50000],
-                output=''.join(full_output)[:5000],
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                total_tokens=total_tokens,
-            )
-            if Message.objects.filter(friend=friend).count() % 1 == 0:
-                update.update_memory(friend)
-
-        response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+        response = StreamingHttpResponse(
+            self.event_stream(app, inputs, friend, message),
+            content_type='text/event-stream'
+        )
         response['Cache-Control'] = 'no-cache'
         return response
+
+    # 定义流式生成器
+    def event_stream(
+            self,
+            app: CompiledStateGraph,
+            inputs,
+            friend: Friend,
+            message: str
+    ):
+        mq = queue.Queue()
+        thread = threading.Thread(target=self.work, args=(app, inputs, mq))
+        thread.start()
+
+        full_output = []
+        full_usage = {}
+
+        while True:
+            msg = mq.get()
+            print('====>', msg)
+            if msg is None:
+                break
+            if msg.get('content', None):
+                full_output.append(msg['content'])
+                yield f'data: {json.dumps({'content': msg['content']}, ensure_ascii=False)}\n\n'
+            if msg.get('audio', None):
+                yield f'data: {json.dumps({'audio': msg['audio']}, ensure_ascii=False)}\n\n'
+            if msg.get('usage', None):
+                full_usage = msg['usage']
+
+        yield 'data: [DONE]\n\n'
+        input_tokens = full_usage.get('input_tokens', 0)
+        output_tokens = full_usage.get('output_tokens', 0)
+        total_tokens = full_usage.get('total_tokens', 0)
+        Message.objects.create(
+            friend=friend,
+            user_message=message[:5000],
+            input=json.dumps(
+                [m.model_dump() for m in inputs['messages']],
+                ensure_ascii=False
+            )[:50000],
+            output=''.join(full_output)[:5000],
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
+        )
+        if Message.objects.filter(friend=friend).count() % 1 == 0:
+            update.update_memory(friend)
+
+    def work(
+            self,
+            app: CompiledStateGraph,
+            inputs,
+            mq: queue.Queue
+    ):
+        try:
+            asyncio.run(self.run_tts_task(app, inputs, mq))
+        finally:
+            mq.put_nowait(None)
+
+    async def run_tts_task(
+            self,
+            app: CompiledStateGraph,
+            inputs,
+            mq: queue.Queue
+    ):
+        task_id = uuid.uuid4().hex
+        wss_url = os.getenv('WSS_URL')
+        api_key = os.getenv('API_KEY')
+        headers = {'Authorization': f'Bearer {api_key}'}
+        async with websockets.connect(wss_url, additional_headers=headers) as ws:
+            await ws.send(json.dumps({
+                "header": {
+                    "action": "run-task",
+                    "task_id": task_id,  # 随机uuid
+                    "streaming": "duplex"
+                },
+                "payload": {
+                    "task_group": "audio",
+                    "task": "tts",
+                    "function": "SpeechSynthesizer",
+                    "model": "cosyvoice-v3-flash",
+                    "parameters": {
+                        "text_type": "PlainText",
+                        "voice": "longanyang",  # 音色
+                        "format": "mp3",  # 音频格式
+                        "sample_rate": 22050,  # 采样率
+                        "volume": 50,  # 音量
+                        "rate": 1.25,  # 语速
+                        "pitch": 1  # 音调
+                    },
+                    "input": {  # input不能省去，不然会报错
+                    }
+                }
+            }))
+            async for msg in ws:
+                if json.loads(msg)['header']['event'] == 'task-started':
+                    break
+            await asyncio.gather(
+                self.tts_sender(ws, task_id, app, inputs, mq),
+                self.tts_receiver(ws, mq)
+            )
+
+    async def tts_sender(
+            self,
+            ws,
+            task_id: str,
+            app: CompiledStateGraph,
+            inputs,
+            mq: queue.Queue
+    ):
+        async for msg, metadata in app.astream(inputs, stream_mode="messages"):
+            if isinstance(msg, BaseMessageChunk):
+                if msg.content:
+                    await ws.send(json.dumps({
+                        "header": {
+                            "action": "continue-task",
+                            "task_id": task_id,  # 随机uuid
+                            "streaming": "duplex"
+                        },
+                        "payload": {
+                            "input": {
+                                "text": msg.content,
+                            }
+                        }
+                    }))
+                    mq.put_nowait({'content': msg.content})
+                if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
+                    mq.put_nowait({'usage': msg.usage_metadata})
+        await ws.send(json.dumps({
+            "header": {
+                "action": "finish-task",
+                "task_id": task_id,
+                "streaming": "duplex"
+            },
+            "payload": {
+                "input": {}  # input不能省去，否则会报错
+            }
+        }))
+
+    async def tts_receiver(
+            self,
+            ws,
+            mq: queue.Queue
+    ):
+        async for msg in ws:
+            if isinstance(msg, bytes):
+                audio = base64.b64encode(msg).decode('utf-8')
+                mq.put_nowait({'audio': audio})
+            else:
+                data = json.loads(msg)
+                event = data['header']['event']
+                if event in ['task-finished', 'task-failed']:
+                    break
