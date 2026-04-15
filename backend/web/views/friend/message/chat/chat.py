@@ -120,7 +120,10 @@ class MessageChatView(APIView):
             self.event_stream(app, inputs, friend, message),
             content_type='text/event-stream'
         )
+        # 禁用浏览器和中间缓存，确保流式内容的实时性
         response['Cache-Control'] = 'no-cache'
+        # 禁用 Nginx 等代理服务器的响应缓冲，实现即时下发
+        response['X-Accel-Buffering'] = 'no'
         return response
 
     # 定义流式生成器
@@ -140,7 +143,7 @@ class MessageChatView(APIView):
 
         while True:
             msg = mq.get()
-            print('====>', msg)
+            # print('====>', msg)
             if msg is None:
                 break
             if msg.get('content', None):
