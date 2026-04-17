@@ -8,6 +8,7 @@ import {useUserStore} from "@/stores/user.js";
 import UserMenu from "@/components/navbar/UserMenu.vue";
 import {ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
+import logoUrl from "@/assets/logo.png";
 
 const router = useRouter()
 const route = useRoute()
@@ -35,7 +36,7 @@ function handleSearch() {
 <template>
   <div class="drawer lg:drawer-open">
     <input id="my-drawer-4" type="checkbox" class="drawer-toggle"/>
-    <div class="drawer-content">
+    <div class="drawer-content flex flex-col min-h-screen">
       <!-- Navbar -->
       <nav class="navbar w-full bg-base-100 shadow-sm">
         <div class="navbar-start">
@@ -43,6 +44,7 @@ function handleSearch() {
             <!-- Sidebar toggle icon -->
             <MenuIcon/>
           </label>
+          <img :src="logoUrl" alt="AI Friends Logo" class="w-8 h-auto">
           <div class="px-2 font-bold text-2xl">AI Friends</div>
         </div>
         <div class="navbar-center w-4/5 max-w-180 flex justify-center">
@@ -68,7 +70,15 @@ function handleSearch() {
         </div>
       </nav>
       <!-- Page content here -->
-      <slot></slot>
+      <div class="grow">
+        <slot></slot>
+      </div>
+
+      <footer class="footer sm:footer-horizontal footer-center bg-base-300 text-base-content p-4">
+        <aside>
+          <p>Copyright © {{ new Date().getFullYear() }} - All right reserved by AI Friends</p>
+        </aside>
+      </footer>
     </div>
 
     <div class="drawer-side is-drawer-close:overflow-visible">
