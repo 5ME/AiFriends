@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from web.models.character import Character
+from web.models.character import Character, Voice
 from web.models.user import UserProfile
 from web.views.utils.photo import remove_old_photo
 
@@ -20,11 +20,15 @@ class UpdateCharacterView(APIView):
             profile = request.data['profile'].strip()
             photo = request.FILES.get('photo', None)
             background_image = request.FILES.get('background_image', None)
+            voice_id = request.data['voice_id']
 
             if not name:
                 return Response({'message': '角色名称不能为空'})
             if not profile:
                 return Response({'message': '角色信息不能为空'})
+
+            voice = Voice.objects.get(id=voice_id)
+            character.voice = voice
 
             character.name = name
             character.profile = profile

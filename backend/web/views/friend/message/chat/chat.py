@@ -135,7 +135,7 @@ class MessageChatView(APIView):
             message: str
     ):
         mq = queue.Queue()
-        thread = threading.Thread(target=self.work, args=(app, inputs, mq))
+        thread = threading.Thread(target=self.work, args=(app, inputs, mq, friend.character.voice.voice_id))
         thread.start()
 
         full_output = []
@@ -177,10 +177,11 @@ class MessageChatView(APIView):
             self,
             app: CompiledStateGraph,
             inputs,
-            mq: queue.Queue
+            mq: queue.Queue,
+            voice_id: str,
     ):
         try:
-            asyncio.run(self.run_tts_task(app, inputs, mq))
+            asyncio.run(self.run_tts_task(app, inputs, mq, voice_id))
         finally:
             mq.put_nowait(None)
 
@@ -188,7 +189,8 @@ class MessageChatView(APIView):
             self,
             app: CompiledStateGraph,
             inputs,
-            mq: queue.Queue
+            mq: queue.Queue,
+            voice_id: str,
     ):
         task_id = uuid.uuid4().hex
         wss_url = os.getenv('WSS_URL')
@@ -208,7 +210,7 @@ class MessageChatView(APIView):
                     "model": "cosyvoice-v3-flash",
                     "parameters": {
                         "text_type": "PlainText",
-                        "voice": "longanyang",  # 音色
+                        "voice": voice_id,  # 音色
                         "format": "mp3",  # 音频格式
                         "sample_rate": 22050,  # 采样率
                         "volume": 50,  # 音量
