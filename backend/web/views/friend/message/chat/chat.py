@@ -170,7 +170,7 @@ class MessageChatView(APIView):
             output_tokens=output_tokens,
             total_tokens=total_tokens,
         )
-        if Message.objects.filter(friend=friend).count() % 1 == 0:
+        if Message.objects.filter(friend=friend).count() % 10 == 0:
             update.update_memory(friend)
 
     def work(
