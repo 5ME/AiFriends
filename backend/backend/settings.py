@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-0xy8(za45g9-an!z&4u*lf@g38j24g!2+&6o^faq$%#n046mwz'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['127.0.0.1', '115.190.245.146']
 
@@ -130,7 +130,7 @@ else:
 if DEBUG:
     MEDIA_URL = 'http://127.0.0.1:8000/media/'
 else:
-    MEDIA_URL = 'http://115.190.245.146/media/'
+    MEDIA_URL = 'https://115.190.245.146/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 

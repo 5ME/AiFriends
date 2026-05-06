@@ -19,8 +19,8 @@ if (platform === "vue") {
   CONFIG_API.HTTP_URL = "http://127.0.0.1:8000"
   CONFIG_API.VAD_URL = "http://127.0.0.1:8000/static/frontend/vad/"
 } else if (platform === "cloud") {
-  CONFIG_API.HTTP_URL = "http://115.190.245.146"
-  CONFIG_API.VAD_URL = "http://115.190.245.146/static/frontend/vad/"
+  CONFIG_API.HTTP_URL = "https://115.190.245.146"
+  CONFIG_API.VAD_URL = "https://115.190.245.146/static/frontend/vad/"
 }
 
 export default CONFIG_API
