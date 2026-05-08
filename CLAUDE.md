@@ -69,6 +69,24 @@ Each API endpoint is a single file under `backend/web/views/`, each exporting a 
 
 Models live in `backend/web/models/` — three files: `user.py` (UserProfile), `character.py` (Character, Voice), `friend.py` (Friend, Message, SystemPrompt).
 
+### Character.profile convention
+
+The `Character.profile` field has a dual role: it serves as both the user-facing character introduction AND the LLM system prompt. The convention is:
+
+- **First line** (`\n`-delimited) = public introduction shown on cards and the `CharacterDetail` modal
+- **Full text** = sent to the LLM as part of the system prompt in `chat/graph.py`
+
+When displaying profile to users, always split on `\n` and show only the first line: `character.profile.split('\n')[0]`.
+
+### Character detail → chat flow
+
+On the homepage, clicking a character card opens `CharacterDetail.vue` (a modal) rather than jumping straight to chat. The component:
+1. Calls `GET /api/friend/is_friend/?character_id=X` to check friendship status
+2. Shows "添加好友" or "开始聊天" button accordingly
+3. On button click, calls `POST /api/friend/get_or_create/` then opens `ChatField`
+
+`Character.vue` accepts a `showDetail` prop — when true, the card click opens the detail modal first; when false (friend list page, user space), the old direct-to-chat behavior is preserved.
+
 ### LangGraph agent architecture
 
 Two separate LangGraph state graphs:
