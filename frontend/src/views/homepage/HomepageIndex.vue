@@ -90,7 +90,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="flex flex-col items-center">
     <div class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-9 mt-12 justify-items-center w-full px-9">
-      <Character v-for="character in characters" :key="character.id" :character="character"/>
+      <Character v-for="character in characters" :key="character.id" :character="character" :show-detail="true"/>
     </div>
 
     <div ref="sentinel-ref" class="h-2 mt-8"></div>

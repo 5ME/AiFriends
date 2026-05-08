@@ -5,9 +5,10 @@ import RemoveIcon from "@/components/character/icons/RemoveIcon.vue";
 import {useUserStore} from "@/stores/user";
 import api from "@/js/http/api";
 import ChatField from "@/components/character/chat_field/ChatField.vue";
+import CharacterDetail from "@/components/character/CharacterDetail.vue";
 import {useRouter} from "vue-router";
 
-const props = defineProps(['character', 'canEdit', 'canRemoveFriend', 'friendId'])
+const props = defineProps(['character', 'canEdit', 'canRemoveFriend', 'friendId', 'showDetail'])
 const emit = defineEmits(['remove'])
 const isHover = ref(false)
 const router = useRouter()
@@ -27,7 +28,16 @@ async function handleRemoveCharacter() {
 }
 
 const chatFieldRef = useTemplateRef('chat-field-ref')
+const characterDetailRef = useTemplateRef('character-detail-ref')
 const friend = ref(null)
+
+function handleCardClick() {
+  if (props.showDetail) {
+    characterDetailRef.value.showModal()
+  } else {
+    openChatField()
+  }
+}
 
 async function openChatField() {
   if (!user.isLogin()) {
@@ -68,7 +78,7 @@ async function handleRemoveFriend() {
                                 transition-transform duration-300"
          :class="{'scale-105': isHover, 'shadow-2xl': isHover}"
          @mouseover="isHover=true" @mouseout="isHover=false"
-         @click="openChatField">
+         @click="handleCardClick">
       <figure>
         <img :src="character.background_image" alt="bg"/>
       </figure>
@@ -123,6 +133,9 @@ async function handleRemoveFriend() {
         {{ character.author.username }}
       </div>
     </RouterLink>
+
+    <!--角色详情框-->
+    <CharacterDetail ref="character-detail-ref" :character="character"/>
 
     <!--聊天框-->
     <ChatField ref="chat-field-ref" :friend="friend"/>
