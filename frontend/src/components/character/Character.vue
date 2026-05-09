@@ -29,6 +29,7 @@ async function handleRemoveCharacter() {
 
 const chatFieldRef = useTemplateRef('chat-field-ref')
 const characterDetailRef = useTemplateRef('character-detail-ref')
+const confirmModalRef = useTemplateRef('confirm-modal-ref')
 const friend = ref(null)
 
 function handleCardClick() {
@@ -58,12 +59,17 @@ async function openChatField() {
   }
 }
 
-async function handleRemoveFriend() {
+function handleRemoveFriend() {
+  confirmModalRef.value.showModal()
+}
+
+async function confirmRemoveFriend() {
   try {
     const response = await api.post('/api/friend/remove/', {
       friend_id: props.friendId
     })
     if (response.data.message === 'success') {
+      confirmModalRef.value.close()
       emit('remove', props.friendId)
     }
   } catch (e) {
@@ -139,6 +145,33 @@ async function handleRemoveFriend() {
 
     <!--聊天框-->
     <ChatField ref="chat-field-ref" :friend="friend"/>
+
+    <!--解除好友确认框-->
+    <Teleport to="body">
+      <dialog ref="confirm-modal-ref" class="modal">
+        <div class="modal-box">
+          <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button>
+          </form>
+          <h3 class="text-lg font-bold mb-4">确认解除好友关系</h3>
+          <p class="text leading-relaxed mb-2">
+            解除好友关系后，与 <span class="font-semibold underline decoration-red-700 decoration-dashed underline-offset-4">{{ character.name }}</span> 的聊天记录也将一并清除且不可恢复。即使重新与该角色结为好友，旧有聊天记录也无法恢复。
+          </p>
+          <p class="text font-semibold leading-relaxed mb-6">
+            确定要继续吗？
+          </p>
+          <div class="modal-action">
+            <form method="dialog">
+              <button class="btn btn-ghost">取消</button>
+            </form>
+            <button class="btn bg-red-700 text-white" @click="confirmRemoveFriend">确认解除</button>
+          </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button>close</button>
+        </form>
+      </dialog>
+    </Teleport>
   </div>
 </template>
 
