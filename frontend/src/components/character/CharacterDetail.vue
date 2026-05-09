@@ -5,7 +5,10 @@ import {useRouter} from "vue-router";
 import api from "@/js/http/api";
 import ChatField from "@/components/character/chat_field/ChatField.vue";
 
-const props = defineProps(['character'])
+const props = defineProps({
+  character: Object,
+  mode: {type: String, default: 'card'},  // 'card' = homepage flow, 'chat' = info-only
+})
 
 const router = useRouter()
 const user = useUserStore()
@@ -18,12 +21,14 @@ const friend = ref(null)
 const isLoading = ref(true)
 
 async function showModal() {
-  if (!user.isLogin()) {
+  if (props.mode === 'card' && !user.isLogin()) {
     await router.push({name: 'user-account-login-index'})
     return
   }
-  isLoading.value = true
   modalRef.value.showModal()
+  if (props.mode === 'chat') return
+
+  isLoading.value = true
   try {
     const response = await api.get('/api/friend/is_friend/', {
       params: {character_id: props.character.id}
@@ -58,13 +63,13 @@ defineExpose({showModal})
 </script>
 
 <template>
-  <dialog ref="modal-ref" class="modal">
+  <Teleport to="body">
+    <dialog ref="modal-ref" class="modal">
     <div class="modal-box w-120 max-h-[90vh] overflow-y-auto">
-      <form method="dialog">
-        <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3 z-10">
-          ✕
-        </button>
-      </form>
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3 z-10"
+              @click="modalRef.close()">
+        ✕
+      </button>
 
       <!-- 背景图 -->
       <div class="h-40 -mx-6 -mt-6 mb-4 overflow-hidden rounded-t-2xl">
@@ -98,8 +103,8 @@ defineExpose({showModal})
         <span class="text-sm text-neutral-500">{{ character.author.username }}</span>
       </RouterLink>
 
-      <!-- 操作按钮 -->
-      <div class="card-actions justify-end">
+      <!-- 操作按钮（仅 card 模式） -->
+      <div v-if="mode === 'card'" class="card-actions justify-end">
         <button v-if="isLoading" class="btn btn-neutral" disabled>
           <span class="loading loading-spinner"></span>
         </button>
@@ -112,9 +117,10 @@ defineExpose({showModal})
       </div>
     </div>
 
-    <!-- 聊天框 -->
-    <ChatField ref="chat-field-ref" :friend="friend" />
+    <!-- 聊天框（仅 card 模式） -->
+    <ChatField v-if="mode === 'card'" ref="chat-field-ref" :friend="friend" />
   </dialog>
+  </Teleport>
 </template>
 
 <style scoped>

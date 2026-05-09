@@ -38,14 +38,16 @@ function handleSearch() {
     <input id="my-drawer-4" type="checkbox" class="drawer-toggle"/>
     <div class="drawer-content flex flex-col min-h-screen">
       <!-- Navbar -->
-      <nav class="navbar w-full bg-base-100 shadow-sm">
+      <nav class="navbar w-full bg-base-100 shadow-sm sticky top-0 z-50">
         <div class="navbar-start">
           <label for="my-drawer-4" aria-label="open sidebar" class="btn btn-square btn-ghost">
             <!-- Sidebar toggle icon -->
             <MenuIcon/>
           </label>
-          <img :src="logoUrl" alt="AI Friends Logo" class="w-8 h-auto">
-          <div class="px-2 font-bold text-2xl">AI Friends</div>
+          <RouterLink :to="{ name: 'homepage-index' }" class="flex items-center">
+            <img :src="logoUrl" alt="AI Friends Logo" class="w-8 h-auto">
+            <div class="px-2 font-bold text-2xl">AI Friends</div>
+          </RouterLink>
         </div>
         <div class="navbar-center w-4/5 max-w-180 flex justify-center">
           <form @submit.prevent="handleSearch" class="join w-4/5 flex justify-center">
