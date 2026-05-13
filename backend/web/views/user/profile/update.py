@@ -25,11 +25,14 @@ class UpdateProfileView(APIView):
             photo = request.FILES.get('photo', None)
 
             if not username:
-                return Response({'message': '用户名不能为空'})
+                return Response({'message': '用户名不能为空'},
+                                status=status.HTTP_400_BAD_REQUEST)
             if not profile:
-                return Response({'message': '简介不能为空'})
+                return Response({'message': '简介不能为空'},
+                                status=status.HTTP_400_BAD_REQUEST)
             if username != user.username and User.objects.filter(username=username).exists():
-                return Response({'message': '此用户名已存在'})
+                return Response({'message': '此用户名已存在'},
+                                status=status.HTTP_409_CONFLICT)
 
             user.username = username
             user.save()
