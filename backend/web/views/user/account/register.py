@@ -16,9 +16,11 @@ class RegisterView(APIView):
             username = request.data.get('username').strip()
             password = request.data.get('password').strip()
             if not username or not password:
-                return Response({'message': '用户名和密码不能为空'})
+                return Response({'message': '用户名和密码不能为空'},
+                                status=status.HTTP_400_BAD_REQUEST)
             if User.objects.filter(username=username).exists():
-                return Response({'message': '此用户名已被占用'})
+                return Response({'message': '此用户名已被占用'},
+                                status=status.HTTP_409_CONFLICT)
             user = User.objects.create_user(username=username, password=password)
             user_profile = UserProfile.objects.create(user=user)
             refresh = RefreshToken.for_user(user)

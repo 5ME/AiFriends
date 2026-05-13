@@ -35,7 +35,7 @@ class LoginView(APIView):
                 return response
             else:
                 return Response({'message': '用户名或密码错误'},
-                                status=status.HTTP_200_OK)
+                                status=status.HTTP_401_UNAUTHORIZED)
         except Exception as e:
             logger.exception('用户登录异常: %s', e)
             return Response({'message': '系统异常'},
