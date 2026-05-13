@@ -9,6 +9,7 @@ const route = useRoute()
 const characters = ref([])
 const isLoading = ref(false)
 const hasCharacters = ref(true)
+const loadError = ref('')
 const sentinelRef = useTemplateRef('sentinel-ref')
 
 // 判断哨兵是否在窗口内
@@ -32,13 +33,11 @@ async function loadMore() {
         search_text: route.query.q || ''
       }
     })
-    const data = response.data
-    // console.log(data)
-    if (data.message === 'success') {
-      newCharacters = data.characters
-    }
+    // 200 = 获取成功
+    newCharacters = response.data.characters
   } catch (e) {
     console.log(e)
+    loadError.value = '加载失败，请稍后重试'
   } finally {
     isLoading.value = false
     if (newCharacters.length === 0) {
@@ -89,6 +88,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex flex-col items-center">
+    <p v-if="loadError" class="text-center text-sm text-red-500 py-4">{{ loadError }}</p>
     <div class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-9 mt-12 justify-items-center w-full px-9">
       <Character v-for="character in characters" :key="character.id" :character="character" :show-detail="true"/>
     </div>

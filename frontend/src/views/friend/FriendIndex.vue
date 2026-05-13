@@ -7,6 +7,7 @@ const sentinelRef = useTemplateRef('sentinel-ref')
 const friends = ref([])
 const isLoading = ref(false)
 const hasFriends = ref(true)
+const loadError = ref('')
 
 // 判断哨兵是否在窗口内
 function checkSentinelVisible() {
@@ -28,12 +29,11 @@ async function loadMore() {
         items_count: friends.value.length
       }
     })
-    const data = response.data
-    if (data.message === 'success') {
-      newFriends = data.friends
-    }
+    // 200 = 获取成功
+    newFriends = response.data.friends
   } catch (e) {
     console.log(e)
+    loadError.value = '加载失败，请稍后重试'
   } finally {
     isLoading.value = false
     if (newFriends.length === 0) {
@@ -76,6 +76,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex flex-col items-center mb-12">
+    <p v-if="loadError" class="text-center text-sm text-red-500 py-4">{{ loadError }}</p>
     <div class="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-9 mt-12 justify-items-center w-full px-9">
       <Character v-for="friend in friends"
                  :key="friend.id"
