@@ -15,10 +15,14 @@ AI Friends — a full-stack web app where users create AI characters ("friends")
 
 ### Backend (Python/Django)
 
+Uses miniconda environment `py312`. Activate with `conda activate py312` before running commands.
+
 ```bash
 cd backend
 pip install -r requirements.txt
+# 本地调试前将 settings.py 中 DEBUG 改为 True
 python manage.py runserver              # Dev server on :8000
+# 部署到云服务器时 DEBUG = False
 python manage.py collectstatic          # Collect static files for production
 ```
 
@@ -67,7 +71,23 @@ The frontend is built into `backend/static/frontend/`. Django serves the SPA via
 
 Each API endpoint is a single file under `backend/web/views/`, each exporting a DRF `APIView` subclass. **No DRF serializers are used** — views read `request.data` / `request.FILES` directly and return plain dicts via `Response(data, status=...)`.
 
+**HTTP status code conventions** — never use the default 200 for error responses:
+- `200` — success (only for successful operations)
+- `400` — client validation error (empty fields, missing required data)
+- `401` — authentication failure (wrong password, expired token)
+- `404` — resource not found
+- `409` — conflict (duplicate username, etc.)
+- `500` — server error (unhandled exception)
+
+**Exception handling:** Never use bare `except:`. Always `except Exception as e:` with `logger.exception(...)` before the error response. Every view imports `logging` and has `logger = logging.getLogger(__name__)`.
+
 Models live in `backend/web/models/` — three files: `user.py` (UserProfile), `character.py` (Character, Voice), `friend.py` (Friend, Message, SystemPrompt).
+
+### Logging
+
+LOGGING is configured in `backend/backend/settings.py` with console (StreamHandler) + rotating file handler (`logs/web.log`, 10 MB × 5 backups). Both the root logger and the `web` logger are set to INFO level.
+
+All view modules use `logger = logging.getLogger(__name__)`. Use `logger.exception()` on caught errors (equivalent to `logger.error(... exc_info=True)`, captures full traceback).
 
 ### Character.profile convention
 
@@ -94,6 +114,20 @@ Two separate LangGraph state graphs:
 1. **Chat agent** (`web/views/friend/message/chat/graph.py`) — `deepseek-v3.2` model with tools: `get_time` and `search_knowledge_base` (LanceDB vector search over Bailian docs). Streams tokens via SSE. Also streams TTS audio chunks (base64 mp3) over the same SSE connection using a separate DashScope WebSocket.
 
 2. **Memory agent** (`web/views/friend/message/memory/graph.py`) — `tongyi-xiaomi-analysis-flash` model. Triggers every 10 messages to summarize conversation and write into `Friend.memory` field.
+
+### Frontend error handling
+
+**200 = success.** Components no longer check `data.message === 'success'` — HTTP 200 guarantees the operation succeeded.
+
+**4xx/5xx errors go through `catch` blocks.** Components read `e.response?.data?.message` with a fallback string:
+
+```javascript
+} catch (e) {
+  errorMessage.value = e.response?.data?.message || '网络异常'
+}
+```
+
+**axios 401 whitelist:** Login/register endpoints are excluded from the 401→token-refresh interceptor (`frontend/src/js/http/api.js`), since a 401 on those means "wrong credentials," not "expired token."
 
 ### SSE streaming (chat)
 

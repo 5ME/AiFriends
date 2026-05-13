@@ -2,6 +2,56 @@
 
 AI 虚拟角色聊天平台 — 用户可创建 AI 角色并与之进行文字 + 语音聊天，支持长期记忆和 RAG 知识库检索。
 
+## 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 后端 | Django 6.0 + Django REST Framework + JWT (SQLite) |
+| 前端 | Vue 3 (Composition API) + Vite 7 + Pinia + Vue Router 5 |
+| UI | Tailwind CSS 4 + daisyUI 5 |
+| AI | 阿里云 DashScope（通义千问） + LangChain/LangGraph |
+| 语音 | DashScope TTS (WebSocket) + ASR (WebSocket) + 浏览器端 VAD (Silero VAD) |
+| 向量存储 | LanceDB + 自定义 Embeddings |
+| 部署 | Gunicorn + Nginx (Ubuntu) |
+
+## 功能
+
+- 创建 / 编辑 / 删除自定义 AI 虚拟角色
+- 文字 + 语音双模态聊天，AI 回复支持语音合成播放
+- 聊天上下文长期记忆，每 10 条消息自动摘要
+- RAG 知识库检索（LanceDB 向量搜索）
+- 用户注册登录（JWT 双令牌认证）
+- 首页角色探索 + 好友关系管理
+
+## 快速开始
+
+### 后端
+
+```bash
+cd backend
+pip install -r requirements.txt
+python manage.py runserver        # http://127.0.0.1:8000
+```
+
+### 前端
+
+```bash
+cd frontend
+npm install
+npm run dev                       # http://localhost:5173
+```
+
+> 开发时前端默认以 `vue` 模式运行，API 请求指向 `http://127.0.0.1:8000`。  
+> 环境模式在 `frontend/src/js/config/config.js` 中切换：`vue`（纯前端开发）、`django`（后端开发）、`cloud`（生产）。
+
+### 生产部署
+
+1. 设置 `platform = 'cloud'` → `frontend/src/js/config/config.js`
+2. `cd frontend && npm run build` → 构建产物输出到 `backend/static/frontend/`
+3. `cd backend && python manage.py collectstatic`
+4. 启动 Gunicorn：`gunicorn --workers 3 --bind unix:gunicorn.sock backend.wsgi:application`
+5. Nginx 反向代理到 Gunicorn socket（详见 `服务器部署.md`）
+
 ## 项目结构
 
 ```
