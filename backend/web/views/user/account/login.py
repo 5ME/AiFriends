@@ -6,6 +6,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from web.models.user import UserProfile
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class LoginView(APIView):
     def post(self, request, *args, **kwargs):
@@ -33,6 +36,7 @@ class LoginView(APIView):
             else:
                 return Response({'message': '用户名或密码错误'},
                                 status=status.HTTP_200_OK)
-        except:
+        except Exception as e:
+            logger.exception('用户登录异常: %s', e)
             return Response({'message': '系统异常'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)

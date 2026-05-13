@@ -6,6 +6,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from web.models.user import UserProfile
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class RegisterView(APIView):
     def post(self, request, *args, **kwargs):
@@ -16,11 +19,8 @@ class RegisterView(APIView):
                 return Response({'message': '用户名和密码不能为空'})
             if User.objects.filter(username=username).exists():
                 return Response({'message': '此用户名已被占用'})
-            print(username, password)
             user = User.objects.create_user(username=username, password=password)
-            print(user)
             user_profile = UserProfile.objects.create(user=user)
-            print(user_profile)
             refresh = RefreshToken.for_user(user)
             response = Response({
                 'message': 'success',
@@ -33,6 +33,7 @@ class RegisterView(APIView):
             response.set_cookie(key='refresh_token', value=str(refresh), httponly=True,
                                 samesite='Lax', max_age=86400 * 7, secure=True)
             return response
-        except:
+        except Exception as e:
+            logger.exception('用户注册异常: %s', e)
             return Response({'message': '系统异常'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
