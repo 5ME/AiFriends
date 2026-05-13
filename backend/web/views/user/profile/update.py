@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth.models import User
 from django.utils.timezone import now
 from rest_framework import status
@@ -7,6 +9,8 @@ from rest_framework.views import APIView
 
 from web.models.user import UserProfile
 from web.views.utils.photo import remove_old_photo
+
+logger = logging.getLogger(__name__)
 
 
 class UpdateProfileView(APIView):
@@ -46,6 +50,7 @@ class UpdateProfileView(APIView):
                 'profile': user_profile.profile,
                 'photo': user_profile.photo.url,
             })
-        except:
+        except Exception as e:
+            logger.exception('更新用户资料异常: %s', e)
             return Response(data={'message': '系统异常'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
