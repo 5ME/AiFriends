@@ -37,13 +37,10 @@ async function handleUpdate() {
     try {
       const res = await api.post('/api/user/profile/update/', formData)
       const data = res.data
-      if (data.message === 'success') {
-        user.setUserInfo(data)
-      } else {
-        errorMessage.value = data.message
-      }
+      // 200 = 更新成功
+      user.setUserInfo(data)
     } catch (err) {
-      console.log(err)
+      errorMessage.value = err.response?.data?.message || '网络异常'
     }
   }
 }
