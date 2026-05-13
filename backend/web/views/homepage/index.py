@@ -1,9 +1,13 @@
+import logging
+
 from django.db.models import Q
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from web.models.character import Character
+
+logger = logging.getLogger(__name__)
 
 
 class HomepageIndexView(APIView):
@@ -34,6 +38,7 @@ class HomepageIndexView(APIView):
                     }
                 })
             return Response({'message': 'success', 'characters': characters})
-        except:
+        except Exception as e:
+            logger.exception('首页加载异常: %s', e)
             return Response({"message": "系统异常"},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
