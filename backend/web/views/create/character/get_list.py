@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.response import Response
@@ -5,6 +7,8 @@ from rest_framework.views import APIView
 
 from web.models.character import Character
 from web.models.user import UserProfile
+
+logger = logging.getLogger(__name__)
 
 
 class GetListCharacterView(APIView):
@@ -41,6 +45,7 @@ class GetListCharacterView(APIView):
                 },
                 'characters': characters,
             })
-        except:
+        except Exception as e:
+            logger.exception('获取角色列表异常: %s', e)
             return Response({'message': '系统异常'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)

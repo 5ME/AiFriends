@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -5,6 +7,8 @@ from rest_framework.views import APIView
 
 from web.models.character import Character, Voice
 from web.models.user import UserProfile
+
+logger = logging.getLogger(__name__)
 
 
 class CreateCharacterView(APIView):
@@ -36,6 +40,7 @@ class CreateCharacterView(APIView):
                 background_image=background_image, voice=voice
             )
             return Response({'message': 'success'})
-        except:
+        except Exception as e:
+            logger.exception('创建角色异常: %s', e)
             return Response({'message': '系统异常'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)

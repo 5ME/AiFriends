@@ -1,3 +1,5 @@
+import logging
+
 from django.utils.timezone import now
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -7,6 +9,8 @@ from rest_framework.views import APIView
 from web.models.character import Character, Voice
 from web.models.user import UserProfile
 from web.views.utils.photo import remove_old_photo
+
+logger = logging.getLogger(__name__)
 
 
 class UpdateCharacterView(APIView):
@@ -49,6 +53,7 @@ class UpdateCharacterView(APIView):
                 remove_old_photo(old_background_image)
 
             return Response({'message': 'success'})
-        except:
+        except Exception as e:
+            logger.exception('更新角色异常: %s', e)
             return Response({'message': '系统异常'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
