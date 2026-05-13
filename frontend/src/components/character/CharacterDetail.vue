@@ -19,6 +19,7 @@ const isFriend = ref(false)
 const friendId = ref(null)
 const friend = ref(null)
 const isLoading = ref(true)
+const errorMessage = ref('')
 
 async function showModal() {
   if (props.mode === 'card' && !user.isLogin()) {
@@ -33,10 +34,9 @@ async function showModal() {
     const response = await api.get('/api/friend/is_friend/', {
       params: {character_id: props.character.id}
     })
-    if (response.data.message === 'success') {
-      isFriend.value = response.data.is_friend
-      friendId.value = response.data.friend_id
-    }
+    // 200 = 获取成功
+    isFriend.value = response.data.is_friend
+    friendId.value = response.data.friend_id
   } catch (e) {
     console.log(e)
   } finally {
@@ -49,13 +49,13 @@ async function handleAction() {
     const response = await api.post('/api/friend/get_or_create/', {
       character_id: props.character.id
     })
-    if (response.data.message === 'success') {
-      friend.value = response.data.friend
-      modalRef.value.close()
-      chatFieldRef.value.showModal()
-    }
+    // 200 = 操作成功
+    friend.value = response.data.friend
+    modalRef.value.close()
+    chatFieldRef.value.showModal()
   } catch (e) {
     console.log(e)
+    errorMessage.value = e.response?.data?.message || '操作失败'
   }
 }
 
@@ -115,6 +115,7 @@ defineExpose({showModal})
           添加好友
         </button>
       </div>
+      <p v-if="errorMessage" class="text-sm text-red-500 mt-2">{{ errorMessage }}</p>
     </div>
 
     <!-- 聊天框（仅 card 模式） -->

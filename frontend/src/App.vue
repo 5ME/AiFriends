@@ -14,10 +14,8 @@ const router = useRouter()
 onMounted(async () => {
   try {
     const response = await api.get('/api/user/account/get_user_info/')
-    const data = response.data
-    if (data.message === 'success') {
-      user.setUserInfo(data)
-    }
+    // 200 = 获取成功
+    user.setUserInfo(response.data)
   } catch (e) {
     console.log(e)
   } finally {

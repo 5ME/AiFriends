@@ -1,9 +1,13 @@
+import logging
+
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from web.models.character import Voice
+
+logger = logging.getLogger(__name__)
 
 
 class GetListVoiceView(APIView):
@@ -20,6 +24,7 @@ class GetListVoiceView(APIView):
                     'profile': voice.profile,
                 })
             return Response({"message": "success", "voices": voices})
-        except:
+        except Exception as e:
+            logger.exception('获取音色列表异常: %s', e)
             return Response({"message": "系统异常"},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)

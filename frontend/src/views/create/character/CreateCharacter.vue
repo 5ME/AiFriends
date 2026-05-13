@@ -28,13 +28,12 @@ const curVoiceId = ref(null)
 onMounted(async () => {
   try {
     const response = await api.get('/api/create/character/voice/get_list/')
-    const data = response.data
-    if (data.message === "success") {
-      voices.value = data.voices
-      curVoiceId.value = data.voices[0].id
-    }
+    // 200 = 获取成功
+    voices.value = response.data.voices
+    curVoiceId.value = response.data.voices[0].id
   } catch (e) {
     console.log(e)
+    // 音色列表加载失败不影响创建流程
   }
 })
 
@@ -66,20 +65,15 @@ async function handleCreate() {
 
     try {
       const response = await api.post('api/create/character/create/', formData)
-      const data = response.data
-      if (data.message === 'success') {
-        // 成功，跳转至个人主页
-        await router.push({
-          name: 'user-space-index',
-          params: {
-            user_id: user.id
-          }
-        })
-      } else {
-        errorMessage.value = data.message
-      }
+      // 200 = 创建成功
+      await router.push({
+        name: 'user-space-index',
+        params: {
+          user_id: user.id
+        }
+      })
     } catch (e) {
-      console.log(e)
+      errorMessage.value = e.response?.data?.message || '网络异常'
     }
   }
 }

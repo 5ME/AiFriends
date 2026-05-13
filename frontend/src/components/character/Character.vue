@@ -31,6 +31,7 @@ const chatFieldRef = useTemplateRef('chat-field-ref')
 const characterDetailRef = useTemplateRef('character-detail-ref')
 const confirmModalRef = useTemplateRef('confirm-modal-ref')
 const friend = ref(null)
+const friendError = ref('')
 
 function handleCardClick() {
   if (props.showDetail) {
@@ -48,13 +49,11 @@ async function openChatField() {
       const response = await api.post('/api/friend/get_or_create/', {
         character_id: props.character.id
       })
-      const data = response.data
-      if (data.message === 'success') {
-        friend.value = data.friend
-        chatFieldRef.value.showModal()
-      }
+      // 200 = 操作成功
+      friend.value = response.data.friend
+      chatFieldRef.value.showModal()
     } catch (e) {
-      console.log(e)
+      friendError.value = e.response?.data?.message || '操作失败'
     }
   }
 }
@@ -125,6 +124,8 @@ async function confirmRemoveFriend() {
             解除好友
           </button>
         </div>
+
+        <p v-if="friendError" class="text-sm text-red-600 mt-2">{{ friendError }}</p>
       </div>
     </div>
 

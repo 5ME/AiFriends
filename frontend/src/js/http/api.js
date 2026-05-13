@@ -78,7 +78,11 @@ api.interceptors.response.use(
       }
 
       // 检查是否是 401 未授权错误，且该请求未被重试过（避免无限循环）
-      if (error.response?.status === 401 && !originalRequest._retry) {
+      // 登录/注册接口的 401 表示"凭据错误"，不应触发 token 刷新
+      const requestUrl = error.config?.url || ''
+      const isAuthEndpoint = requestUrl.includes('/api/user/account/login/') || requestUrl.includes('/api/user/account/register/')
+
+      if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
         // 标记该请求已被重试，避免无限循环
         originalRequest._retry = true
 

@@ -4,6 +4,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class RefreshTokenView(APIView):
     def post(self, request, *args, **kwargs):
@@ -27,6 +30,7 @@ class RefreshTokenView(APIView):
                 response.set_cookie(key='refresh_token', value=str(refresh), httponly=True,
                                     samesite='Lax', max_age=86400 * 7, secure=True)
             return response
-        except:
+        except Exception as e:
+            logger.exception('刷新token异常: %s', e)
             return Response({'message': 'refresh_token 过期'},
                             status=status.HTTP_401_UNAUTHORIZED)

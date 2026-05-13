@@ -24,12 +24,10 @@ async function getCharacterData() {
     const response = await api.get('api/create/character/get_single/', {
       params: {character_id: route.params.character_id}
     })
-    const data = response.data
-    if (data.message === 'success') {
-      character.value = data.character
-      voices.value = data.voices
-      curVoiceId.value = data.character.voice_id
-    }
+    // 200 = 获取成功
+    character.value = response.data.character
+    voices.value = response.data.voices
+    curVoiceId.value = response.data.character.voice_id
   } catch (e) {
     console.log(e)
   }
@@ -85,20 +83,15 @@ async function handleUpdate() {
 
     try {
       const response = await api.post('api/create/character/update/', formData)
-      const data = response.data
-      if (data.message === 'success') {
-        // 成功，跳转至个人主页
-        await router.push({
-          name: 'user-space-index',
-          params: {
-            user_id: user.id
-          }
-        })
-      } else {
-        errorMessage.value = data.message
-      }
+      // 200 = 更新成功
+      await router.push({
+        name: 'user-space-index',
+        params: {
+          user_id: user.id
+        }
+      })
     } catch (e) {
-      console.log(e)
+      errorMessage.value = e.response?.data?.message || '网络异常'
     }
   }
 }

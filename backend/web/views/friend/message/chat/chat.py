@@ -11,6 +11,7 @@ import websockets
 from django.http import StreamingHttpResponse
 from langchain_core.messages import HumanMessage, BaseMessageChunk, BaseMessage, SystemMessage, AIMessage
 from langgraph.graph.state import CompiledStateGraph
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
@@ -102,10 +103,12 @@ class MessageChatView(APIView):
         friend_id = request.data["friend_id"]
         message = request.data["message"].strip()
         if not message:
-            return Response({"message": "消息不能为空"})
+            return Response({"message": "消息不能为空"},
+                            status=status.HTTP_400_BAD_REQUEST)
         friends = Friend.objects.filter(pk=friend_id, user_profile__user=request.user)
         if not friends.exists():
-            return Response({"message": "好友关系不存在"})
+            return Response({"message": "好友关系不存在"},
+                            status=status.HTTP_404_NOT_FOUND)
         friend = friends.first()
         app = ChatGraph.create_app()
         inputs = {

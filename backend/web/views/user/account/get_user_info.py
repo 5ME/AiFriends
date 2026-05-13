@@ -5,6 +5,9 @@ from rest_framework.views import APIView
 
 from web.models.user import UserProfile
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class GetUserInfoView(APIView):
     permission_classes = [IsAuthenticated]
@@ -20,6 +23,7 @@ class GetUserInfoView(APIView):
                 'photo': user_profile.photo.url,
                 'profile': user_profile.profile,
             }, status=status.HTTP_200_OK)
-        except:
+        except Exception as e:
+            logger.exception('获取用户信息异常: %s', e)
             return Response({"message": "系统异常"},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
