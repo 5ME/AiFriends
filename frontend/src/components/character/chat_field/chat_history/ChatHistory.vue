@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import Message from "@/components/character/chat_field/chat_history/message/Message.vue";
 import api from "@/js/http/api";
-import {nextTick, onBeforeUnmount, onMounted, useTemplateRef} from "vue";
+import {nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef} from "vue";
 
 const props = defineProps(['friendId', 'character', 'history'])
 const emits = defineEmits(['pushFrontMessage'])
@@ -14,6 +14,7 @@ async function scrollToBottom() {
   scrollRef.value.scrollTop = scrollRef.value.scrollHeight
 }
 
+const loadError = ref('')
 let isLoading = false
 let hasMessages = true
 let lastMessageId = 0
@@ -42,11 +43,10 @@ async function loadMore() {
       }
     })
     const data = response.data
-    if (data.message === 'success') {
-      newMessages = data.messages
-    }
+    newMessages = data.messages
   } catch (e) {
     console.log(e)
+    loadError.value = '加载失败，请稍后重试'
   } finally {
     isLoading = false
     if (newMessages.length === 0) {
@@ -109,6 +109,7 @@ defineExpose({
 
 <template>
   <div ref="scroll-ref" class="absolute top-18 left-0 w-90 h-112 overflow-y-scroll no-scrollbar">
+    <p v-if="loadError" class="text-center text-sm text-red-500 py-4">{{ loadError }}</p>
     <!--哨兵-->
     <div ref="sentinel-ref" class="h-2"></div>
     <!--聊天消息-->
