@@ -11,6 +11,7 @@ import websockets
 from django.http import StreamingHttpResponse
 from langchain_core.messages import HumanMessage, BaseMessageChunk, BaseMessage, SystemMessage, AIMessage
 from langgraph.graph.state import CompiledStateGraph
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import BaseRenderer
 from rest_framework.response import Response
