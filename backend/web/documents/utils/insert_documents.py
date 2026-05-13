@@ -5,6 +5,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from web.documents.utils.custom_embeddings import CustomEmbeddings
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def insert_documents():
     # 加载文件
@@ -14,7 +18,7 @@ def insert_documents():
     # 切分文件
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = text_splitter.split_documents(docs)
-    print(f'已切分成 {len(chunks)} 个片段')
+    logger.info('已切分成 %d 个片段', len(chunks))
 
     # 自定义向量化类
     embeddings = CustomEmbeddings()
@@ -28,5 +32,5 @@ def insert_documents():
         table_name='my_knowledge_base',
         mode='overwrite',
     )
-    print(f'{type(lance_db)}')
-    print(f'已插入 {lance_db._table.count_rows()} 行数据')
+    logger.info('%s', type(lance_db))
+    logger.info('已插入 %d 行数据', lance_db._table.count_rows())
