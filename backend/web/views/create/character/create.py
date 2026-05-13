@@ -25,13 +25,17 @@ class CreateCharacterView(APIView):
             voice_id = request.data.get('voice_id')
 
             if not name:
-                return Response({'message': '角色名称不能为空'})
+                return Response({'message': '角色名称不能为空'},
+                                status=status.HTTP_400_BAD_REQUEST)
             if not profile:
-                return Response({'message': '角色信息不能为空'})
+                return Response({'message': '角色信息不能为空'},
+                                status=status.HTTP_400_BAD_REQUEST)
             if not photo:
-                return Response({'message': '角色头像不能为空'})
+                return Response({'message': '角色头像不能为空'},
+                                status=status.HTTP_400_BAD_REQUEST)
             if not background_image:
-                return Response({'message': '对话背景不能为空'})
+                return Response({'message': '对话背景不能为空'},
+                                status=status.HTTP_400_BAD_REQUEST)
 
             voice = Voice.objects.get(id=voice_id)
 
