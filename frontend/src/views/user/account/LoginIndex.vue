@@ -14,7 +14,6 @@ const user = useUserStore()
 const router = useRouter()
 
 async function handleLogin() {
-  console.log("handle login request...")
   errorMessage.value = ''
   if (!username.value.trim()) {
     errorMessage.value = '用户名不能为空'
@@ -27,18 +26,13 @@ async function handleLogin() {
         'password': password.value
       })
       const data = response.data
-      if (data.message === 'success') {
-        user.setAccessToken(data.access_token)
-        user.setUserInfo(data)
-        await router.push({
-          name: 'homepage-index'
-        })
-      } else {
-        console.log(data.message)
-        errorMessage.value = data.message
-      }
+      // 200 = 登录成功
+      user.setAccessToken(data.access_token)
+      user.setUserInfo(data)
+      await router.push({ name: 'homepage-index' })
     } catch (e) {
-      console.log(e)
+      // 401/400/500 统一在此处理
+      errorMessage.value = e.response?.data?.message || '网络异常'
     }
   }
 }

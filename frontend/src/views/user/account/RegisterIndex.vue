@@ -27,15 +27,13 @@ async function handleRegister() {
         password: password.value
       })
       const data = response.data
-      if (data.message === 'success') {
-        user.setAccessToken(data.access_token)
-        user.setUserInfo(data)
-        await router.push({name: 'homepage-index'})
-      } else {
-        errorMessage.value = data.message
-      }
+      // 200 = 注册成功
+      user.setAccessToken(data.access_token)
+      user.setUserInfo(data)
+      await router.push({name: 'homepage-index'})
     } catch (e) {
-      console.log(e)
+      // 400/409/500 统一在此处理
+      errorMessage.value = e.response?.data?.message || '网络异常'
     }
   }
 }
