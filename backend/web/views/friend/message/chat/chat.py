@@ -21,6 +21,9 @@ from websockets.client import ClientConnection
 from web.models.friend import Friend, Message, SystemPrompt
 from web.views.friend.message.chat.graph import ChatGraph
 from web.views.friend.message.memory import update
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SSERenderer(BaseRenderer):
