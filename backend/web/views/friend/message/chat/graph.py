@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import TypedDict, Annotated, Sequence
 
@@ -13,10 +14,13 @@ from langgraph.prebuilt import ToolNode
 
 from web.documents.utils.custom_embeddings import CustomEmbeddings
 
+logger = logging.getLogger(__name__)
 
+# LangGraph Chat Agent: LLM 决策 → tool 调用 → LLM 再决策的循环
 class ChatGraph:
     @staticmethod
     def create_app():
+        # Tool 1: 时间查询
         @tool
         def get_time() -> str:
             """
@@ -25,6 +29,7 @@ class ChatGraph:
             """
             return localtime(now()).strftime("%Y-%m-%d %H:%M:%S")
 
+        # Tool 2: 知识库向量检索（LanceDB）
         @tool
         def search_knowledge_base(query: str) -> str:
             """
@@ -44,6 +49,7 @@ class ChatGraph:
 
         tools = [get_time, search_knowledge_base]
 
+        # 主 LLM，负责决策和文本生成
         llm = ChatOpenAI(
             model="deepseek-v3.2",
             api_key=os.getenv("API_KEY"),
@@ -59,25 +65,27 @@ class ChatGraph:
         class AgentState(TypedDict):
             messages: Annotated[Sequence[BaseMessage], add_messages]
 
+        # Agent 节点：调用 LLM 产生响应或 tool 调用请求
         def model_call(state: AgentState) -> AgentState:
+            logger.info('Chat Agent LLM 调用, message_count=%d', len(state["messages"]))
             res = llm.invoke(state["messages"])
             return {"messages": [res]}
 
+        # 路由：LLM 响应中有 tool_calls 则转到工具节点，否则结束
         def should_continue(state: AgentState) -> str:
             last_message = state["messages"][-1]
             if last_message.tool_calls:
                 return "tools"
             return "end"
 
-        # 工具节点
+        # LangGraph ToolNode 自动执行 tool_calls 并返回结果
         tool_node = ToolNode(tools)
 
+        # 构建图: START → agent → tools ⇄ agent → END
         graph = StateGraph(AgentState)
-        # 添加节点
         graph.add_node('agent', model_call)
         graph.add_node('tools', tool_node)
 
-        # 添加边
         graph.add_edge(START, 'agent')
         graph.add_conditional_edges(
             'agent',
