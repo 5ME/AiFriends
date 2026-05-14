@@ -152,6 +152,8 @@ class MessageChatView(APIView):
             # print('====>', msg)
             if msg is None:
                 break
+            if msg.get('error', None):
+                yield f'data: {json.dumps({"error": msg["error"]}, ensure_ascii=False)}\n\n'
             if msg.get('content', None):
                 full_output.append(msg['content'])
                 yield f'data: {json.dumps({'content': msg['content']}, ensure_ascii=False)}\n\n'
@@ -188,6 +190,9 @@ class MessageChatView(APIView):
     ):
         try:
             asyncio.run(self.run_tts_task(app, inputs, mq, voice_id))
+        except Exception:
+            logger.exception('Chat Agent 执行异常')
+            mq.put_nowait({'error': '系统异常，请稍后重试'})
         finally:
             mq.put_nowait(None)
 
