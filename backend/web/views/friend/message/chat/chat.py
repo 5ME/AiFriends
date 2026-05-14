@@ -141,6 +141,7 @@ class MessageChatView(APIView):
             message: str
     ):
         mq = queue.Queue()
+        logger.info('Chat Agent 开始, friend_id=%s', friend.id)
         thread = threading.Thread(target=self.work, args=(app, inputs, mq, friend.character.voice.voice_id))
         thread.start()
 
@@ -178,7 +179,11 @@ class MessageChatView(APIView):
             output_tokens=output_tokens,
             total_tokens=total_tokens,
         )
+        logger.info('Chat Agent 完成, friend_id=%s, tokens: in=%d out=%d total=%d',
+                    friend.id, input_tokens, output_tokens, total_tokens)
         if Message.objects.filter(friend=friend).count() % 10 == 0:
+            logger.info('触发 Memory 更新, friend_id=%s, message_count=%d',
+                        friend.id, Message.objects.filter(friend=friend).count())
             update.update_memory(friend)
 
     def work(
@@ -232,6 +237,7 @@ class MessageChatView(APIView):
                     }
                 }
             }))
+            logger.info('TTS WebSocket 已连接, task_id=%s, voice_id=%s', task_id, voice_id)
             async for msg in ws:
                 if json.loads(msg)['header']['event'] == 'task-started':
                     break
