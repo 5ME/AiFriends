@@ -21,6 +21,9 @@ from websockets.client import ClientConnection
 from web.models.friend import Friend, Message, SystemPrompt
 from web.views.friend.message.chat.graph import ChatGraph
 from web.views.friend.message.memory import update
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SSERenderer(BaseRenderer):
@@ -138,6 +141,7 @@ class MessageChatView(APIView):
             message: str
     ):
         mq = queue.Queue()
+        logger.info('Chat Agent 开始, friend_id=%s', friend.id)
         thread = threading.Thread(target=self.work, args=(app, inputs, mq, friend.character.voice.voice_id))
         thread.start()
 
@@ -149,6 +153,8 @@ class MessageChatView(APIView):
             # print('====>', msg)
             if msg is None:
                 break
+            if msg.get('error', None):
+                yield f'data: {json.dumps({"error": msg["error"]}, ensure_ascii=False)}\n\n'
             if msg.get('content', None):
                 full_output.append(msg['content'])
                 yield f'data: {json.dumps({'content': msg['content']}, ensure_ascii=False)}\n\n'
@@ -173,7 +179,11 @@ class MessageChatView(APIView):
             output_tokens=output_tokens,
             total_tokens=total_tokens,
         )
+        logger.info('Chat Agent 完成, friend_id=%s, tokens: in=%d out=%d total=%d',
+                    friend.id, input_tokens, output_tokens, total_tokens)
         if Message.objects.filter(friend=friend).count() % 10 == 0:
+            logger.info('触发 Memory 更新, friend_id=%s, message_count=%d',
+                        friend.id, Message.objects.filter(friend=friend).count())
             update.update_memory(friend)
 
     def work(
@@ -185,6 +195,9 @@ class MessageChatView(APIView):
     ):
         try:
             asyncio.run(self.run_tts_task(app, inputs, mq, voice_id))
+        except Exception:
+            logger.exception('Chat Agent 执行异常')
+            mq.put_nowait({'error': '系统异常，请稍后重试'})
         finally:
             mq.put_nowait(None)
 
@@ -224,6 +237,7 @@ class MessageChatView(APIView):
                     }
                 }
             }))
+            logger.info('TTS WebSocket 已连接, task_id=%s, voice_id=%s', task_id, voice_id)
             async for msg in ws:
                 if json.loads(msg)['header']['event'] == 'task-started':
                     break

@@ -148,6 +148,9 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
           // 实现输出打断
           return
         }
+        if (data.error) {
+          emits('appendToLastMessage', data.error)
+        }
         if (data.content) {
           emits('appendToLastMessage', data.content)
         }
