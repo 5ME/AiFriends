@@ -4,6 +4,10 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from web.models.friend import Friend, SystemPrompt, Message
 from web.views.friend.message.memory.graph import MemoryGraph
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def create_system_message() -> SystemMessage:
     system_prompts = SystemPrompt.objects.filter(title__exact='记忆').order_by('order_number')
@@ -24,14 +28,17 @@ def create_human_message(friend: Friend, recent_count: int=10) -> HumanMessage:
 
 
 def update_memory(friend: Friend):
-    app = MemoryGraph.create_app()
-    inputs = {
-        'messages': [
-            create_system_message(),
-            create_human_message(friend)
-        ]
-    }
-    res = app.invoke(inputs)
-    friend.memory = res['messages'][-1].content
-    friend.updated_at = now()
-    friend.save()
+    try:
+        app = MemoryGraph.create_app()
+        inputs = {
+            'messages': [
+                create_system_message(),
+                create_human_message(friend)
+            ]
+        }
+        res = app.invoke(inputs)
+        friend.memory = res['messages'][-1].content
+        friend.updated_at = now()
+        friend.save()
+    except Exception:
+        logger.exception('Memory Agent 更新失败, friend_id=%s', friend.id)
