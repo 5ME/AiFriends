@@ -2,26 +2,35 @@ import asyncio
 import json
 import os
 import uuid
+import logging
 
 import websockets
-from openai import api_key
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+logger = logging.getLogger(__name__)
 
 
 class ASRView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        audio = request.FILES.get('audio')
-        if not audio:
-            return Response({'message': '音频不存在'},
-                            status=status.HTTP_400_BAD_REQUEST)
-        pcm_data = audio.read()
-        text = asyncio.run(self.run_asr_task(pcm_data))
-        return Response({'message': 'success', 'text': text})
+        try:
+            audio = request.FILES.get('audio')
+            if not audio:
+                return Response({'message': '音频不存在'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            logger.info('ASR 开始')
+            pcm_data = audio.read()
+            text = asyncio.run(self.run_asr_task(pcm_data))
+            logger.info('ASR 完成, text_length=%d', len(text))
+            return Response({'message': 'success', 'text': text})
+        except Exception:
+            logger.exception('ASR 执行异常')
+            return Response({'message': '系统异常'},
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     async def run_asr_task(self, pcm_data):
         task_id = uuid.uuid4().hex
@@ -52,6 +61,7 @@ class ASRView(APIView):
                     "function": "recognition"
                 }
             }))
+            logger.info('ASR WebSocket 已连接, task_id=%s', task_id)
             async for msg in ws:
                 if json.loads(msg)['header']['event'] == 'task-started':
                     # 收到 task-started 事件后，再发送待识别的音频流
@@ -94,7 +104,8 @@ class ASRView(APIView):
                 # 需要等待一句话结束（sentence_end == true）时同步
                 if output.get('transcription', None) and output['transcription']['sentence_end']:
                     text.append(output['transcription']['text'])
-            # 如果任务结束或失败则退出
-            elif event in ['task-finished', 'task-failed']:
+            elif event == 'task-finished':
                 break
+            elif event == 'task-failed':
+                raise Exception('ASR task failed')
         return ''.join(text)
