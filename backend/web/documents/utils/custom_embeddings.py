@@ -2,6 +2,9 @@ import os
 
 from langchain_core.embeddings import Embeddings
 from openai import OpenAI
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class CustomEmbeddings(Embeddings):
@@ -31,12 +34,17 @@ class CustomEmbeddings(Embeddings):
                 continue
             
             # 调用 Embedding 接口
-            response = self.client.embeddings.create(
-                model="text-embedding-v4",
-                input=batch,
-                dimensions=1024  # 指定向量维度为 1024
-            )
-            all_embeddings.extend([data.embedding for data in response.data])
+            try:
+                response = self.client.embeddings.create(
+                    model="text-embedding-v4",
+                    input=batch,
+                    dimensions=1024  # 指定向量维度为 1024
+                )
+                all_embeddings.extend([data.embedding for data in response.data])
+            except Exception:
+                logger.exception('Embedding API 调用失败, batch_index=%d, batch_size=%d',
+                                 i // batch_size, len(batch))
+                raise
         return all_embeddings
 
     def embed_query(self, text):
@@ -45,4 +53,8 @@ class CustomEmbeddings(Embeddings):
         :param text: 查询文本
         :return: 对应的向量
         """
-        return self.embed_documents([text])[0]
+        try:
+            return self.embed_documents([text])[0]
+        except Exception:
+            logger.exception('Embedding 查询向量化失败, text_length=%d', len(text))
+            raise

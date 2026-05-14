@@ -103,10 +103,10 @@ class MessageChatView(APIView):
     renderer_classes = (SSERenderer,)
 
     def post(self, request, *args, **kwargs):
-        friend_id = request.data["friend_id"]
-        message = request.data["message"].strip()
-        if not message:
-            return Response({"message": "消息不能为空"},
+        friend_id = request.data.get("friend_id")
+        message = (request.data.get("message") or "").strip()
+        if not friend_id or not message:
+            return Response({"message": "参数不完整"},
                             status=status.HTTP_400_BAD_REQUEST)
         friends = Friend.objects.filter(pk=friend_id, user_profile__user=request.user)
         if not friends.exists():
@@ -142,7 +142,8 @@ class MessageChatView(APIView):
     ):
         mq = queue.Queue()
         logger.info('Chat Agent 开始, friend_id=%s', friend.id)
-        thread = threading.Thread(target=self.work, args=(app, inputs, mq, friend.character.voice.voice_id))
+        voice_id = friend.character.voice.voice_id if friend.character.voice else ''
+        thread = threading.Thread(target=self.work, args=(app, inputs, mq, voice_id))
         thread.start()
 
         full_output = []
@@ -167,18 +168,21 @@ class MessageChatView(APIView):
         input_tokens = full_usage.get('input_tokens', 0)
         output_tokens = full_usage.get('output_tokens', 0)
         total_tokens = full_usage.get('total_tokens', 0)
-        Message.objects.create(
-            friend=friend,
-            user_message=message[:5000],
-            input=json.dumps(
-                [m.model_dump() for m in inputs['messages']],
-                ensure_ascii=False
-            )[:50000],
-            output=''.join(full_output)[:5000],
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            total_tokens=total_tokens,
-        )
+        try:
+            Message.objects.create(
+                friend=friend,
+                user_message=message[:5000],
+                input=json.dumps(
+                    [m.model_dump() for m in inputs['messages']],
+                    ensure_ascii=False
+                )[:50000],
+                output=''.join(full_output)[:5000],
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                total_tokens=total_tokens,
+            )
+        except Exception:
+            logger.exception('聊天消息保存失败, friend_id=%s', friend.id)
         logger.info('Chat Agent 完成, friend_id=%s, tokens: in=%d out=%d total=%d',
                     friend.id, input_tokens, output_tokens, total_tokens)
         if Message.objects.filter(friend=friend).count() % 10 == 0:
