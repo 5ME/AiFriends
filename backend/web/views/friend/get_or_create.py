@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 import logging
 
+from web.models.character import Character
 from web.models.friend import Friend
 from web.models.user import UserProfile
 
@@ -16,9 +17,14 @@ class FriendGetOrCreateView(APIView):
 
     def post(self, request):
         try:
-            character_id = request.data['character_id']
-            user = request.user
-            user_profile = UserProfile.objects.get(user=user)
+            character_id = request.data.get('character_id')
+            if not character_id:
+                return Response({'message': '参数不完整'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if not Character.objects.filter(id=character_id).exists():
+                return Response({'message': '该角色已被创建者删除'},
+                                status=status.HTTP_404_NOT_FOUND)
+            user_profile = UserProfile.objects.get(user=request.user)
             friends = Friend.objects.filter(character_id=character_id, user_profile=user_profile)
             if friends.exists():
                 friend = friends.first()
