@@ -150,6 +150,7 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
         }
         if (data.error) {
           emits('appendToLastMessage', data.error)
+          stopAudio()
         }
         if (data.content) {
           emits('appendToLastMessage', data.content)
