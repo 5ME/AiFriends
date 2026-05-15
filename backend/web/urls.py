@@ -6,6 +6,7 @@ from web.views.create.character.get_single import GetSingleCharacterView
 from web.views.create.character.remove import RemoveCharacterView
 from web.views.create.character.update import UpdateCharacterView
 from web.views.create.character.voice.get_list import GetListVoiceView
+from web.views.friend.get_count import FriendGetCountView
 from web.views.friend.get_list import FriendGetListView
 from web.views.friend.get_or_create import FriendGetOrCreateView
 from web.views.friend.is_friend import FriendIsFriendView
@@ -39,6 +40,7 @@ urlpatterns = [
 
     path('api/homepage/index/', HomepageIndexView.as_view()),
 
+    path('api/friend/get_count/', FriendGetCountView.as_view()),
     path('api/friend/is_friend/', FriendIsFriendView.as_view()),
     path('api/friend/get_or_create/', FriendGetOrCreateView.as_view()),
     path('api/friend/remove/', FriendRemoveView.as_view()),
