@@ -14,12 +14,16 @@ const isHover = ref(false)
 const router = useRouter()
 const user = useUserStore()
 
-async function handleRemoveCharacter() {
+function handleRemoveCharacter() {
+  deleteConfirmModalRef.value.showModal()
+}
+
+async function confirmRemoveCharacter() {
   try {
     const response = await api.post('api/create/character/remove/', {
       character_id: props.character.id
     })
-    if (response.data.message === 'success') {
+    if (response.status === 200) {
       emit('remove', props.character.id)
     }
   } catch (e) {
@@ -30,6 +34,7 @@ async function handleRemoveCharacter() {
 const chatFieldRef = useTemplateRef('chat-field-ref')
 const characterDetailRef = useTemplateRef('character-detail-ref')
 const confirmModalRef = useTemplateRef('confirm-modal-ref')
+const deleteConfirmModalRef = useTemplateRef('delete-confirm-modal-ref')
 const friend = ref(null)
 const friendError = ref('')
 
@@ -166,6 +171,39 @@ async function confirmRemoveFriend() {
               <button class="btn btn-ghost">取消</button>
             </form>
             <button class="btn bg-red-700 text-white" @click="confirmRemoveFriend">确认解除</button>
+          </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button>close</button>
+        </form>
+      </dialog>
+    </Teleport>
+
+    <!--删除角色确认框-->
+    <Teleport to="body">
+      <dialog ref="delete-confirm-modal-ref" class="modal">
+        <div class="modal-box">
+          <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3">✕</button>
+          </form>
+          <h3 class="text-lg font-bold mb-4">确认删除角色</h3>
+          <p class="mb-2">
+            删除角色后，角色信息及所有相关数据将被永久清除且不可恢复。
+          </p>
+          <p v-if="character.friend_count > 0" class="mb-2">
+            目前有 <span class="font-semibold">{{ character.friend_count }}</span> 位用户与该角色存在好友关系，相关聊天记录也将一并清除。
+          </p>
+          <p class="mb-2">
+            即使重新创建同名角色，旧有数据也无法恢复。
+          </p>
+          <p class="font-semibold mb-6">
+            确定要继续吗？
+          </p>
+          <div class="modal-action">
+            <form method="dialog">
+              <button class="btn btn-ghost">取消</button>
+            </form>
+            <button class="btn bg-red-700 text-white" @click="confirmRemoveCharacter">确认删除</button>
           </div>
         </div>
         <form method="dialog" class="modal-backdrop">
