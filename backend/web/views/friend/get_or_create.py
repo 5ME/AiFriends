@@ -22,6 +22,7 @@ class FriendGetOrCreateView(APIView):
                 return Response({'message': '参数不完整'},
                                 status=status.HTTP_400_BAD_REQUEST)
             if not Character.objects.filter(id=character_id).exists():
+                logger.warning('角色已被删除, character_id=%s, user_id=%s', character_id, request.user.id)
                 return Response({'message': '该角色已被创建者删除'},
                                 status=status.HTTP_404_NOT_FOUND)
             user_profile = UserProfile.objects.get(user=request.user)

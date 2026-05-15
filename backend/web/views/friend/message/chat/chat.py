@@ -110,6 +110,7 @@ class MessageChatView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
         friends = Friend.objects.filter(pk=friend_id, user_profile__user=request.user)
         if not friends.exists():
+            logger.warning('好友关系不存在(角色可能已被删除), friend_id=%s, user_id=%s', friend_id, request.user.id)
             response = StreamingHttpResponse(
                 self._error_stream('该角色已被创建者删除，相关好友关系已解除'),
                 content_type='text/event-stream'
