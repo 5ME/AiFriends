@@ -94,8 +94,11 @@ async function handleCreate() {
 
         <p v-if="errorMessage" class="text-sm text-red-500">{{ errorMessage }}</p>
 
-        <div class="card-actions justify-center mt-3">
-          <button @click="handleCreate" class="btn btn-neutral w-50">
+        <div class="card-actions justify-center mt-3 gap-4">
+          <button @click="router.back()" class="btn btn-outline w-30">
+            取消
+          </button>
+          <button @click="handleCreate" class="btn btn-neutral w-30">
             创建
           </button>
         </div>

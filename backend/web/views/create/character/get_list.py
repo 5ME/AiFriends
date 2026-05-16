@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from web.models.character import Character
+from web.models.friend import Friend
 from web.models.user import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -23,12 +24,14 @@ class GetListCharacterView(APIView):
             characters = []
             for character in character_list:
                 author = character.author
+                friend_count = Friend.objects.filter(character_id=character.id).count()
                 characters.append({
                     'id': character.id,
                     'name': character.name,
                     'profile': character.profile,
                     'photo': character.photo.url,
                     'background_image': character.background_image.url,
+                    'friend_count': friend_count,
                     'author': {
                         'user_id': author.user_id,
                         'username': author.user.username,

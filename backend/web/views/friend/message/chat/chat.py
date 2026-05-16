@@ -110,8 +110,13 @@ class MessageChatView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
         friends = Friend.objects.filter(pk=friend_id, user_profile__user=request.user)
         if not friends.exists():
-            return Response({"message": "好友关系不存在"},
-                            status=status.HTTP_404_NOT_FOUND)
+            logger.warning('好友关系不存在(角色可能已被删除), friend_id=%s, user_id=%s', friend_id, request.user.id)
+            response = StreamingHttpResponse(
+                self._error_stream('该角色已被创建者删除，相关好友关系已解除'),
+                content_type='text/event-stream'
+            )
+            response['Cache-Control'] = 'no-cache'
+            return response
         friend = friends.first()
         app = ChatGraph.create_app()
         inputs = {
@@ -131,6 +136,11 @@ class MessageChatView(APIView):
         # 禁用 Nginx 等代理服务器的响应缓冲，实现即时下发
         response['X-Accel-Buffering'] = 'no'
         return response
+
+    def _error_stream(self, error_msg: str):
+        error_data = json.dumps({'error': error_msg}, ensure_ascii=False)
+        yield f'data: {error_data}\n\n'
+        yield 'data: [DONE]\n\n'
 
     # 定义流式生成器
     def event_stream(

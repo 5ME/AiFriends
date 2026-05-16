@@ -7,7 +7,7 @@ import {onUnmounted, ref, useTemplateRef} from "vue";
 import Microphone from "@/components/character/chat_field/input_field/Microphone.vue";
 
 const props = defineProps(['friendId'])
-const emits = defineEmits(['pushBackMessage', 'appendToLastMessage'])
+const emits = defineEmits(['pushBackMessage', 'appendToLastMessage', 'error'])
 
 const inputRef = useTemplateRef('input-ref')
 const message = ref('')
@@ -150,6 +150,7 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
         }
         if (data.error) {
           emits('appendToLastMessage', data.error)
+          stopAudio()
         }
         if (data.content) {
           emits('appendToLastMessage', data.content)
@@ -160,10 +161,14 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
       },
       onerror(err) {
         console.log(err)
+        emits('appendToLastMessage', err.message || '发送失败')
+        stopAudio()
       },
     })
   } catch (e) {
     console.log(e)
+    emits('appendToLastMessage', e.message || '发送失败')
+    stopAudio()
   }
 }
 
