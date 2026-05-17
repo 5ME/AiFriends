@@ -13,4 +13,5 @@ dist/
 backend/web/documents/lancedb_storage/
 frontend/public/vad/
 backend/logs/
+.pytest_cache/
 .claude/
