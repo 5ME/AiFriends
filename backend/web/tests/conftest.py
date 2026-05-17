@@ -1,4 +1,8 @@
+import io
+
 import pytest
+from PIL import Image
+from django.core.files.uploadedfile import SimpleUploadedFile
 from model_bakery import baker
 from django.contrib.auth.models import User
 from rest_framework.test import APIClient
@@ -7,6 +11,14 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from web.models.user import UserProfile
 from web.models.character import Character, Voice
 from web.models.friend import Friend
+
+
+def _dummy_image(name="test.png"):
+    """Create a 1x1 pixel PNG SimpleUploadedFile for ImageField fixtures."""
+    img = Image.new("RGB", (1, 1), color="red")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return SimpleUploadedFile(name, buf.getvalue(), content_type="image/png")
 
 
 @pytest.fixture
@@ -48,11 +60,15 @@ def voice(db):
 @pytest.fixture
 def character(user_profile, voice):
     """测试角色（属于 auth_client 的用户）"""
+    photo = _dummy_image("photo.png")
+    bg = _dummy_image("bg.png")
     return baker.make(
         Character,
         author=user_profile,
         name="Test Character",
         voice=voice,
+        photo=photo,
+        background_image=bg,
     )
 
 
