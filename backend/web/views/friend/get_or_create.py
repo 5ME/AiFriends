@@ -40,7 +40,7 @@ class FriendGetOrCreateView(APIView):
                     'character': {
                         'id': character.id,
                         'name': character.name,
-                        'profile': character.profile,
+                        'introduction': character.introduction,
                         'photo': character.photo_url,
                         'background_image': character.background_image_url,
                         'author': {

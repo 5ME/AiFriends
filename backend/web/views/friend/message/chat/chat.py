@@ -53,7 +53,7 @@ def add_system_prompt(
     prompts = []
     for sp in system_prompts:
         prompts.append(sp.prompt)
-    prompts.append(f'\n\n【角色性格】\n\n{friend.character.profile}\n')
+    prompts.append(f'\n\n【角色性格】\n\n{friend.character.system_prompt}\n')
     prompts.append(f'【长期记忆】\n{friend.memory}\n')
     prompt = ''.join(prompts)
     return {'messages': [SystemMessage(prompt)] + msgs}

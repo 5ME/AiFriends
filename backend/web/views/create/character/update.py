@@ -1,6 +1,5 @@
 import logging
 
-from django.utils.timezone import now
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -21,7 +20,8 @@ class UpdateCharacterView(APIView):
             character_id = request.data['character_id']
             character = Character.objects.get(id=character_id, author__user=request.user)
             name = request.data['name'].strip()
-            profile = request.data['profile'].strip()
+            introduction = request.data.get('introduction', '').strip()
+            system_prompt = request.data.get('system_prompt', '').strip()
             photo = request.FILES.get('photo', None)
             background_image = request.FILES.get('background_image', None)
             voice_id = request.data['voice_id']
@@ -29,7 +29,10 @@ class UpdateCharacterView(APIView):
             if not name:
                 return Response({'message': '角色名称不能为空'},
                                 status=status.HTTP_400_BAD_REQUEST)
-            if not profile:
+            if not introduction:
+                return Response({'message': '角色简介不能为空'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if not system_prompt:
                 return Response({'message': '角色信息不能为空'},
                                 status=status.HTTP_400_BAD_REQUEST)
 
@@ -37,7 +40,8 @@ class UpdateCharacterView(APIView):
             character.voice = voice
 
             character.name = name
-            character.profile = profile
+            character.introduction = introduction
+            character.system_prompt = system_prompt
             old_photo = None
             if photo:
                 old_photo = character.photo
@@ -46,7 +50,6 @@ class UpdateCharacterView(APIView):
             if background_image:
                 old_background_image = character.background_image
                 character.background_image = background_image
-            character.updated_at = now()
             character.save()
 
             if old_photo:

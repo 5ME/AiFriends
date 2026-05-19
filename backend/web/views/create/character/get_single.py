@@ -30,7 +30,8 @@ class GetSingleCharacterView(APIView):
                 'character': {
                     'id': character.id,
                     'name': character.name,
-                    'profile': character.profile,
+                    'introduction': character.introduction,
+                    'system_prompt': character.system_prompt,
                     'photo': character.photo_url,
                     'background_image': character.background_image_url,
                     'voice_id': character.voice.id,

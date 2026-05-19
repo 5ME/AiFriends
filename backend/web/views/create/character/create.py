@@ -19,7 +19,8 @@ class CreateCharacterView(APIView):
             user = request.user
             user_profile = UserProfile.objects.get(user=user)
             name = request.data.get('name').strip()
-            profile = request.data.get('profile').strip()
+            introduction = request.data.get('introduction', '').strip()
+            system_prompt = request.data.get('system_prompt', '').strip()
             photo = request.FILES.get('photo', None)
             background_image = request.FILES.get('background_image', None)
             voice_id = request.data.get('voice_id')
@@ -27,7 +28,10 @@ class CreateCharacterView(APIView):
             if not name:
                 return Response({'message': '角色名称不能为空'},
                                 status=status.HTTP_400_BAD_REQUEST)
-            if not profile:
+            if not introduction:
+                return Response({'message': '角色简介不能为空'},
+                                status=status.HTTP_400_BAD_REQUEST)
+            if not system_prompt:
                 return Response({'message': '角色信息不能为空'},
                                 status=status.HTTP_400_BAD_REQUEST)
             if not photo:
@@ -40,8 +44,9 @@ class CreateCharacterView(APIView):
             voice = Voice.objects.get(id=voice_id)
 
             character = Character.objects.create(
-                author=user_profile, name=name, profile=profile, photo=photo,
-                background_image=background_image, voice=voice
+                author=user_profile, name=name,
+                introduction=introduction, system_prompt=system_prompt,
+                photo=photo, background_image=background_image, voice=voice
             )
             return Response({'message': 'success'})
         except Exception as e:
