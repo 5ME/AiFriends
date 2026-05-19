@@ -22,6 +22,8 @@ cd backend
 pip install -r requirements.txt
 # 本地调试前将 settings.py 中 DEBUG 改为 True
 python manage.py runserver              # Dev server on :8000
+python -m pytest web/tests/ -v         # Run all backend tests (48 tests)
+python manage.py clean_dirty_characters --all  # Clean test residue data
 # 部署到云服务器时 DEBUG = False
 python manage.py collectstatic          # Collect static files for production
 ```
@@ -45,6 +47,13 @@ npm run preview     # Preview production build locally
 5. Nginx reverse-proxies to the gunicorn socket (see `服务器部署.md` for full Nginx config)
 
 ## Architecture
+
+### Testing (pytest)
+
+- Tests in `web/tests/`, run with `python -m pytest web/tests/ -v`
+- `conftest.py` provides global fixtures: `api_client`, `user`, `auth_client`, `character`, `friend`, etc.
+- `media_root` fixture (autouse, session-scoped) redirects test uploads to a temp directory — test files never touch real `media/`
+- Tests use `model_bakery` (baker.make) + `pytest-django` transaction rollback
 
 ### How the stacks connect
 
@@ -141,3 +150,11 @@ The frontend uses `@microsoft/fetch-event-source` (`js/http/streamApi.js`) to PO
 ### RAG / knowledge base
 
 `backend/web/documents/` contains LanceDB vector storage and a custom embeddings wrapper (`custom_embeddings.py`) that calls DashScope's embedding API. Documents are inserted via `insert_documents.py`. The chat agent's `search_knowledge_base` tool queries this store.
+
+### Character.photo_url / background_image_url
+
+Use `character.photo_url` and `character.background_image_url` properties instead of `.photo.url` / `.background_image.url`. These safe properties return `''` when no file is associated, preventing `ValueError` crashes.
+
+### Voice.is_builtin
+
+System built-in voices (longanyang/longanhuan) have `is_builtin=True`. The cleanup command skips them. Never delete a voice with `is_builtin=True`.
