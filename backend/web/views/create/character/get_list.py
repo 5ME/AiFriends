@@ -29,8 +29,8 @@ class GetListCharacterView(APIView):
                     'id': character.id,
                     'name': character.name,
                     'profile': character.profile,
-                    'photo': character.photo.url,
-                    'background_image': character.background_image.url,
+                    'photo': character.photo_url,
+                    'background_image': character.background_image_url,
                     'friend_count': friend_count,
                     'author': {
                         'user_id': author.user_id,

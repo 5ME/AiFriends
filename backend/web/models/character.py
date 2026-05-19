@@ -22,6 +22,7 @@ class Voice(models.Model):
     name = models.CharField(max_length=100)
     voice_id = models.CharField(max_length=100, help_text="阿里云音色ID")
     profile = models.TextField(max_length=500, default='')
+    is_builtin = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=now)
 
     def __str__(self):
@@ -37,6 +38,20 @@ class Character(models.Model):
     background_image = models.ImageField(upload_to=background_image_upload_to)
     created_at = models.DateTimeField(default=now)
     updated_at = models.DateTimeField(default=now)
+
+    @property
+    def photo_url(self):
+        try:
+            return self.photo.url
+        except ValueError:
+            return ''
+
+    @property
+    def background_image_url(self):
+        try:
+            return self.background_image.url
+        except ValueError:
+            return ''
 
     def __str__(self):
         return f"{self.author.user.username} - {self.name} - {localtime(self.created_at).strftime('%Y-%m-%d %H:%M:%S')}"

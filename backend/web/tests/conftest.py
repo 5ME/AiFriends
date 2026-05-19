@@ -8,9 +8,19 @@ from django.contrib.auth.models import User
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
+import django.conf
+
 from web.models.user import UserProfile
 from web.models.character import Character, Voice
 from web.models.friend import Friend
+
+
+@pytest.fixture(scope="session", autouse=True)
+def media_root(tmp_path_factory):
+    """将 MEDIA_ROOT 重定向到临时目录 — 测试结束后 pytest 自动清理"""
+    path = tmp_path_factory.mktemp("test_media")
+    django.conf.settings.MEDIA_ROOT = path
+    return path
 
 
 def _dummy_image(name="test.png"):
