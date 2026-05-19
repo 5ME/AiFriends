@@ -40,8 +40,9 @@ class ChatGraph:
 
             embeddings = CustomEmbeddings()
             emb = embeddings.embed_query(query)
+            table = DocumentChunk._meta.db_table
             chunks = DocumentChunk.objects.raw(
-                "SELECT id, content FROM document_chunk ORDER BY embedding <=> %s::vector LIMIT 3",
+                f"SELECT id, content FROM {table} ORDER BY embedding <=> %s::vector LIMIT 3",
                 [emb]
             )
             context = '\n\n'.join([f'内容片段：{i + 1}\n{c.content}' for i, c in enumerate(chunks)])

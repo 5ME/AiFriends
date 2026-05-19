@@ -91,16 +91,9 @@ DATABASES = {
         'USER': 'aifriends',
         'PASSWORD': 'aifriends001#',
         'HOST': '115.190.245.146',
-        'PORT': '5432',
-        'CONN_MAX_AGE': 0,
+        'PORT': '54321',
+        'CONN_MAX_AGE': 600,
         'CONN_HEALTH_CHECKS': True,
-        'OPTIONS': {
-            'sslmode': 'disable',
-            'keepalives': 1,
-            'keepalives_idle': 30,
-            'keepalives_interval': 10,
-            'keepalives_count': 5,
-        },
     }
 }
 
