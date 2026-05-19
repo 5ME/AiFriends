@@ -15,9 +15,9 @@ defineExpose({
 
 <template>
   <fieldset class="fieldset">
-    <legend class="fieldset-legend">角色介绍</legend>
+    <legend class="fieldset-legend">角色简介</legend>
     <textarea v-model="myProfile" rows="5" class="textarea w-108"
-              placeholder="介绍一下你创建的角色吧"/>
+              placeholder="简短介绍，将展示在角色卡片和详情页中"/>
   </fieldset>
 </template>
 

@@ -115,7 +115,7 @@ async function confirmRemoveFriend() {
           </h2>
         </div>
         <p class="line-clamp-2 break-all">
-          {{ character.profile }}
+          {{ character.introduction }}
         </p>
         <div class="card-actions justify-end"
              v-if="canEdit && character.author.user_id === user.id">
