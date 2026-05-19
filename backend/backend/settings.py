@@ -77,6 +77,10 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 import sys
+import os
+
+from dotenv import load_dotenv
+load_dotenv()
 
 # 检测是否在 pytest 环境 — 测试用 SQLite，运行环境用 PostgreSQL
 TESTING = any('pytest' in arg for arg in sys.argv)
@@ -87,11 +91,11 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     } if TESTING else {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'aifriends',
-        'USER': 'aifriends',
-        'PASSWORD': 'aifriends001#',
-        'HOST': '115.190.245.146',
-        'PORT': '54321',
+        'NAME': os.getenv('PG_NAME', 'aifriends'),
+        'USER': os.getenv('PG_USER', 'aifriends'),
+        'PASSWORD': os.getenv('PG_PASSWORD', ''),
+        'HOST': os.getenv('PG_HOST', '127.0.0.1'),
+        'PORT': os.getenv('PG_PORT', '5432'),
         'CONN_MAX_AGE': 600,
         'CONN_HEALTH_CHECKS': True,
     }
@@ -174,11 +178,6 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
 ]
-
-from dotenv import load_dotenv
-load_dotenv()
-
-import os
 
 # 日志目录
 LOG_DIR = BASE_DIR / 'logs'
