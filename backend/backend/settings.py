@@ -76,14 +76,31 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+import sys
+
+# 检测是否在 pytest 环境 — 测试用 SQLite，运行环境用 PostgreSQL
+TESTING = any('pytest' in arg for arg in sys.argv)
+
 DATABASES = {
     'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    } if TESTING else {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'aifriends',
         'USER': 'aifriends',
         'PASSWORD': 'aifriends001#',
         'HOST': '115.190.245.146',
         'PORT': '5432',
+        'CONN_MAX_AGE': 0,
+        'CONN_HEALTH_CHECKS': True,
+        'OPTIONS': {
+            'sslmode': 'disable',
+            'keepalives': 1,
+            'keepalives_idle': 30,
+            'keepalives_interval': 10,
+            'keepalives_count': 5,
+        },
     }
 }
 
