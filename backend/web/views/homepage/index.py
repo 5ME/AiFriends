@@ -17,7 +17,7 @@ class HomepageIndexView(APIView):
             search_text = request.query_params.get('search_text', '').strip()
             if search_text:
                 queryset = Character.objects.filter(
-                    Q(name__icontains=search_text) | Q(profile__icontains=search_text)
+                    Q(name__icontains=search_text) | Q(introduction__icontains=search_text)
                 )
             else:
                 queryset = Character.objects.all()
