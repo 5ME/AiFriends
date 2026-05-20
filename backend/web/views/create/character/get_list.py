@@ -1,12 +1,12 @@
 import logging
 
 from django.contrib.auth.models import User
+from django.db.models import Count
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from web.models.character import Character
-from web.models.friend import Friend
 from web.models.user import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -19,23 +19,24 @@ class GetListCharacterView(APIView):
             user_id = request.query_params.get('user_id')
             user = User.objects.get(id=user_id)
             user_profile = UserProfile.objects.get(user=user)
+            # select_related 一次性 JOIN author→user，annotate 内联 COUNT 好友数
             character_list = Character.objects.filter(author=user_profile) \
+                                 .select_related('author__user') \
+                                 .annotate(friend_count=Count('friend')) \
                                  .order_by('-id')[items_count:items_count + 20]
             characters = []
             for character in character_list:
-                author = character.author
-                friend_count = Friend.objects.filter(character_id=character.id).count()
                 characters.append({
                     'id': character.id,
                     'name': character.name,
                     'introduction': character.introduction,
                     'photo': character.photo_url,
                     'background_image': character.background_image_url,
-                    'friend_count': friend_count,
+                    'friend_count': character.friend_count,
                     'author': {
-                        'user_id': author.user_id,
-                        'username': author.user.username,
-                        'photo': author.photo.url
+                        'user_id': character.author_id,
+                        'username': character.author.user.username,
+                        'photo': character.author.photo.url
                     }
                 })
             return Response({
