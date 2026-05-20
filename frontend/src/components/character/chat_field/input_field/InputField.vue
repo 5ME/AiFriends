@@ -187,7 +187,7 @@ defineExpose({focus, closeMic})
 </script>
 
 <template>
-  <form v-if="!showMic" @submit.prevent="handleSend" class="absolute bottom-4 left-2 h-12 w-86 flex items-center">
+  <form v-show="!showMic" @submit.prevent="handleSend" class="absolute bottom-4 left-2 h-12 w-86 flex items-center">
     <input class="input bg-black/30 backdrop-blur text-base text-white w-full h-full rounded-md pr-20"
            type="text" placeholder="文本输入"
            ref="input-ref" v-model="message"/>
@@ -199,12 +199,14 @@ defineExpose({focus, closeMic})
       <MicIcon/>
     </div>
   </form>
-  <!--麦克风组件-->
-  <Microphone v-else
-              @close="showMic=false"
-              @send="handleSend"
-              @stop="handleStop"
-  />
+  <!--麦克风组件（KeepAlive 保持存活，避免重复加载 WASM）-->
+  <KeepAlive>
+    <Microphone v-if="showMic"
+                @close="showMic=false"
+                @send="handleSend"
+                @stop="handleStop"
+    />
+  </KeepAlive>
 </template>
 
 <style scoped>
