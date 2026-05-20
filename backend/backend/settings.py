@@ -96,7 +96,7 @@ DATABASES = {
         'PASSWORD': os.getenv('PG_PASSWORD', ''),
         'HOST': os.getenv('PG_HOST', '127.0.0.1'),
         'PORT': os.getenv('PG_PORT', '5432'),
-        'CONN_MAX_AGE': 600,
+        'CONN_MAX_AGE': 0 if DEBUG else 300,  # 调试模式不持久化连接，避免远程 PG 断连报错
         'CONN_HEALTH_CHECKS': True,
     }
 }
