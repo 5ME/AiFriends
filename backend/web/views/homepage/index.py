@@ -17,24 +17,27 @@ class HomepageIndexView(APIView):
             search_text = request.query_params.get('search_text', '').strip()
             if search_text:
                 queryset = Character.objects.filter(
-                    Q(name__icontains=search_text) | Q(profile__icontains=search_text)
+                    Q(name__icontains=search_text) | Q(introduction__icontains=search_text)
                 )
             else:
                 queryset = Character.objects.all()
-            characters_raw = queryset.order_by('-id')[items_count:items_count + 20]
+            # select_related 一次性 JOIN author+user，避免 N+1 查询
+            # 也防止多次网络往返中远程 PG 断连
+            characters_raw = (queryset
+                .select_related('author__user')
+                .order_by('-id')[items_count:items_count + 20])
             characters = []
             for character in characters_raw:
-                author = character.author
                 characters.append({
                     'id': character.id,
                     'name': character.name,
-                    'profile': character.profile,
+                    'introduction': character.introduction,
                     'photo': character.photo_url,
                     'background_image': character.background_image_url,
                     'author': {
-                        'user_id': author.user_id,
-                        'username': author.user.username,
-                        'photo': author.photo.url
+                        'user_id': character.author_id,
+                        'username': character.author.user.username,
+                        'photo': character.author.photo.url
                     }
                 })
             return Response({'message': 'success', 'characters': characters})

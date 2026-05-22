@@ -77,25 +77,25 @@ class TestChatGraphRouting:
         last = result["messages"][-1]
         assert last.content == "The time is 12:00"
 
+    @patch("web.models.document.DocumentChunk.objects.raw")
     @patch("web.views.friend.message.chat.graph.CustomEmbeddings")
-    @patch("web.views.friend.message.chat.graph.lancedb.connect")
     @patch("web.views.friend.message.chat.graph.ChatOpenAI")
-    @patch("web.views.friend.message.chat.graph.LanceDB")
-    def test_search_knowledge_base_tool(self, mock_lancedb, mock_llm_class,
-                                         mock_lancedb_connect, mock_embeddings):
-        """search_knowledge_base uses LanceDB to search and return results"""
+    def test_search_knowledge_base_tool(self, mock_llm_class, mock_embeddings_class,
+                                         mock_raw):
+        """search_knowledge_base uses pgvector to search and return results"""
         from web.views.friend.message.chat.graph import ChatGraph
 
-        # Mock LanceDB
-        mock_lancedb_instance = MagicMock()
-        mock_doc = MagicMock()
-        mock_doc.page_content = "Aliyun Bailian platform introduction..."
-        mock_lancedb_instance.similarity_search.return_value = [mock_doc]
-        mock_lancedb.return_value = mock_lancedb_instance
+        # Mock CustomEmbeddings
+        mock_embeddings = MagicMock()
+        mock_embeddings.embed_query.return_value = [0.1] * 1024
+        mock_embeddings_class.return_value = mock_embeddings
 
-        # Mock LLM to trigger the search_knowledge_base tool, then
-        # return a final text response (different AIMessage instances
-        # required — add_messages deduplicates same-ID messages).
+        # Mock DocumentChunk.objects.raw() to return a fake chunk
+        mock_chunk = MagicMock()
+        mock_chunk.content = "Aliyun Bailian platform introduction..."
+        mock_raw.return_value = [mock_chunk]
+
+        # Mock LLM to trigger the search_knowledge_base tool
         mock_llm = MagicMock()
         mock_llm.invoke.side_effect = [
             AIMessage(

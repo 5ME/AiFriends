@@ -53,7 +53,7 @@ def add_system_prompt(
     prompts = []
     for sp in system_prompts:
         prompts.append(sp.prompt)
-    prompts.append(f'\n\n【角色性格】\n\n{friend.character.profile}\n')
+    prompts.append(f'\n\n【角色性格】\n\n{friend.character.system_prompt}\n')
     prompts.append(f'【长期记忆】\n{friend.memory}\n')
     prompt = ''.join(prompts)
     return {'messages': [SystemMessage(prompt)] + msgs}
@@ -108,7 +108,9 @@ class MessageChatView(APIView):
         if not friend_id or not message:
             return Response({"message": "参数不完整"},
                             status=status.HTTP_400_BAD_REQUEST)
-        friends = Friend.objects.filter(pk=friend_id, user_profile__user=request.user)
+        # select_related 预加载 character→voice，避免后续 add_system_prompt 和 voice_id 延迟查询
+        friends = Friend.objects.filter(pk=friend_id, user_profile__user=request.user) \
+                      .select_related('character__voice')
         if not friends.exists():
             logger.warning('好友关系不存在(角色可能已被删除), friend_id=%s, user_id=%s', friend_id, request.user.id)
             response = StreamingHttpResponse(
@@ -195,9 +197,10 @@ class MessageChatView(APIView):
             logger.exception('聊天消息保存失败, friend_id=%s', friend.id)
         logger.info('Chat Agent 完成, friend_id=%s, tokens: in=%d out=%d total=%d',
                     friend.id, input_tokens, output_tokens, total_tokens)
-        if Message.objects.filter(friend=friend).count() % 10 == 0:
+        msg_count = Message.objects.filter(friend=friend).count()
+        if msg_count % 10 == 0:
             logger.info('触发 Memory 更新, friend_id=%s, message_count=%d',
-                        friend.id, Message.objects.filter(friend=friend).count())
+                        friend.id, msg_count)
             update.update_memory(friend)
 
     def work(

@@ -1,36 +1,63 @@
-import lancedb
+import logging
 from langchain_community.document_loaders import TextLoader
-from langchain_community.vectorstores import LanceDB
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 
 from web.documents.utils.custom_embeddings import CustomEmbeddings
-
-import logging
+from web.models.document import DocumentChunk
 
 logger = logging.getLogger(__name__)
 
 
 def insert_documents():
-    # 加载文件
     loader = TextLoader('./web/documents/Bailian_Overview.txt', encoding='utf-8')
     docs = loader.load()
 
-    # 切分文件
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = text_splitter.split_documents(docs)
     logger.info('已切分成 %d 个片段', len(chunks))
 
-    # 自定义向量化类
     embeddings = CustomEmbeddings()
 
-    # 插入向量数据库
-    db_connection = lancedb.connect('./web/documents/lancedb_storage')
-    lance_db = LanceDB.from_documents(
-        connection=db_connection,
-        documents=chunks,
-        embedding=embeddings,
-        table_name='my_knowledge_base',
-        mode='overwrite',
+    # 先清空旧数据再插入，保证多次执行不会产生重复记录
+    DocumentChunk.objects.all().delete()
+    for chunk in chunks:
+        emb = embeddings.embed_query(chunk.page_content)
+        DocumentChunk.objects.create(content=chunk.page_content, embedding=emb)
+
+    logger.info('已插入 %d 条向量记录', len(chunks))
+
+def insert_markdown_documents():
+    loader = TextLoader('./web/documents/Bailian_Overview.md', encoding='utf-8')
+    docs = loader.load()
+
+    # 2. 先按标题切分
+    headers_to_split_on = [
+        ("#", "Header 1"),
+        ("##", "Header 2"),
+        ("###", "Header 3"),
+    ]
+    md_splitter = MarkdownHeaderTextSplitter(
+        headers_to_split_on=headers_to_split_on,
+        strip_headers=False
     )
-    logger.info('%s', type(lance_db))
-    logger.info('已插入 %d 行数据', lance_db._table.count_rows())
+    # docs 是 List[Document]
+    md_chunks = []
+    for doc in docs:
+        md_chunks.extend(md_splitter.split_text(doc.page_content))
+
+    # 3. 再按长度切分
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=50
+    )
+    final_chunks = text_splitter.split_documents(md_chunks)
+
+    embeddings = CustomEmbeddings()
+
+    # 先清空旧数据再插入，保证多次执行不会产生重复记录
+    DocumentChunk.objects.all().delete()
+    for chunk in final_chunks:
+        emb = embeddings.embed_query(chunk.page_content)
+        DocumentChunk.objects.create(content=chunk.page_content, embedding=emb)
+
+    logger.info('已插入 %d 条向量记录', len(final_chunks))

@@ -3,6 +3,7 @@
 import Photo from "@/views/create/character/components/Photo.vue";
 import Name from "@/views/create/character/components/Name.vue";
 import Profile from "@/views/create/character/components/Profile.vue";
+import SystemPrompt from "@/views/create/character/components/SystemPrompt.vue";
 import BackgroundImage from "@/views/create/character/components/BackgroundImage.vue";
 import {onMounted, ref, useTemplateRef, watch} from "vue";
 import {base64ToFile} from "@/js/utils/base64_to_file";
@@ -46,6 +47,7 @@ const photoRef = useTemplateRef('photo-ref')
 const nameRef = useTemplateRef('name-ref')
 const voiceRef = useTemplateRef('voice-ref')
 const profileRef = useTemplateRef('profile-ref')
+const systemPromptRef = useTemplateRef('system-prompt-ref')
 const backgroundImageRef = useTemplateRef('background-image-ref')
 
 const errorMessage = ref('')
@@ -54,7 +56,8 @@ async function handleUpdate() {
   const photo = photoRef.value.myPhoto
   const name = nameRef.value.myName?.trim()
   const voice = voiceRef.value.myVoice
-  const profile = profileRef.value.myProfile?.trim()
+  const introduction = profileRef.value.myProfile?.trim()
+  const systemPrompt = systemPromptRef.value.myValue?.trim()
   const backgroundImage = backgroundImageRef.value.myBackgroundImage
 
   errorMessage.value = ''
@@ -64,8 +67,10 @@ async function handleUpdate() {
     errorMessage.value = '角色名称不能为空'
   } else if (!voice) {
     errorMessage.value = '角色音色不能为空'
-  } else if (!profile) {
-    errorMessage.value = '角色介绍不能为空'
+  } else if (!introduction) {
+    errorMessage.value = '角色简介不能为空'
+  } else if (!systemPrompt) {
+    errorMessage.value = '角色信息不能为空'
   } else if (!backgroundImage) {
     errorMessage.value = '聊天背景不能为空'
   } else {
@@ -73,7 +78,8 @@ async function handleUpdate() {
     formData.append('character_id', route.params.character_id as string)
     formData.append('name', name)
     formData.append('voice_id', voice)
-    formData.append('profile', profile)
+    formData.append('introduction', introduction)
+    formData.append('system_prompt', systemPrompt)
     if (photo !== character.value.photo) {
       formData.append('photo', base64ToFile(photo, 'photo.png'))
     }
@@ -107,7 +113,8 @@ async function handleUpdate() {
         <Photo ref="photo-ref" :photo="character.photo"/>
         <Name ref="name-ref" :name="character.name"/>
         <Voice ref="voice-ref" :voices="voices" :curVoiceId="curVoiceId"/>
-        <Profile ref="profile-ref" :profile="character.profile"/>
+        <Profile ref="profile-ref" :profile="character.introduction"/>
+        <SystemPrompt ref="system-prompt-ref" :system-prompt="character.system_prompt"/>
         <BackgroundImage ref="background-image-ref" :backgroundImage="character.background_image"/>
 
         <p v-if="errorMessage" class="text-sm text-red-500">{{ errorMessage }}</p>

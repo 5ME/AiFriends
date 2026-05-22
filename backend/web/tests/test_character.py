@@ -25,7 +25,8 @@ class TestCreate:
             "/api/create/character/create/",
             {
                 "name": "My Character",
-                "profile": "A friendly AI",
+                "introduction": "A friendly AI",
+                "system_prompt": "You are a friendly AI character.",
                 "voice_id": voice.id,
                 "photo": _make_test_image("photo.jpg"),
                 "background_image": _make_test_image("bg.jpg"),
@@ -38,7 +39,7 @@ class TestCreate:
         """无 token → 401"""
         resp = api_client.post(
             "/api/create/character/create/",
-            {"name": "X", "profile": "X", "voice_id": voice.id},
+            {"name": "X", "introduction": "X", "system_prompt": "X", "voice_id": voice.id},
         )
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -48,7 +49,8 @@ class TestCreate:
             "/api/create/character/create/",
             {
                 "name": "",
-                "profile": "Test",
+                "introduction": "Test",
+                "system_prompt": "Test",
                 "voice_id": voice.id,
                 "photo": _make_test_image("photo.jpg"),
                 "background_image": _make_test_image("bg.jpg"),
@@ -56,13 +58,29 @@ class TestCreate:
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_create_empty_profile(self, auth_client, voice):
-        """空 profile → 400"""
+    def test_create_empty_introduction(self, auth_client, voice):
+        """空 introduction → 400"""
         resp = auth_client.post(
             "/api/create/character/create/",
             {
                 "name": "Test",
-                "profile": "",
+                "introduction": "",
+                "system_prompt": "Test",
+                "voice_id": voice.id,
+                "photo": _make_test_image("photo.jpg"),
+                "background_image": _make_test_image("bg.jpg"),
+            },
+        )
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_create_empty_system_prompt(self, auth_client, voice):
+        """空 system_prompt → 400"""
+        resp = auth_client.post(
+            "/api/create/character/create/",
+            {
+                "name": "Test",
+                "introduction": "Test",
+                "system_prompt": "",
                 "voice_id": voice.id,
                 "photo": _make_test_image("photo.jpg"),
                 "background_image": _make_test_image("bg.jpg"),
@@ -103,14 +121,16 @@ class TestUpdate:
             {
                 "character_id": character.id,
                 "name": "Updated Name",
-                "profile": "Updated profile",
+                "introduction": "Updated intro",
+                "system_prompt": "Updated system prompt",
                 "voice_id": voice.id,
             },
         )
         assert resp.status_code == status.HTTP_200_OK
         character.refresh_from_db()
         assert character.name == "Updated Name"
-        assert character.profile == "Updated profile"
+        assert character.introduction == "Updated intro"
+        assert character.system_prompt == "Updated system prompt"
 
     def test_update_not_author(self, other_auth_client, character, voice):
         """非作者编辑 → 500（按 author 过滤找不到）"""
@@ -119,7 +139,8 @@ class TestUpdate:
             {
                 "character_id": character.id,
                 "name": "Hacked",
-                "profile": "Hacked profile",
+                "introduction": "Hacked profile",
+                "system_prompt": "Hacked system prompt",
                 "voice_id": voice.id,
             },
         )

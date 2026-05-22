@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AI Friends — a full-stack web app where users create AI characters ("friends") and chat with them. Supports text + voice input/output, long-term memory summarization, and RAG-based knowledge retrieval.
 
-- **Backend:** Django 6.0 + Django REST Framework + JWT auth (SQLite)
+- **Backend:** Django 6.0 + Django REST Framework + JWT auth (PostgreSQL 17 + pgvector 0.8, tests use SQLite)
 - **Frontend:** Vue 3 (Composition API) + Vite 7 + Pinia + Vue Router 5 + Tailwind CSS 4 + daisyUI 5
-- **AI:** Alibaba DashScope (Qwen models) via OpenAI-compatible API. LangChain/LangGraph for orchestration. LanceDB for vector storage.
+- **AI:** Alibaba DashScope (Qwen models) via OpenAI-compatible API. LangChain/LangGraph for orchestration. pgvector for vector storage (LanceDB code retained but unused).
 - **Voice:** DashScope TTS (WebSocket streaming) + ASR (WebSocket). Browser-side VAD via `@ricky0123/vad-web` (Silero VAD on ONNX).
 
 ## Commands
@@ -22,7 +22,9 @@ cd backend
 pip install -r requirements.txt
 # 本地调试前将 settings.py 中 DEBUG 改为 True
 python manage.py runserver              # Dev server on :8000
-python -m pytest web/tests/ -v         # Run all backend tests (48 tests)
+python -m pytest web/tests/ -v         # Run all backend tests (49 tests)
+# PostgreSQL: credentials in .env (PG_HOST/PG_PORT/PG_NAME/PG_USER/PG_PASSWORD)
+# Template: cp .env.example .env
 python manage.py clean_dirty_characters --all  # Clean test residue data
 # 部署到云服务器时 DEBUG = False
 python manage.py collectstatic          # Collect static files for production
@@ -50,10 +52,11 @@ npm run preview     # Preview production build locally
 
 ### Testing (pytest)
 
-- Tests in `web/tests/`, run with `python -m pytest web/tests/ -v`
+- Tests in `web/tests/`, run with `python -m pytest web/tests/ -v` (49 tests)
 - `conftest.py` provides global fixtures: `api_client`, `user`, `auth_client`, `character`, `friend`, etc.
 - `media_root` fixture (autouse, session-scoped) redirects test uploads to a temp directory — test files never touch real `media/`
 - Tests use `model_bakery` (baker.make) + `pytest-django` transaction rollback
+- **Dual-DB strategy:** tests run on SQLite (auto-detected via `sys.argv`), runtime uses PostgreSQL. This avoids remote PG instability during local development.
 
 ### How the stacks connect
 
@@ -90,7 +93,7 @@ Each API endpoint is a single file under `backend/web/views/`, each exporting a 
 
 **Exception handling:** Never use bare `except:`. Always `except Exception as e:` with `logger.exception(...)` before the error response. Every view imports `logging` and has `logger = logging.getLogger(__name__)`.
 
-Models live in `backend/web/models/` — three files: `user.py` (UserProfile), `character.py` (Character, Voice), `friend.py` (Friend, Message, SystemPrompt).
+Models live in `backend/web/models/` — four files: `user.py` (UserProfile), `character.py` (Character, Voice), `friend.py` (Friend, Message, SystemPrompt), `document.py` (DocumentChunk with pgvector VectorField).
 
 ### Logging
 
@@ -98,14 +101,14 @@ LOGGING is configured in `backend/backend/settings.py` with console (StreamHandl
 
 All view modules use `logger = logging.getLogger(__name__)`. Use `logger.exception()` on caught errors (equivalent to `logger.error(... exc_info=True)`, captures full traceback).
 
-### Character.profile convention
+### Character fields
 
-The `Character.profile` field has a dual role: it serves as both the user-facing character introduction AND the LLM system prompt. The convention is:
+`Character.profile` has been split into two independent fields:
 
-- **First line** (`\n`-delimited) = public introduction shown on cards and the `CharacterDetail` modal
-- **Full text** = sent to the LLM as part of the system prompt in `chat/graph.py`
+- **`introduction`** (`max_length=500`) — public intro shown on cards and the `CharacterDetail` modal. Frontend display uses this directly.
+- **`system_prompt`** (`max_length=10000`) — full character personality prompt sent to the LLM via `chat/graph.py` and `chat/chat.py`.
 
-When displaying profile to users, always split on `\n` and show only the first line: `character.profile.split('\n')[0]`.
+The two fields are completely independent — `system_prompt` does NOT include `introduction`. Only `system_prompt` enters the LLM context.
 
 ### Character detail → chat flow
 
@@ -120,7 +123,7 @@ On the homepage, clicking a character card opens `CharacterDetail.vue` (a modal)
 
 Two separate LangGraph state graphs:
 
-1. **Chat agent** (`web/views/friend/message/chat/graph.py`) — `deepseek-v3.2` model with tools: `get_time` and `search_knowledge_base` (LanceDB vector search over Bailian docs). Streams tokens via SSE. Also streams TTS audio chunks (base64 mp3) over the same SSE connection using a separate DashScope WebSocket.
+1. **Chat agent** (`web/views/friend/message/chat/graph.py`) — `deepseek-v3.2` model with tools: `get_time` and `search_knowledge_base` (pgvector `<->` cosine distance search over Bailian docs stored in `DocumentChunk` model). Streams tokens via SSE. Also streams TTS audio chunks (base64 mp3) over the same SSE connection using a separate DashScope WebSocket.
 
 2. **Memory agent** (`web/views/friend/message/memory/graph.py`) — `tongyi-xiaomi-analysis-flash` model. Triggers every 10 messages to summarize conversation and write into `Friend.memory` field.
 

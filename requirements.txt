@@ -105,3 +105,5 @@ pytest>=8.0
 pytest-django>=4.0
 pytest-mock>=3.0
 model_bakery>=1.0
+psycopg2-binary>=2.9
+pgvector>=0.4

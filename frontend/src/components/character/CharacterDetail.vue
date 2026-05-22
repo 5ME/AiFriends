@@ -89,7 +89,7 @@ defineExpose({showModal})
 
       <!-- 角色简介 -->
       <div class="mb-6">
-        <p class="text-base whitespace-pre-wrap leading-relaxed">{{ character.profile.split('\n')[0] }}</p>
+        <p class="text-base whitespace-pre-wrap leading-relaxed">{{ character.introduction }}</p>
       </div>
 
       <!-- 作者信息 -->

@@ -18,25 +18,25 @@ class FriendGetListView(APIView):
     def get(self, request):
         try:
             items_count = int(request.query_params.get('items_count', 0))
+            # select_related 一次性 JOIN character→author→user，避免循环中逐条查 3 次
             friends_raw = Friend.objects.filter(user_profile__user=request.user) \
+                              .select_related('character__author__user') \
                               .annotate(last_active=Coalesce(Max('message__created_at'), 'created_at')) \
                               .order_by('-last_active')[items_count:items_count + 20]
             friends = []
             for friend in friends_raw:
-                character = friend.character
-                author = character.author
                 friends.append({
                     'id': friend.id,
                     'character': {
-                        'id': character.id,
-                        'name': character.name,
-                        'profile': character.profile,
-                        'photo': character.photo_url,
-                        'background_image': character.background_image_url,
+                        'id': friend.character_id,
+                        'name': friend.character.name,
+                        'introduction': friend.character.introduction,
+                        'photo': friend.character.photo_url,
+                        'background_image': friend.character.background_image_url,
                         'author': {
-                            'user_id': author.user_id,
-                            'username': author.user.username,
-                            'photo': author.photo.url,
+                            'user_id': friend.character.author_id,
+                            'username': friend.character.author.user.username,
+                            'photo': friend.character.author.photo.url,
                         }
                     }
                 })

@@ -23,21 +23,23 @@ class Voice(models.Model):
     voice_id = models.CharField(max_length=100, help_text="阿里云音色ID")
     profile = models.TextField(max_length=500, default='')
     is_builtin = models.BooleanField(default=False)
-    created_at = models.DateTimeField(default=now)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.name} - {self.voice_id} - {localtime(self.created_at).strftime('%Y-%m-%d %H:%M:%S')}"
 
 
 class Character(models.Model):
-    author = models.ForeignKey(UserProfile, on_delete=models.CASCADE)
+    author = models.ForeignKey(UserProfile, on_delete=models.CASCADE, db_index=True)
     name = models.CharField(max_length=50)
+    introduction = models.TextField(max_length=500, default='')
+    system_prompt = models.TextField(max_length=10000, default='')
     photo = models.ImageField(upload_to=photo_upload_to)
     voice = models.ForeignKey(Voice, default=None, on_delete=models.CASCADE, blank=True, null=True)
-    profile = models.TextField(max_length=10000)
     background_image = models.ImageField(upload_to=background_image_upload_to)
-    created_at = models.DateTimeField(default=now)
-    updated_at = models.DateTimeField(default=now)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     @property
     def photo_url(self):

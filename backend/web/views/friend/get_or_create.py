@@ -26,27 +26,27 @@ class FriendGetOrCreateView(APIView):
                 return Response({'message': '该角色已被创建者删除'},
                                 status=status.HTTP_404_NOT_FOUND)
             user_profile = UserProfile.objects.get(user=request.user)
-            friends = Friend.objects.filter(character_id=character_id, user_profile=user_profile)
+            # select_related 一次性 JOIN character→author→user，避免链式延迟加载
+            friends = Friend.objects.filter(character_id=character_id, user_profile=user_profile) \
+                          .select_related('character__author__user')
             if friends.exists():
                 friend = friends.first()
             else:
                 friend = Friend.objects.create(character_id=character_id, user_profile=user_profile)
-            character = friend.character
-            author = character.author
             return Response({
                 'message': 'success',
                 'friend': {
                     'id': friend.id,
                     'character': {
-                        'id': character.id,
-                        'name': character.name,
-                        'profile': character.profile,
-                        'photo': character.photo_url,
-                        'background_image': character.background_image_url,
+                        'id': friend.character.id,
+                        'name': friend.character.name,
+                        'introduction': friend.character.introduction,
+                        'photo': friend.character.photo_url,
+                        'background_image': friend.character.background_image_url,
                         'author': {
-                            'user_id': author.user_id,
-                            'username': author.user.username,
-                            'photo': author.photo.url,
+                            'user_id': friend.character.author_id,
+                            'username': friend.character.author.user.username,
+                            'photo': friend.character.author.photo.url,
                         }
                     }
                 }

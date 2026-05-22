@@ -2,9 +2,7 @@ import logging
 import os
 from typing import TypedDict, Annotated, Sequence
 
-import lancedb
 from django.utils.timezone import localtime, now
-from langchain_community.vectorstores import LanceDB
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
@@ -38,13 +36,16 @@ class ChatGraph:
             :param query: 要查询的问题
             :return: 查询结果
             """
-            lance_db = LanceDB(
-                connection=lancedb.connect('./web/documents/lancedb_storage'),
-                embedding=CustomEmbeddings(),
-                table_name='my_knowledge_base',
+            from web.models.document import DocumentChunk
+
+            embeddings = CustomEmbeddings()
+            emb = embeddings.embed_query(query)
+            table = DocumentChunk._meta.db_table
+            chunks = DocumentChunk.objects.raw(
+                f"SELECT id, content FROM {table} ORDER BY embedding <=> %s::vector LIMIT 3",
+                [emb]
             )
-            docs = lance_db.similarity_search(query=query, k=3)
-            context = '\n\n'.join([f'内容片段：{i + 1} \n {doc.page_content}' for i, doc in enumerate(docs)])
+            context = '\n\n'.join([f'内容片段：{i + 1}\n{c.content}' for i, c in enumerate(chunks)])
             return f'从知识库中找到以下相关信息：\n\n{context}\n\n'
 
         tools = [get_time, search_knowledge_base]
