@@ -32,11 +32,9 @@ class DocumentChunk(models.Model):
     embedding = VectorField(dimensions=1024)
     document = models.ForeignKey(
         UserDocument, on_delete=models.CASCADE, null=True, blank=True,
-        db_index=True,
     )
     owner = models.ForeignKey(
         'UserProfile', on_delete=models.CASCADE, null=True, blank=True,
-        db_index=True,
     )
     chunk_index = models.IntegerField(default=0)
     token_count = models.IntegerField(default=0)
@@ -50,4 +48,5 @@ class DocumentChunk(models.Model):
         ]
 
     def __str__(self):
-        return f'Chunk {self.chunk_index} of {self.document_id}'
+        doc = f'Doc {self.document_id}' if self.document_id else 'no document'
+        return f'Chunk {self.chunk_index} of {doc}'

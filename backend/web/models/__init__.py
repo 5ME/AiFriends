@@ -1,1 +1,1 @@
-from .document import DocumentChunk
+from .document import DocumentChunk, UserDocument
