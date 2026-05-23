@@ -18,7 +18,11 @@ class UpdateCharacterView(APIView):
     def post(self, request):
         try:
             character_id = request.data['character_id']
-            character = Character.objects.get(id=character_id, author__user=request.user)
+            try:
+                character = Character.objects.get(id=character_id, author__user=request.user)
+            except Character.DoesNotExist:
+                return Response({'message': '角色不存在或无权访问'},
+                                status=status.HTTP_404_NOT_FOUND)
             name = request.data['name'].strip()
             introduction = request.data.get('introduction', '').strip()
             system_prompt = request.data.get('system_prompt', '').strip()

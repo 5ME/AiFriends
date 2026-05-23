@@ -16,7 +16,11 @@ class GetSingleCharacterView(APIView):
     def get(self, request):
         try:
             character_id = request.query_params.get('character_id')
-            character = Character.objects.get(id=character_id, author__user=request.user)
+            try:
+                character = Character.objects.get(id=character_id, author__user=request.user)
+            except Character.DoesNotExist:
+                return Response({'message': '角色不存在或无权访问'},
+                                status=status.HTTP_404_NOT_FOUND)
             voices_raw = Voice.objects.order_by('id')
             voices = []
             for voice in voices_raw:
