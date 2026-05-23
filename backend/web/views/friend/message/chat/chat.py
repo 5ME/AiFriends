@@ -49,7 +49,7 @@ def add_system_prompt(
     更新后的inputs字典，包含添加的系统提示
     """
     msgs = inputs['messages']
-    system_prompts = SystemPrompt.objects.filter(title__exact='回复').order_by('order_number')
+    system_prompts = SystemPrompt.objects.filter(title=SystemPrompt.Title.REPLY).order_by('order_number')
     prompts = []
     for sp in system_prompts:
         prompts.append(sp.prompt)
