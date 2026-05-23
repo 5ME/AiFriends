@@ -16,6 +16,9 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+from dotenv import load_dotenv
+load_dotenv()
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -78,9 +81,6 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 import sys
-
-from dotenv import load_dotenv
-load_dotenv()
 
 # 检测是否在 pytest 环境 — 测试用 SQLite，运行环境用 PostgreSQL
 TESTING = any('pytest' in arg for arg in sys.argv)
