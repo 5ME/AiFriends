@@ -8,7 +8,7 @@ from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.constants import START, END
 from langgraph.graph import add_messages, StateGraph
-from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt import InjectedState, ToolNode
 
 from web.documents.utils.custom_embeddings import CustomEmbeddings
 
@@ -29,7 +29,7 @@ class ChatGraph:
 
         # Tool 2: 知识库向量检索（LanceDB）
         @tool
-        def search_knowledge_base(query: str) -> str:
+        def search_knowledge_base(query: str, state: Annotated[dict, InjectedState]) -> str:
             """
             当用户查询"阿里云百炼"相关简介信息时，调用此函数。
             输入为要查询的问题，输出为查询结果。
@@ -38,12 +38,16 @@ class ChatGraph:
             """
             from web.models.document import DocumentChunk
 
+            user_id = state.get("user_id")
             embeddings = CustomEmbeddings()
             emb = embeddings.embed_query(query)
             table = DocumentChunk._meta.db_table
             chunks = DocumentChunk.objects.raw(
-                f"SELECT id, content FROM {table} ORDER BY embedding <=> %s::vector LIMIT 3",
-                [emb]
+                f"SELECT id, content, chunk_index, document_id "
+                f"FROM {table} "
+                f"WHERE owner_id IS NULL OR owner_id = %s "
+                f"ORDER BY embedding <=> %s::vector LIMIT 3",
+                [user_id, emb]
             )
             context = '\n\n'.join([f'内容片段：{i + 1}\n{c.content}' for i, c in enumerate(chunks)])
             return f'从知识库中找到以下相关信息：\n\n{context}\n\n'
@@ -65,6 +69,7 @@ class ChatGraph:
 
         class AgentState(TypedDict):
             messages: Annotated[Sequence[BaseMessage], add_messages]
+            user_id: int
 
         # Agent 节点：调用 LLM 产生响应或 tool 调用请求
         def model_call(state: AgentState) -> AgentState:
