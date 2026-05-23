@@ -23,6 +23,15 @@ def media_root(tmp_path_factory):
     return path
 
 
+@pytest.fixture(scope="session", autouse=True)
+def pgvector_extension(django_db_setup, django_db_blocker):
+    """确保测试库中 pgvector 扩展可用"""
+    from django.db import connection
+    with django_db_blocker.unblock():
+        with connection.cursor() as cursor:
+            cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
+
+
 def _dummy_image(name="test.png"):
     """Create a 1x1 pixel PNG SimpleUploadedFile for ImageField fixtures."""
     img = Image.new("RGB", (1, 1), color="red")
