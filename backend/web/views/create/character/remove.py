@@ -17,7 +17,11 @@ class RemoveCharacterView(APIView):
     def post(self, request):
         try:
             character_id = request.data['character_id']
-            character = Character.objects.get(id=character_id, author__user=request.user)
+            try:
+                character = Character.objects.get(id=character_id, author__user=request.user)
+            except Character.DoesNotExist:
+                return Response({'message': '角色不存在或无权访问'},
+                                status=status.HTTP_404_NOT_FOUND)
             remove_old_photo(character.photo)
             remove_old_photo(character.background_image)
             character.delete()

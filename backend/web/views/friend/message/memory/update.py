@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_system_message() -> SystemMessage:
-    system_prompts = SystemPrompt.objects.filter(title__exact='记忆').order_by('order_number')
+    system_prompts = SystemPrompt.objects.filter(title=SystemPrompt.Title.MEMORY).order_by('order_number')
     prompts = []
     for sp in system_prompts:
         prompts.append(sp.prompt)

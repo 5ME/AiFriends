@@ -103,12 +103,12 @@ class TestGetSingle:
         assert data["character"]["name"] == "Test Character"
 
     def test_get_single_other_author(self, other_auth_client, character):
-        """查看别人的 → 500（按 author 过滤找不到）"""
+        """查看别人的 → 404"""
         resp = other_auth_client.get(
             "/api/create/character/get_single/",
             {"character_id": character.id},
         )
-        assert resp.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert resp.status_code == status.HTTP_404_NOT_FOUND
 
 
 class TestUpdate:
@@ -133,7 +133,7 @@ class TestUpdate:
         assert character.system_prompt == "Updated system prompt"
 
     def test_update_not_author(self, other_auth_client, character, voice):
-        """非作者编辑 → 500（按 author 过滤找不到）"""
+        """非作者编辑 → 404"""
         resp = other_auth_client.post(
             "/api/create/character/update/",
             {
@@ -144,7 +144,7 @@ class TestUpdate:
                 "voice_id": voice.id,
             },
         )
-        assert resp.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert resp.status_code == status.HTTP_404_NOT_FOUND
 
 
 class TestDelete:
@@ -160,12 +160,12 @@ class TestDelete:
         assert not Character.objects.filter(id=character.id).exists()
 
     def test_delete_not_author(self, other_auth_client, character):
-        """非作者删除 → 500（按 author 过滤找不到）"""
+        """非作者删除 → 404"""
         resp = other_auth_client.post(
             "/api/create/character/remove/",
             {"character_id": character.id},
         )
-        assert resp.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert resp.status_code == status.HTTP_404_NOT_FOUND
 
 
 class TestGetList:

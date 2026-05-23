@@ -6,22 +6,23 @@ AI 虚拟角色聊天平台 — 用户可创建 AI 角色并与之进行文字 +
 
 | 层级 | 技术 |
 |------|------|
-| 后端 | Django 6.0 + Django REST Framework + JWT (SQLite) |
+| 后端 | Django 6.0 + Django REST Framework + JWT (PostgreSQL 17 + pgvector 0.8) |
 | 前端 | Vue 3 (Composition API) + Vite 7 + Pinia + Vue Router 5 |
 | UI | Tailwind CSS 4 + daisyUI 5 |
-| AI | 阿里云 DashScope（通义千问） + LangChain/LangGraph |
-| 语音 | DashScope TTS (WebSocket) + ASR (WebSocket) + 浏览器端 VAD (Silero VAD) |
-| 向量存储 | LanceDB + 自定义 Embeddings |
+| AI | 阿里云 DashScope（通义千问 / DeepSeek-V3.2） + LangChain/LangGraph |
+| 语音 | DashScope TTS (WebSocket) + ASR (WebSocket) + 浏览器端 VAD (Silero VAD / ONNX) |
+| 向量存储 | pgvector (1024 维 DashScope text-embedding-v4) |
 | 部署 | Gunicorn + Nginx (Ubuntu) |
 
 ## 功能
 
 - 创建 / 编辑 / 删除自定义 AI 虚拟角色
-- 文字 + 语音双模态聊天，AI 回复支持语音合成播放
-- 聊天上下文长期记忆，每 10 条消息自动摘要
-- RAG 知识库检索（LanceDB 向量搜索）
-- 用户注册登录（JWT 双令牌认证）
+- 文字 + 语音双模态聊天，AI 回复支持文字 + 语音同步流式输出
+- 聊天上下文长期记忆，每 10 条消息触发 Memory Agent 自动摘要
+- RAG 知识库检索（pgvector 余弦距离搜索）
+- 用户注册登录（JWT access/refresh 双令牌认证，httpOnly cookie）
 - 首页角色探索 + 好友关系管理
+- pytest 自动化测试覆盖核心链路（51 个测试）
 
 ## 快速开始
 
@@ -29,8 +30,25 @@ AI 虚拟角色聊天平台 — 用户可创建 AI 角色并与之进行文字 +
 
 ```bash
 cd backend
+# 1. 配置环境变量
+cp .env.example .env
+# 编辑 .env 填入 API_KEY 等必填项
+
+# 2. 安装依赖
 pip install -r requirements.txt
+
+# 3. 数据库迁移
+python manage.py migrate
+
+# 4. 启动开发服务器
 python manage.py runserver        # http://127.0.0.1:8000
+```
+
+### 运行测试
+
+```bash
+cd backend
+python -m pytest web/tests/ -v   # 51 个测试
 ```
 
 ### 前端
@@ -69,6 +87,7 @@ AiFriends/
 │   │   │   ├── user.py                   #   UserProfile
 │   │   │   ├── character.py              #   Character、Voice
 │   │   │   └── friend.py                 #   Friend、Message、SystemPrompt
+│   │   │   └── document.py               #   DocumentChunk (pgvector 向量字段)
 │   │   │
 │   │   ├── views/                        # API 视图（文件即视图，无序列化器）
 │   │   │   ├── index.py                  #   前端 SPA 入口视图
@@ -134,3 +153,12 @@ AiFriends/
 ├── AGENTS.md                             # Codex agent 指令
 └── CLAUDE.md                             # Claude Code 项目指南
 ```
+
+## 已知限制
+
+- [ ] 知识库目前为全局预置，暂不支持用户自行上传文档构建个人 RAG
+- [ ] 音色仅支持系统内置，暂不支持用户自定义
+- [ ] Memory Agent 当前在聊天请求线程内同步执行，大模型调用期间会占用 worker 资源
+- [ ] 未做 Docker 容器化，部署需手动配置环境
+- [ ] 未做压测，暂无容量评估数据
+- [ ] 测试环境使用 SQLite，pgvector 查询仅在 PostgreSQL 运行环境中验证
