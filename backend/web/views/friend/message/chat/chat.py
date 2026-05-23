@@ -122,7 +122,8 @@ class MessageChatView(APIView):
         friend = friends.first()
         app = ChatGraph.create_app()
         inputs = {
-            'messages': [HumanMessage(message)]
+            'messages': [HumanMessage(message)],
+            'user_id': friend.user_profile.id,
         }
         # 添加系统提示词
         inputs = add_system_prompt(inputs, friend)
