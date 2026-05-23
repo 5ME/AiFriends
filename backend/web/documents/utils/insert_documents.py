@@ -3,7 +3,7 @@ from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 
 from web.documents.utils.custom_embeddings import CustomEmbeddings
-from web.models.document import DocumentChunk
+from web.models.document import DocumentChunk, UserDocument
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +18,20 @@ def insert_documents():
 
     embeddings = CustomEmbeddings()
 
-    # 先清空旧数据再插入，保证多次执行不会产生重复记录
-    DocumentChunk.objects.all().delete()
-    for chunk in chunks:
+    # 使用 UserDocument 管理文档，保证多次执行不会产生重复记录
+    sys_doc, _ = UserDocument.objects.get_or_create(
+        title='百炼平台概述',
+        defaults={'status': 'completed'}
+    )
+    DocumentChunk.objects.filter(document=sys_doc).delete()
+    for i, chunk in enumerate(chunks):
         emb = embeddings.embed_query(chunk.page_content)
-        DocumentChunk.objects.create(content=chunk.page_content, embedding=emb)
+        DocumentChunk.objects.create(
+            content=chunk.page_content, embedding=emb,
+            document=sys_doc, owner=None, chunk_index=i,
+        )
+    sys_doc.chunks_count = len(chunks)
+    sys_doc.save()
 
     logger.info('已插入 %d 条向量记录', len(chunks))
 
@@ -54,10 +63,19 @@ def insert_markdown_documents():
 
     embeddings = CustomEmbeddings()
 
-    # 先清空旧数据再插入，保证多次执行不会产生重复记录
-    DocumentChunk.objects.all().delete()
-    for chunk in final_chunks:
+    # 使用 UserDocument 管理文档，保证多次执行不会产生重复记录
+    sys_doc, _ = UserDocument.objects.get_or_create(
+        title='百炼平台概述 Markdown',
+        defaults={'status': 'completed'}
+    )
+    DocumentChunk.objects.filter(document=sys_doc).delete()
+    for i, chunk in enumerate(final_chunks):
         emb = embeddings.embed_query(chunk.page_content)
-        DocumentChunk.objects.create(content=chunk.page_content, embedding=emb)
+        DocumentChunk.objects.create(
+            content=chunk.page_content, embedding=emb,
+            document=sys_doc, owner=None, chunk_index=i,
+        )
+    sys_doc.chunks_count = len(final_chunks)
+    sys_doc.save()
 
     logger.info('已插入 %d 条向量记录', len(final_chunks))
