@@ -56,7 +56,7 @@ def add_system_prompt(
     prompts.append(f'\n\n【角色性格】\n\n{friend.character.system_prompt}\n')
     prompts.append(f'【长期记忆】\n{friend.memory}\n')
     prompt = ''.join(prompts)
-    return {'messages': [SystemMessage(prompt)] + msgs}
+    return {**inputs, 'messages': [SystemMessage(prompt)] + msgs}
 
 
 def add_recent_messages(
@@ -95,7 +95,7 @@ def add_recent_messages(
     else:
         new_msgs = history + msgs
 
-    return {'messages': new_msgs}
+    return {**inputs, 'messages': new_msgs}
 
 
 class MessageChatView(APIView):
@@ -122,7 +122,8 @@ class MessageChatView(APIView):
         friend = friends.first()
         app = ChatGraph.create_app()
         inputs = {
-            'messages': [HumanMessage(message)]
+            'messages': [HumanMessage(message)],
+            'user_id': friend.user_profile.id,
         }
         # 添加系统提示词
         inputs = add_system_prompt(inputs, friend)
