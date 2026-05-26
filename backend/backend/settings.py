@@ -49,6 +49,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # 必须尽量靠前
     'django.middleware.security.SecurityMiddleware',
+    'web.middleware.request_id.RequestIdMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -190,13 +191,18 @@ if not os.path.exists(LOG_DIR):
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'filters': {
+        'request_id': {
+            '()': 'web.middleware.request_id.RequestIdFilter',
+        },
+    },
     'formatters': {
         'verbose': {
-            'format': '[{levelname}] {asctime} {module} {process:d} {thread:d}: {message}',
+            'format': '[{levelname}] {asctime} [{request_id}] {module} {process:d} {thread:d}: {message}',
             'style': '{',
         },
         'simple': {
-            'format': '[{levelname}] {asctime} {module}: {message}',
+            'format': '[{levelname}] {asctime} [{request_id}] {module}: {message}',
             'style': '{',
         },
     },
@@ -204,6 +210,7 @@ LOGGING = {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
+            'filters': ['request_id'],
         },
         'file': {
             'class': 'logging.handlers.RotatingFileHandler',
@@ -212,6 +219,7 @@ LOGGING = {
             'backupCount': 5,
             'formatter': 'verbose',
             'encoding': 'utf-8',
+            'filters': ['request_id'],
         },
     },
     'root': {
