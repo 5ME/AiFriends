@@ -9,7 +9,7 @@ class TestHealthEndpoint:
         assert resp.status_code == status.HTTP_200_OK
         assert resp.json() == {"status": "ok", "db": "ok"}
 
-    def test_health_has_request_id(self, api_client):
+    def test_health_has_request_id(self, db, api_client):
         resp = api_client.get("/api/health/")
         assert "X-Request-ID" in resp
         rid = resp["X-Request-ID"]
