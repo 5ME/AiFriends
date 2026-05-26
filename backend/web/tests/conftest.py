@@ -117,3 +117,50 @@ def other_auth_client(other_user):
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
     client.cookies["refresh_token"] = str(refresh)
     return client
+
+
+class _MockASRWebSocket:
+    """Mock ASR WebSocket — supports async with, send(), and async for"""
+
+    def __init__(self, messages=None):
+        from unittest.mock import AsyncMock
+        self.send = AsyncMock()
+        if messages is not None:
+            self._messages = messages
+        else:
+            import json
+            self._messages = [
+                json.dumps({"header": {"event": "task-started"}}),
+                json.dumps({
+                    "header": {"event": "result-generated"},
+                    "payload": {
+                        "output": {
+                            "transcription": {
+                                "sentence_end": True,
+                                "text": "你好",
+                            }
+                        }
+                    }
+                }),
+                json.dumps({"header": {"event": "task-finished"}}),
+            ]
+
+    def __aiter__(self):
+        return self._generate()
+
+    async def _generate(self):
+        for msg in self._messages:
+            yield msg
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
+
+
+@pytest.fixture
+def mock_asr_ws():
+    """Mock ASR WebSocket — task-started → result-generated → task-finished"""
+    import json
+    return _MockASRWebSocket()
