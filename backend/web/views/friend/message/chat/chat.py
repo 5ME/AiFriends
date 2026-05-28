@@ -20,7 +20,7 @@ from websockets.client import ClientConnection
 
 from web.models.friend import Friend, Message, SystemPrompt
 from web.views.friend.message.chat.graph import ChatGraph
-from web.views.friend.message.memory import update
+from web.views.friend.message.memory.tasks import update_memory_task
 import logging
 
 logger = logging.getLogger(__name__)
@@ -202,7 +202,7 @@ class MessageChatView(APIView):
         if msg_count % 10 == 0:
             logger.info('触发 Memory 更新, friend_id=%s, message_count=%d',
                         friend.id, msg_count)
-            update.update_memory(friend)
+            update_memory_task.delay(friend.id)
 
     def work(
             self,
