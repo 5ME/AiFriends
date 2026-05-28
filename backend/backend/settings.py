@@ -234,3 +234,16 @@ LOGGING = {
         },
     },
 }
+
+# Celery — Redis broker（异步任务队列）
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+
+# 任务完成后才 ack — Worker 崩溃时未完成的任务自动回到队列
+CELERY_TASK_ACKS_LATE = True
+
+# 长任务场景，每次只取一个任务避免并发 LLM 调用争抢资源
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+# 软超时 120s / 硬超时 180s（LLM 调用通常 3-8s）
+CELERY_TASK_SOFT_TIME_LIMIT = 120
+CELERY_TASK_TIME_LIMIT = 180
