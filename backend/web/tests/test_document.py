@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch, MagicMock
 from web.models.document import UserDocument, DocumentChunk
 
 
@@ -99,3 +100,79 @@ class TestOwnerFiltering:
             Q(owner__isnull=True) | Q(owner=user_profile)
         )
         assert mixed.count() == 2
+
+
+class TestInsertDocuments:
+    """insert_documents 幂等性和隔离性"""
+
+    @patch("web.documents.utils.insert_documents.CustomEmbeddings")
+    def test_insert_documents_idempotent(self, mock_embeddings_class, db):
+        from web.documents.utils.insert_documents import insert_documents
+        from web.models.document import UserDocument, DocumentChunk
+
+        mock_embeddings = MagicMock()
+        mock_embeddings.embed_query.return_value = [0.0] * 1024
+        mock_embeddings_class.return_value = mock_embeddings
+
+        insert_documents()
+        chunk_count_1 = DocumentChunk.objects.filter(
+            document__title='百炼平台概述'
+        ).count()
+        assert chunk_count_1 > 0
+
+        insert_documents()
+        chunk_count_2 = DocumentChunk.objects.filter(
+            document__title='百炼平台概述'
+        ).count()
+        assert chunk_count_2 == chunk_count_1
+        assert UserDocument.objects.filter(title='百炼平台概述').count() == 1
+
+    @patch("web.documents.utils.insert_documents.CustomEmbeddings")
+    def test_insert_markdown_documents_idempotent(self, mock_embeddings_class, db):
+        from web.documents.utils.insert_documents import insert_markdown_documents
+        from web.models.document import UserDocument, DocumentChunk
+
+        mock_embeddings = MagicMock()
+        mock_embeddings.embed_query.return_value = [0.0] * 1024
+        mock_embeddings_class.return_value = mock_embeddings
+
+        insert_markdown_documents()
+        count_1 = DocumentChunk.objects.filter(
+            document__title='百炼平台概述 Markdown'
+        ).count()
+        assert count_1 > 0
+
+        insert_markdown_documents()
+        count_2 = DocumentChunk.objects.filter(
+            document__title='百炼平台概述 Markdown'
+        ).count()
+        assert count_2 == count_1
+
+    def test_delete_only_own_chunks(self, db):
+        """insert_documents 只删自己文档的 chunks"""
+        from web.documents.utils.insert_documents import insert_documents
+        from web.models.document import UserDocument, DocumentChunk
+
+        other_doc = UserDocument.objects.create(title='other', status='completed')
+        DocumentChunk.objects.create(
+            content='keep me', embedding=[0.0] * 1024,
+            document=other_doc,
+        )
+
+        with patch("web.documents.utils.insert_documents.CustomEmbeddings") as mock_class:
+            mock_embeddings = MagicMock()
+            mock_embeddings.embed_query.return_value = [0.0] * 1024
+            mock_class.return_value = mock_embeddings
+
+            insert_documents()
+
+        own_count = DocumentChunk.objects.filter(
+            document__title='百炼平台概述'
+        ).count()
+        assert own_count > 0
+
+        other_count = DocumentChunk.objects.filter(
+            document=other_doc
+        ).count()
+        assert other_count == 1
+        assert DocumentChunk.objects.get(document=other_doc).content == 'keep me'
