@@ -27,8 +27,8 @@ class TestSystemPromptLoading:
         assert friend.character.system_prompt in system_msg.content
 
     def test_create_system_message_loads_memory_prompts(self, friend):
-        """memory/update.py 的 create_system_message 应加载 title='memory' 的 SystemPrompt"""
-        from web.views.friend.message.memory.update import create_system_message
+        """memory/tasks.py 的 create_system_message 应加载 title='memory' 的 SystemPrompt"""
+        from web.views.friend.message.memory.tasks import create_system_message
 
         SystemPrompt.objects.create(
             title=SystemPrompt.Title.MEMORY,
