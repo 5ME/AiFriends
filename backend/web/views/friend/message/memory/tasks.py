@@ -2,6 +2,7 @@
 import logging
 
 from langchain_core.messages import SystemMessage, HumanMessage
+from openai import APIStatusError
 from backend.celery import app
 
 from web.models.friend import Friend, Message, SystemPrompt
@@ -57,5 +58,9 @@ def update_memory_task(friend_id: int):
                     friend_id, len(friend.memory or ''))
     except Exception as exc:
         logger.exception('Memory 任务失败, friend_id=%d', friend_id)
-        # 10s 后重试一次；两次都失败则放弃，等下一个 10 条触发
+        # 4xx 客户端错误（400/401/403/404 等）是永久性故障，重试无意义
+        # 但 429 RateLimit 是临时限流，应重试
+        if isinstance(exc, APIStatusError) and 400 <= exc.status_code < 500 and exc.status_code != 429:
+            return
+        # 5xx、网络超时、429 限流等临时故障 → 10s 后重试一次
         raise update_memory_task.retry(exc=exc, countdown=10)
