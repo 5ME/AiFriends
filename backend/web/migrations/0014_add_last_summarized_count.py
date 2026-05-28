@@ -10,10 +10,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveIndex(
-            model_name='documentchunk',
-            name='document_chunk_embedding_hnsw_idx',
-        ),
         migrations.AddField(
             model_name='friend',
             name='last_summarized_count',

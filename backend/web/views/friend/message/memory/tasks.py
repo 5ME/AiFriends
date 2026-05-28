@@ -1,7 +1,6 @@
 """Memory Agent 异步任务 — Celery Worker 中执行，不阻塞聊天请求"""
 import logging
 
-from django.utils.timezone import now
 from langchain_core.messages import SystemMessage, HumanMessage
 from backend.celery import app
 
@@ -21,7 +20,7 @@ def create_system_message() -> SystemMessage:
 
 def create_human_message(friend: Friend) -> HumanMessage:
     """构造 Memory Agent 输入：原始记忆 + 上次摘要之后的增量对话"""
-    prompts = [f'【原始记忆】\n{friend.memory}\n', f'【最近对话】\n']
+    prompts = [f'【原始记忆】\n{friend.memory or ""}\n', f'【最近对话】\n']
     total_msgs = Message.objects.filter(friend=friend).count()
 
     # 从上次摘要位置开始取 — 失败重试时不会遗漏消息
@@ -50,13 +49,12 @@ def update_memory_task(friend_id: int):
         res = app_graph.invoke(inputs)
         friend.memory = res['messages'][-1].content
 
-        # 在 task 内部重新计数而非传参：Worker 处理时用户可能已发新消息
-        friend.last_summarized_count = Message.objects.filter(friend=friend).count()
-        friend.updated_at = now()
+        # 使用任务开始时的快照计数，避免 LLM 调用期间新消息导致计数偏大
+        friend.last_summarized_count = msg_count
         friend.save()
 
         logger.info('Memory 任务完成, friend_id=%d, memory_len=%d',
-                    friend_id, len(friend.memory))
+                    friend_id, len(friend.memory or ''))
     except Exception as exc:
         logger.exception('Memory 任务失败, friend_id=%d', friend_id)
         # 10s 后重试一次；两次都失败则放弃，等下一个 10 条触发
