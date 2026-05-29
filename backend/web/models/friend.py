@@ -11,6 +11,9 @@ class Friend(models.Model):
     memory = models.TextField(default='', max_length=5000, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # 记录上一次成功摘要时的消息总数
+    # 失败重试时 create_human_message 从此位置取消息，不会遗漏
+    last_summarized_count = models.IntegerField(default=0)
 
     class Meta:
         unique_together = [['user_profile', 'character']]

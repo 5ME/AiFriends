@@ -16,7 +16,7 @@ class MemoryGraph:
     def create_app() -> CompiledStateGraph:
         # 使用小模型做摘要，降低成本
         llm = ChatOpenAI(
-            model='tongyi-xiaomi-analysis-flash',
+            model='deepseek-v4-flash',
             api_key=os.getenv('API_KEY'),
             base_url=os.getenv('API_BASE'),
         )

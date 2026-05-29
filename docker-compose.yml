@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: ai-friends-db
+    environment:
+      POSTGRES_PASSWORD: Kakarot001#
+    ports:
+      - "55432:5432"
+    volumes:
+      - /home/ygq/postgres-data:/var/lib/postgresql/data
+      - /home/ygq/ai-friends/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-friends-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - /home/ygq/redis-data:/data
+    command: redis-server --save 60 1 --loglevel warning
+    restart: unless-stopped
