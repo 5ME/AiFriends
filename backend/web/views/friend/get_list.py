@@ -34,7 +34,7 @@ class FriendGetListView(APIView):
                         'photo': friend.character.photo_url,
                         'background_image': friend.character.background_image_url,
                         'author': {
-                            'user_id': friend.character.author_id,
+                            'user_id': friend.character.author.user_id,
                             'username': friend.character.author.user.username,
                             'photo': friend.character.author.photo.url,
                         }
