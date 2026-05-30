@@ -1,4 +1,7 @@
+import io
+
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from unittest.mock import patch, MagicMock
 from web.models.document import UserDocument, DocumentChunk
 
@@ -176,3 +179,59 @@ class TestInsertDocuments:
         ).count()
         assert other_count == 1
         assert DocumentChunk.objects.get(document=other_doc).content == 'keep me'
+
+
+class TestDocumentUpload:
+    """POST /api/document/upload/ 上传校验"""
+
+    def test_upload_requires_auth(self, api_client):
+        """未登录 → 401"""
+        file = SimpleUploadedFile('test.txt', b'hello', content_type='text/plain')
+        resp = api_client.post('/api/document/upload/', {'file': file})
+        assert resp.status_code == 401
+
+    def test_upload_no_file_returns_400(self, auth_client):
+        """不传 file → 400"""
+        resp = auth_client.post('/api/document/upload/', {})
+        assert resp.status_code == 400
+        assert '请选择文件' in resp.data['message']
+
+    def test_upload_empty_file_returns_400(self, auth_client):
+        """空文件 → 400"""
+        file = SimpleUploadedFile('test.txt', b'', content_type='text/plain')
+        resp = auth_client.post('/api/document/upload/', {'file': file})
+        assert resp.status_code == 400
+
+    def test_upload_oversized_file_returns_400(self, auth_client):
+        """超大文件 → 400"""
+        content = b'x' * (10 * 1024 * 1024 + 1)  # 10MB + 1B
+        file = SimpleUploadedFile('big.txt', content, content_type='text/plain')
+        resp = auth_client.post('/api/document/upload/', {'file': file})
+        assert resp.status_code == 400
+
+    def test_upload_bad_extension_returns_400(self, auth_client):
+        """不支持的文件类型 → 400"""
+        file = SimpleUploadedFile('test.exe', b'test', content_type='application/octet-stream')
+        resp = auth_client.post('/api/document/upload/', {'file': file})
+        assert resp.status_code == 400
+
+    def test_upload_magic_bytes_mismatch_returns_400(self, auth_client):
+        """文件头魔数与扩展名不匹配 → 400（.exe 伪装 .pdf）"""
+        file = SimpleUploadedFile('fake.pdf', b'MZ\x90\x00test',
+                                  content_type='application/pdf')
+        resp = auth_client.post('/api/document/upload/', {'file': file})
+        assert resp.status_code == 400
+
+    def test_upload_txt_success(self, auth_client, user_profile):
+        """正常上传 .txt"""
+        file = SimpleUploadedFile('hello.txt', b'Hello World',
+                                  content_type='text/plain')
+        resp = auth_client.post('/api/document/upload/', {'file': file})
+        assert resp.status_code == 201
+        assert resp.data['status'] == 'pending'
+        # 验证 UserDocument 已创建
+        from web.models.document import UserDocument
+        doc = UserDocument.objects.get(id=resp.data['id'])
+        assert doc.owner == user_profile
+        assert doc.file_type == 'txt'
+        assert doc.title == 'hello.txt'
