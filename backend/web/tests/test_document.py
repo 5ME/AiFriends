@@ -237,6 +237,40 @@ class TestDocumentUpload:
         assert doc.title == 'hello.txt'
 
 
+class TestDocumentRemove:
+    """POST /api/document/remove/ 删除文档"""
+
+    def test_remove_requires_auth(self, api_client):
+        """未登录 → 401"""
+        resp = api_client.post('/api/document/remove/', {'id': 1})
+        assert resp.status_code == 401
+
+    def test_remove_own_document(self, auth_client, user_profile):
+        """删除自己的文档 → 200，级联删除 chunks"""
+        from web.models.document import UserDocument, DocumentChunk
+        doc = UserDocument.objects.create(title='to-delete', owner=user_profile,
+                                          status='completed')
+        DocumentChunk.objects.create(content='chunk', embedding=[0.0] * 1024,
+                                     document=doc, chunk_index=0)
+        resp = auth_client.post('/api/document/remove/', {'id': doc.id})
+        assert resp.status_code == 200
+        assert not UserDocument.objects.filter(id=doc.id).exists()
+        assert not DocumentChunk.objects.filter(document_id=doc.id).exists()
+
+    def test_remove_other_user_document(self, auth_client, other_user):
+        """不能删除别人的文档 → 404"""
+        from web.models.document import UserDocument
+        doc = UserDocument.objects.create(
+            title='theirs', owner=other_user.userprofile, status='completed')
+        resp = auth_client.post('/api/document/remove/', {'id': doc.id})
+        assert resp.status_code == 404
+
+    def test_remove_nonexistent_returns_404(self, auth_client):
+        """删除不存在的文档 → 404"""
+        resp = auth_client.post('/api/document/remove/', {'id': 99999})
+        assert resp.status_code == 404
+
+
 class TestDocumentList:
     """GET /api/document/list/ 文档列表"""
 
