@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def insert_documents():
-    loader = TextLoader('./web/documents/Bailian_Overview.txt', encoding='utf-8')
+    loader = TextLoader('./web/documents/raw/Bailian_Overview.txt', encoding='utf-8')
     docs = loader.load()
 
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
@@ -36,7 +36,7 @@ def insert_documents():
     logger.info('已插入 %d 条向量记录', len(chunks))
 
 def insert_markdown_documents():
-    loader = TextLoader('./web/documents/Bailian_Overview.md', encoding='utf-8')
+    loader = TextLoader('./web/documents/raw/Bailian_Overview.md', encoding='utf-8')
     docs = loader.load()
 
     # 2. 先按标题切分
