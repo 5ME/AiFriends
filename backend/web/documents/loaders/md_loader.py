@@ -22,8 +22,12 @@ class MdLoader(AbstractLoader):
             ],
             strip_headers=False,
         )
-        # 使用 split_documents 而非 split_text，保留 doc 的 metadata（source 等）
-        md_chunks = md_splitter.split_documents([doc])
+        # split_text 返回 List[Document]，每个带标题层级 metadata
+        md_chunks = md_splitter.split_text(doc.page_content)
+        # 将原始 doc 的 metadata（如 source）合并到每个 chunk
+        for chunk in md_chunks:
+            chunk.metadata.update({k: v for k, v in doc.metadata.items()
+                                   if k not in chunk.metadata})
 
         # 再按长度切分
         text_splitter = RecursiveCharacterTextSplitter(

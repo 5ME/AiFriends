@@ -111,7 +111,7 @@ class TestInsertDocuments:
         from web.models.document import UserDocument, DocumentChunk
 
         mock_embeddings = MagicMock()
-        mock_embeddings.embed_query.return_value = [0.0] * 1024
+        mock_embeddings.embed_documents.return_value = [[0.0] * 1024]
         mock_embeddings_class.return_value = mock_embeddings
 
         insert_documents()
@@ -133,7 +133,7 @@ class TestInsertDocuments:
         from web.models.document import UserDocument, DocumentChunk
 
         mock_embeddings = MagicMock()
-        mock_embeddings.embed_query.return_value = [0.0] * 1024
+        mock_embeddings.embed_documents.return_value = [[0.0] * 1024]
         mock_embeddings_class.return_value = mock_embeddings
 
         insert_markdown_documents()
@@ -161,7 +161,7 @@ class TestInsertDocuments:
 
         with patch("web.documents.utils.insert_documents.CustomEmbeddings") as mock_class:
             mock_embeddings = MagicMock()
-            mock_embeddings.embed_query.return_value = [0.0] * 1024
+            mock_embeddings.embed_documents.return_value = [[0.0] * 1024]
             mock_class.return_value = mock_embeddings
 
             insert_documents()

@@ -1,81 +1,51 @@
+"""系统知识库批量导入 — 使用 loader + chunker 消除重复代码"""
 import logging
-from langchain_community.document_loaders import TextLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 
-from web.documents.utils.custom_embeddings import CustomEmbeddings
+from web.documents.loaders import get_loader
+from web.documents.services import CustomEmbeddings, chunk_documents
 from web.models.document import DocumentChunk, UserDocument
 
 logger = logging.getLogger(__name__)
 
 
-def insert_documents():
-    loader = TextLoader('./web/documents/raw/Bailian_Overview.txt', encoding='utf-8')
-    docs = loader.load()
+def _insert_with_loader(title: str, file_path: str, file_type: str):
+    """通用导入逻辑：get_or_create → load → chunk → embed → bulk_create"""
+    loader = get_loader(file_type)
+    documents = loader.load(file_path)
+    chunks = chunk_documents(documents)
 
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    chunks = text_splitter.split_documents(docs)
-    logger.info('已切分成 %d 个片段', len(chunks))
-
-    embeddings = CustomEmbeddings()
-
-    # 使用 UserDocument 管理文档，保证多次执行不会产生重复记录
     sys_doc, _ = UserDocument.objects.get_or_create(
-        title='百炼平台概述',
+        title=title,
         defaults={'status': 'completed'}
     )
     DocumentChunk.objects.filter(document=sys_doc).delete()
-    for i, chunk in enumerate(chunks):
-        emb = embeddings.embed_query(chunk.page_content)
-        DocumentChunk.objects.create(
-            content=chunk.page_content, embedding=emb,
-            document=sys_doc, owner=None, chunk_index=i,
-        )
-    sys_doc.chunks_count = len(chunks)
-    sys_doc.save()
 
-    logger.info('已插入 %d 条向量记录', len(chunks))
+    embeddings = CustomEmbeddings()
+    texts = [c.page_content for c in chunks]
+    vectors = embeddings.embed_documents(texts)
+
+    objs = [
+        DocumentChunk(
+            content=c.page_content, embedding=v,
+            document=sys_doc, chunk_index=i,
+            # token_count 实际存字符数（近似），非精确 token 数
+            token_count=len(c.page_content),
+            metadata=c.metadata,
+        )
+        for i, (c, v) in enumerate(zip(chunks, vectors))
+    ]
+    DocumentChunk.objects.bulk_create(objs, batch_size=50)
+
+    sys_doc.chunks_count = len(objs)
+    sys_doc.save()
+    logger.info('已插入 %d 条向量记录 → %s', len(objs), title)
+
+
+def insert_documents():
+    _insert_with_loader('百炼平台概述',
+                        './web/documents/raw/Bailian_Overview.txt', 'txt')
+
 
 def insert_markdown_documents():
-    loader = TextLoader('./web/documents/raw/Bailian_Overview.md', encoding='utf-8')
-    docs = loader.load()
-
-    # 2. 先按标题切分
-    headers_to_split_on = [
-        ("#", "Header 1"),
-        ("##", "Header 2"),
-        ("###", "Header 3"),
-    ]
-    md_splitter = MarkdownHeaderTextSplitter(
-        headers_to_split_on=headers_to_split_on,
-        strip_headers=False
-    )
-    # docs 是 List[Document]
-    md_chunks = []
-    for doc in docs:
-        md_chunks.extend(md_splitter.split_text(doc.page_content))
-
-    # 3. 再按长度切分
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=50
-    )
-    final_chunks = text_splitter.split_documents(md_chunks)
-
-    embeddings = CustomEmbeddings()
-
-    # 使用 UserDocument 管理文档，保证多次执行不会产生重复记录
-    sys_doc, _ = UserDocument.objects.get_or_create(
-        title='百炼平台概述 Markdown',
-        defaults={'status': 'completed'}
-    )
-    DocumentChunk.objects.filter(document=sys_doc).delete()
-    for i, chunk in enumerate(final_chunks):
-        emb = embeddings.embed_query(chunk.page_content)
-        DocumentChunk.objects.create(
-            content=chunk.page_content, embedding=emb,
-            document=sys_doc, owner=None, chunk_index=i,
-        )
-    sys_doc.chunks_count = len(final_chunks)
-    sys_doc.save()
-
-    logger.info('已插入 %d 条向量记录', len(final_chunks))
+    _insert_with_loader('百炼平台概述 Markdown',
+                        './web/documents/raw/Bailian_Overview.md', 'md')
