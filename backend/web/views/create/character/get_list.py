@@ -19,10 +19,10 @@ class GetListCharacterView(APIView):
             user_id = request.query_params.get('user_id')
             try:
                 user = User.objects.get(id=user_id)
-            except User.DoesNotExist:
+                user_profile = UserProfile.objects.get(user=user)
+            except (User.DoesNotExist, UserProfile.DoesNotExist):
                 return Response({'message': '用户不存在'},
                                 status=status.HTTP_404_NOT_FOUND)
-            user_profile = UserProfile.objects.get(user=user)
             # select_related 一次性 JOIN author→user，annotate 内联 COUNT 好友数
             character_list = Character.objects.filter(author=user_profile) \
                                  .select_related('author__user') \
