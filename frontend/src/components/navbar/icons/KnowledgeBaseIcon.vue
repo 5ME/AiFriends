@@ -1,9 +1,17 @@
 <template>
-  <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-      d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125
-         0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25
-         0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125
-         1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/>
+  <svg xmlns="http://www.w3.org/2000/svg"
+       viewBox="0 0 24 24"
+       stroke-linejoin="round"
+       stroke-linecap="round"
+       stroke-width="2"
+       fill="none"
+       stroke="currentColor"
+       class="inline-block size-6"
+  >
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+    <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z"></path>
+    <line x1="9" y1="6" x2="15" y2="6"></line>
+    <line x1="9" y1="9.5" x2="15" y2="9.5"></line>
+    <line x1="9" y1="13" x2="13" y2="13"></line>
   </svg>
 </template>

@@ -43,7 +43,7 @@
         <p class="py-4">删除后文档及其所有片段将被永久移除，不可恢复。</p>
         <div class="modal-action">
           <button class="btn" @click="showDeleteModal = false">取消</button>
-          <button class="btn btn-error" @click="handleDelete">确认删除</button>
+          <button class="btn bg-red-700 text-white" @click="handleDelete">确认删除</button>
         </div>
       </div>
     </dialog>

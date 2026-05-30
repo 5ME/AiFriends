@@ -181,3 +181,12 @@ class TestGetList:
         data = resp.json()
         assert data["message"] == "success"
         assert len(data["characters"]) >= 1
+
+    def test_get_list_nonexistent_user_returns_404(self, db, api_client):
+        """不存在的 user_id → 404 而非 500"""
+        resp = api_client.get(
+            "/api/create/character/get_list/",
+            {"user_id": 99999, "items_count": 0},
+        )
+        assert resp.status_code == status.HTTP_404_NOT_FOUND
+        assert "不存在" in resp.data["message"]

@@ -42,7 +42,9 @@ async function loadMore() {
     newCharacters = response.data.characters
   } catch (e) {
     console.log(e)
-    loadError.value = '加载失败，请稍后重试'
+    loadError.value = e.response?.status === 404
+      ? '用户不存在'
+      : '加载失败，请稍后重试'
   } finally {
     isLoading.value = false
     if (newCharacters.length === 0) {
