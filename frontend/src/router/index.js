@@ -9,6 +9,7 @@ import SpaceIndex from "@/views/user/space/SpaceIndex.vue";
 import ProfileIndex from "@/views/user/profile/ProfileIndex.vue";
 import {useUserStore} from "@/stores/user.js";
 import UpdateCharacter from "@/views/create/character/UpdateCharacter.vue";
+import KnowledgeBase from '@/views/KnowledgeBase.vue'
 
 const router = createRouter({
   history: createWebHistory('/'),
@@ -84,6 +85,12 @@ const router = createRouter({
       meta: {
         needLogin: true
       }
+    },
+    {
+      path: '/knowledge',
+      name: 'KnowledgeBase',
+      component: KnowledgeBase,
+      meta: { needLogin: true },
     },
     {
       name: 'not-found-index',
