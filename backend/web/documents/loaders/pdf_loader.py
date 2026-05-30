@@ -21,7 +21,7 @@ class PdfLoader(AbstractLoader):
                 page_content=chunk['text'],
                 metadata={
                     'page_number': chunk['metadata']['page_number'],
-                    'source': os.path.basename(file_path),
+                    'source': file_path,
                 }
             ))
 

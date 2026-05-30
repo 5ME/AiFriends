@@ -22,7 +22,8 @@ class MdLoader(AbstractLoader):
             ],
             strip_headers=False,
         )
-        md_chunks = md_splitter.split_text(doc.page_content)
+        # 使用 split_documents 而非 split_text，保留 doc 的 metadata（source 等）
+        md_chunks = md_splitter.split_documents([doc])
 
         # 再按长度切分
         text_splitter = RecursiveCharacterTextSplitter(
