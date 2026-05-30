@@ -17,12 +17,14 @@ class PdfLoader(AbstractLoader):
 
         docs = []
         for chunk in chunks:
+            meta = {'source': file_path}
+            if isinstance(chunk.get('metadata'), dict):
+                page_num = chunk['metadata'].get('page_number')
+                if page_num is not None:
+                    meta['page_number'] = page_num
             docs.append(Document(
-                page_content=chunk['text'],
-                metadata={
-                    'page_number': chunk['metadata']['page_number'],
-                    'source': file_path,
-                }
+                page_content=chunk.get('text', ''),
+                metadata=meta,
             ))
 
         # 按长度切分
