@@ -235,3 +235,41 @@ class TestDocumentUpload:
         assert doc.owner == user_profile
         assert doc.file_type == 'txt'
         assert doc.title == 'hello.txt'
+
+
+class TestDocumentList:
+    """GET /api/document/list/ 文档列表"""
+
+    def test_list_requires_auth(self, api_client):
+        """未登录 → 401"""
+        resp = api_client.get('/api/document/list/')
+        assert resp.status_code == 401
+
+    def test_list_empty(self, auth_client):
+        """无文档时返回空列表"""
+        resp = auth_client.get('/api/document/list/')
+        assert resp.status_code == 200
+        assert resp.data['documents'] == []
+
+    def test_list_only_own_documents(self, auth_client, user_profile, other_user):
+        """只能看到自己的文档"""
+        from web.models.document import UserDocument
+        UserDocument.objects.create(title='mine', owner=user_profile,
+                                    status='completed')
+        UserDocument.objects.create(title='theirs', owner=other_user.userprofile,
+                                    status='completed')
+        resp = auth_client.get('/api/document/list/')
+        assert resp.status_code == 200
+        assert len(resp.data['documents']) == 1
+        assert resp.data['documents'][0]['title'] == 'mine'
+
+    def test_list_ordered_by_created_desc(self, auth_client, user_profile):
+        """按创建时间倒序"""
+        from web.models.document import UserDocument
+        d1 = UserDocument.objects.create(title='older', owner=user_profile,
+                                          status='completed')
+        d2 = UserDocument.objects.create(title='newer', owner=user_profile,
+                                          status='completed')
+        resp = auth_client.get('/api/document/list/')
+        titles = [d['title'] for d in resp.data['documents']]
+        assert titles == ['newer', 'older']  # DESC
