@@ -16,7 +16,8 @@ class DocumentListView(APIView):
     def get(self, request):
         docs = UserDocument.objects.filter(
             owner=request.user.userprofile
-        ).order_by('-created_at')
+        # -id 作为第二排序键，防止 created_at 相同导致结果不稳定
+        ).order_by('-created_at', '-id')
 
         result = [{
             'id': d.id,
