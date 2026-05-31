@@ -22,7 +22,10 @@ AI 虚拟角色聊天平台 — 用户可创建 AI 角色并与之进行文字 +
 - RAG 知识库检索（pgvector 余弦距离搜索）
 - 用户注册登录（JWT access/refresh 双令牌认证，httpOnly cookie）
 - 首页角色探索 + 好友关系管理
-- pytest 自动化测试覆盖核心链路（51 个测试）
+- pytest 自动化测试覆盖核心链路（99 个测试）
+- 用户文档 RAG 知识库：上传 txt/md/pdf → 异步解析/分块/embedding → pgvector 检索
+- Celery + Redis 异步任务队列（Memory Agent 摘要 + 文档处理）
+- 健康检查端点（GET /api/health/）+ Request ID 全链路追踪
 
 ## 快速开始
 
@@ -44,11 +47,26 @@ python manage.py migrate
 python manage.py runserver        # http://127.0.0.1:8000
 ```
 
+### 基础设施（Docker Compose）
+
+```bash
+wsl docker compose up -d   # 启动 PostgreSQL 17 + pgvector + Redis 7
+```
+
+### Celery Worker
+
+```bash
+cd backend
+celery -A backend worker --loglevel=info --pool=solo
+```
+
+> Memory Agent 摘要和文档处理通过 Celery 异步执行，需同时运行 Django 和 Celery Worker。
+
 ### 运行测试
 
 ```bash
 cd backend
-python -m pytest web/tests/ -v   # 51 个测试
+python -m pytest web/tests/ -v   # 99 个测试
 ```
 
 ### 前端
@@ -69,6 +87,30 @@ npm run dev                       # http://localhost:5173
 3. `cd backend && python manage.py collectstatic`
 4. 启动 Gunicorn：`gunicorn --workers 3 --bind unix:gunicorn.sock backend.wsgi:application`
 5. Nginx 反向代理到 Gunicorn socket（详见 `服务器部署.md`）
+
+## 架构
+
+```
+┌─────────────┐     SSE/HTTP      ┌──────────────────────────────────┐
+│   Vue 3     │ ◄──────────────► │  Django + DRF (Gunicorn)         │
+│   Vite 7    │                   │  ├─ Chat Agent (LangGraph)       │
+│   daisyUI 5 │                   │  ├─ Memory Agent (LangGraph)     │
+└─────────────┘                   │  ├─ RAG (pgvector)              │
+                                  │  └─ JWT Auth                    │
+                                  └──────────┬───────────────────────┘
+                                             │
+                   ┌─────────────────────────┼─────────────────────────┐
+                   │                         │                         │
+            ┌──────▼──────┐          ┌──────▼──────┐          ┌──────▼──────┐
+            │ PostgreSQL  │          │ Redis 7     │          │ DashScope   │
+            │ + pgvector  │          │ (Broker)    │          │ LLM/TTS/ASR │
+            └─────────────┘          └──────┬──────┘          │ + Embedding │
+                                            │                 └─────────────┘
+                                     ┌──────▼──────┐
+                                     │ Celery      │
+                                     │ Worker      │
+                                     └─────────────┘
+```
 
 ## 项目结构
 
@@ -156,9 +198,7 @@ AiFriends/
 
 ## 已知限制
 
-- [ ] 知识库目前为全局预置，暂不支持用户自行上传文档构建个人 RAG
 - [ ] 音色仅支持系统内置，暂不支持用户自定义
-- [ ] Memory Agent 当前在聊天请求线程内同步执行，大模型调用期间会占用 worker 资源
-- [ ] 未做 Docker 容器化，部署需手动配置环境
 - [ ] 未做压测，暂无容量评估数据
-- [ ] 测试使用 PostgreSQL 独立测试库（aifriends_test），与开发库同引擎
+- [ ] 无 API 版本化（/api/v1/）
+- [ ] 无速率限制和成本治理
