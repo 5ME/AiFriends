@@ -35,7 +35,9 @@ class HomepageIndexView(APIView):
                     'photo': character.photo_url,
                     'background_image': character.background_image_url,
                     'author': {
-                        'user_id': character.author_id,
+                        # character.author 是 UserProfile，author_id 是 UserProfile.id
+                        # 但前端路由 /user/space/:user_id/ 用的是 User.id
+                        'user_id': character.author.user_id,
                         'username': character.author.user.username,
                         'photo': character.author.photo.url
                     }

@@ -161,4 +161,4 @@ AiFriends/
 - [ ] Memory Agent 当前在聊天请求线程内同步执行，大模型调用期间会占用 worker 资源
 - [ ] 未做 Docker 容器化，部署需手动配置环境
 - [ ] 未做压测，暂无容量评估数据
-- [ ] 测试环境使用 SQLite，pgvector 查询仅在 PostgreSQL 运行环境中验证
+- [ ] 测试使用 PostgreSQL 独立测试库（aifriends_test），与开发库同引擎

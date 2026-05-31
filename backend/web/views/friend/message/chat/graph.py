@@ -31,8 +31,9 @@ class ChatGraph:
         @tool
         def search_knowledge_base(query: str, state: Annotated[dict, InjectedState]) -> str:
             """
-            当用户查询"阿里云百炼"相关简介信息时，调用此函数。
-            输入为要查询的问题，输出为查询结果。
+            在知识库中检索与用户问题相关的文档内容。
+            知识库包含平台文档和用户上传的个人文档。
+            当需要查找文档中的信息、引用资料或专业知识时，调用此函数。
             :param query: 要查询的问题
             :return: 查询结果
             """

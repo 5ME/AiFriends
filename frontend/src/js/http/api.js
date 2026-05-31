@@ -132,3 +132,22 @@ api.interceptors.response.use(
 )
 
 export default api
+
+// ==================== 文档管理 ====================
+
+/** 上传文档 — axios 自动设置 Content-Type（含 boundary），不要手动覆盖 */
+export function uploadDocument(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post('/api/document/upload/', formData)
+}
+
+/** 获取文档列表 */
+export function getDocumentList() {
+  return api.get('/api/document/list/')
+}
+
+/** 删除文档 */
+export function removeDocument(id) {
+  return api.post('/api/document/remove/', { id })
+}

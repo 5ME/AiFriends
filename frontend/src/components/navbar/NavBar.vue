@@ -9,6 +9,7 @@ import UserMenu from "@/components/navbar/UserMenu.vue";
 import {ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import logoUrl from "@/assets/logo.png";
+import KnowledgeBaseIcon from "@/components/navbar/icons/KnowledgeBaseIcon.vue";
 
 const router = useRouter()
 const route = useRoute()
@@ -113,6 +114,14 @@ function handleSearch() {
               <!-- Create icon -->
               <CreateIcon/>
               <span class="is-drawer-close:hidden text-base whitespace-nowrap">创作</span>
+            </RouterLink>
+          </li>
+          <!-- 知识库入口 -->
+          <li>
+            <RouterLink to="/knowledge" active-class="menu-focus"
+                        class="is-drawer-close:tooltip is-drawer-close:tooltip-right py-3" data-tip="知识库">
+              <KnowledgeBaseIcon/>
+              <span class="is-drawer-close:hidden text-base whitespace-nowrap">知识库</span>
             </RouterLink>
           </li>
         </ul>

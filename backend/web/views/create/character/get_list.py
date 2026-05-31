@@ -17,8 +17,12 @@ class GetListCharacterView(APIView):
         try:
             items_count = int(request.query_params.get('items_count', 0))
             user_id = request.query_params.get('user_id')
-            user = User.objects.get(id=user_id)
-            user_profile = UserProfile.objects.get(user=user)
+            try:
+                user = User.objects.get(id=user_id)
+                user_profile = UserProfile.objects.get(user=user)
+            except (User.DoesNotExist, UserProfile.DoesNotExist):
+                return Response({'message': '用户不存在'},
+                                status=status.HTTP_404_NOT_FOUND)
             # select_related 一次性 JOIN author→user，annotate 内联 COUNT 好友数
             character_list = Character.objects.filter(author=user_profile) \
                                  .select_related('author__user') \
@@ -34,7 +38,9 @@ class GetListCharacterView(APIView):
                     'background_image': character.background_image_url,
                     'friend_count': character.friend_count,
                     'author': {
-                        'user_id': character.author_id,
+                        # character.author 是 UserProfile，author_id 是 UserProfile.id
+                        # 但前端路由 /user/space/:user_id/ 用的是 User.id
+                        'user_id': character.author.user_id,
                         'username': character.author.user.username,
                         'photo': character.author.photo.url
                     }

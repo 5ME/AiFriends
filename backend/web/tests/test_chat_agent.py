@@ -273,3 +273,15 @@ class TestChatSSEEndpoint:
             {"friend_id": friend.id, "message": "Hi"},
         )
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+class TestKnowledgeBaseToolDescription:
+    """search_knowledge_base tool description 不应限定百炼平台"""
+
+    def test_tool_description_does_not_hardcode_bailian(self):
+        """tool description 不应出现'阿里云百炼'字样"""
+        import inspect
+        from web.views.friend.message.chat.graph import ChatGraph
+        source = inspect.getsource(ChatGraph.create_app)
+        assert '阿里云百炼' not in source, \
+            'search_knowledge_base tool description 不应写死百炼平台'
