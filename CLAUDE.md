@@ -6,25 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AI Friends — a full-stack web app where users create AI characters ("friends") and chat with them. Supports text + voice input/output, long-term memory summarization, and RAG-based knowledge retrieval.
 
-- **Backend:** Django 6.0 + Django REST Framework + JWT auth (PostgreSQL 17 + pgvector 0.8, tests use SQLite)
+- **Backend:** Django 6.0 + Django REST Framework + JWT auth (PostgreSQL 17 + pgvector 0.8)
 - **Frontend:** Vue 3 (Composition API) + Vite 7 + Pinia + Vue Router 5 + Tailwind CSS 4 + daisyUI 5
-- **AI:** Alibaba DashScope (Qwen models) via OpenAI-compatible API. LangChain/LangGraph for orchestration. pgvector for vector storage (LanceDB code retained but unused).
+- **AI:** Alibaba DashScope (Qwen models) via OpenAI-compatible API. LangChain/LangGraph for orchestration. pgvector for vector storage.
 - **Voice:** DashScope TTS (WebSocket streaming) + ASR (WebSocket). Browser-side VAD via `@ricky0123/vad-web` (Silero VAD on ONNX).
 
 ## Commands
 
 ### Backend (Python/Django)
 
-Uses miniconda environment `py312`. Activate with `conda activate py312` before running commands.
+Uses conda environment at `D:\MyWork\Miniconda3\envs\py312`. Activate with `conda activate py312` before running commands.
 
 ```bash
 cd backend
-pip install -r requirements.txt
-# 本地调试前将 settings.py 中 DEBUG 改为 True
+pip install -r ../requirements.txt      # requirements.txt 在项目根目录
+# DEBUG / SECRET_KEY 等通过 .env 环境变量控制，无需手动改 settings.py
 python manage.py runserver              # Dev server on :8000
-python -m pytest web/tests/ -v         # Run all backend tests (49 tests)
-# PostgreSQL: credentials in .env (PG_HOST/PG_PORT/PG_NAME/PG_USER/PG_PASSWORD)
-# Template: cp .env.example .env
+python -m pytest web/tests/ -v         # Run all backend tests (~99 tests)
+# PostgreSQL & Redis: Docker Compose 一键启动（见下方 Infrastructure）
+# .env 模板: cp .env.example .env
 python manage.py clean_dirty_characters --all  # Clean test residue data
 # 部署到云服务器时 DEBUG = False
 python manage.py collectstatic          # Collect static files for production
@@ -40,23 +40,44 @@ npm run build       # Production build → ../backend/static/frontend/
 npm run preview     # Preview production build locally
 ```
 
+### Infrastructure
+
+**Docker Compose** (`docker-compose.yml` at project root):
+
+```bash
+wsl docker compose up -d   # 启动 PostgreSQL 17 + pgvector + Redis 7
+```
+
+| Service | Port | Credentials |
+|---------|------|-------------|
+| PostgreSQL 17 + pgvector | `55432:5432` | `.env` (PG_* variables) |
+| Redis 7 | `6379:6379` | — |
+
+**Celery Worker:**
+
+```bash
+cd backend
+celery -A backend worker --loglevel=info --pool=solo
+```
+
 ### Production Deployment
 
 1. Set `platform = 'cloud'` in `frontend/src/js/config/config.js`
 2. `cd frontend && npm run build`
 3. `cd backend && python manage.py collectstatic`
 4. Start gunicorn: `gunicorn --workers 3 --bind unix:gunicorn.sock backend.wsgi:application`
-5. Nginx reverse-proxies to the gunicorn socket (see `服务器部署.md` for full Nginx config)
+5. Start Celery Worker: `celery -A backend worker --loglevel=info --pool=solo`
+6. Nginx reverse-proxies to the gunicorn socket (see `服务器部署.md` for full Nginx config)
 
 ## Architecture
 
 ### Testing (pytest)
 
-- Tests in `web/tests/`, run with `python -m pytest web/tests/ -v` (49 tests)
+- Tests in `web/tests/`, run with `python -m pytest web/tests/ -v` (~99 tests)
 - `conftest.py` provides global fixtures: `api_client`, `user`, `auth_client`, `character`, `friend`, etc.
 - `media_root` fixture (autouse, session-scoped) redirects test uploads to a temp directory — test files never touch real `media/`
 - Tests use `model_bakery` (baker.make) + `pytest-django` transaction rollback
-- **Dual-DB strategy:** tests run on SQLite (auto-detected via `sys.argv`), runtime uses PostgreSQL. This avoids remote PG instability during local development.
+- **Dual-DB strategy:** tests run on PostgreSQL `aifriends_test` database (auto-detected via `sys.argv`), separated from the development `aifriends` database. Avoids polluting development data during tests.
 
 ### How the stacks connect
 
@@ -93,7 +114,7 @@ Each API endpoint is a single file under `backend/web/views/`, each exporting a 
 
 **Exception handling:** Never use bare `except:`. Always `except Exception as e:` with `logger.exception(...)` before the error response. Every view imports `logging` and has `logger = logging.getLogger(__name__)`.
 
-Models live in `backend/web/models/` — four files: `user.py` (UserProfile), `character.py` (Character, Voice), `friend.py` (Friend, Message, SystemPrompt), `document.py` (DocumentChunk with pgvector VectorField).
+Models live in `backend/web/models/` — four files: `user.py` (UserProfile), `character.py` (Character, Voice), `friend.py` (Friend, Message, SystemPrompt), `document.py` (UserDocument, DocumentChunk with pgvector VectorField).
 
 ### Logging
 
@@ -123,9 +144,27 @@ On the homepage, clicking a character card opens `CharacterDetail.vue` (a modal)
 
 Two separate LangGraph state graphs:
 
-1. **Chat agent** (`web/views/friend/message/chat/graph.py`) — `deepseek-v3.2` model with tools: `get_time` and `search_knowledge_base` (pgvector `<->` cosine distance search over Bailian docs stored in `DocumentChunk` model). Streams tokens via SSE. Also streams TTS audio chunks (base64 mp3) over the same SSE connection using a separate DashScope WebSocket.
+1. **Chat agent** (`web/views/friend/message/chat/graph.py`) — `deepseek-v3.2` model with tools: `get_time` and `search_knowledge_base` (pgvector 余弦向量检索，按 `owner_id` 过滤召回全局知识库 + 用户个人文档)。Streams tokens via SSE. Also streams TTS audio chunks (base64 mp3) over the same SSE connection using a separate DashScope WebSocket.
 
-2. **Memory agent** (`web/views/friend/message/memory/graph.py`) — `tongyi-xiaomi-analysis-flash` model. Triggers every 10 messages to summarize conversation and write into `Friend.memory` field.
+2. **Memory agent** (`web/views/friend/message/memory/graph.py`) — `deepseek-v4-flash` model. 通过 Celery 异步任务 (`web/views/friend/message/memory/tasks.py`) 每 10 条消息触发一次，摘要写入 `Friend.memory` 字段。`last_summarized_count` 字段防止失败重试时遗漏消息。
+
+### Celery async tasks
+
+`web/tasks.py` 是 Celery `autodiscover_tasks()` 的入口文件，所有异步任务通过此文件注册导入：
+
+```python
+from web.views.friend.message.memory.tasks import update_memory_task    # Memory Agent
+from web.views.document.tasks import process_document_task              # 文档处理
+```
+
+`autodiscover_tasks()` 只扫描 `<app>.tasks` 模块，深度嵌套的 task 文件必须在此入口文件中显式导入。
+
+### Frontend knowledge base page
+
+`/knowledge` 路由 → `KnowledgeBase.vue`（`meta: { needLogin: true }`）：
+- **UploadZone** — 拖拽/点击上传 .txt/.md/.pdf（≤10MB，前端校验格式+大小）
+- **DocumentCard** — 文档卡片，状态标签（pending/processing/completed/failed）
+- **useDocumentPolling** — 每 3 秒轮询文档列表，全部到达终态时自动停止，兜底 120 次（6 分钟）超时
 
 ### Frontend error handling
 
@@ -152,7 +191,29 @@ The frontend uses `@microsoft/fetch-event-source` (`js/http/streamApi.js`) to PO
 
 ### RAG / knowledge base
 
-`backend/web/documents/` contains LanceDB vector storage and a custom embeddings wrapper (`custom_embeddings.py`) that calls DashScope's embedding API. Documents are inserted via `insert_documents.py`. The chat agent's `search_knowledge_base` tool queries this store.
+`backend/web/documents/` 重构成了三层架构：
+
+```
+documents/
+├── loaders/          # 文档加载层（抽象接口 + txt/md/pdf 三种 loader）
+├── services/         # 服务层（embeddings + chunker 统一切分）
+└── utils/            # 兼容旧 import + 系统知识库批量导入
+```
+
+- **向量化：** `CustomEmbeddings` 封装 DashScope `text-embedding-v4` API（1024 维）
+- **切分：** `RecursiveCharacterTextSplitter(chunk_size=500, overlap=50)`
+- **存储：** `DocumentChunk` 模型（pgvector VectorField，HNSW 索引）
+- **用户隔离：** `DocumentChunk.owner` 字段，`search_knowledge_base` 按 `WHERE owner_id IS NULL OR owner_id = %s` 同时召回全局 + 个人文档
+
+**API 端点：**
+
+| 端点 | 功能 |
+|------|------|
+| `POST /api/document/upload/` | 上传文档 → 同步校验 → Celery 异步处理 |
+| `GET /api/document/list/` | 用户文档列表 |
+| `POST /api/document/remove/` | 删除文档 + 级联 chunks |
+
+**Celery 任务：** `process_document_task(doc_id)` — 文本提取 → 分块 → embedding → 批量写入 DocumentChunk。注册在 `web/tasks.py`。
 
 ### Character.photo_url / background_image_url
 
