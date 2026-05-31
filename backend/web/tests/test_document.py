@@ -222,7 +222,8 @@ class TestDocumentUpload:
         resp = auth_client.post('/api/document/upload/', {'file': file})
         assert resp.status_code == 400
 
-    def test_upload_txt_success(self, auth_client, user_profile):
+    @patch("web.views.document.upload.process_document_task.delay")
+    def test_upload_txt_success(self, mock_delay, auth_client, user_profile):
         """正常上传 .txt"""
         file = SimpleUploadedFile('hello.txt', b'Hello World',
                                   content_type='text/plain')
@@ -235,6 +236,8 @@ class TestDocumentUpload:
         assert doc.owner == user_profile
         assert doc.file_type == 'txt'
         assert doc.title == 'hello.txt'
+        # 验证 Celery 任务已被触发
+        mock_delay.assert_called_once_with(doc.id)
 
 
 class TestDocumentRemove:
