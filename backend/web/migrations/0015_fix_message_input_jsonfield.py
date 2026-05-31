@@ -30,8 +30,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(convert_input_to_json, reverse_convert),
-        migrations.RemoveIndex(
-            model_name='documentchunk',
-            name='document_chunk_embedding_hnsw_idx',
-        ),
+        # NOTE: RemoveIndex for document_chunk_embedding_hnsw_idx was auto-generated
+        # by makemigrations because the model Meta didn't declare the HnswIndex yet.
+        # Removed here — the index is recreated in migration 0016.
     ]
