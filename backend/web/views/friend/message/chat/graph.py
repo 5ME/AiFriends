@@ -27,7 +27,7 @@ class ChatGraph:
             """
             return localtime(now()).strftime("%Y-%m-%d %H:%M:%S")
 
-        # Tool 2: 知识库向量检索（LanceDB）
+        # Tool 2: 知识库向量检索（pgvector）
         @tool
         def search_knowledge_base(query: str, state: Annotated[dict, InjectedState]) -> str:
             """
