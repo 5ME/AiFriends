@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import {nextTick, onBeforeUnmount, ref, useTemplateRef, watch} from "vue";
 import CameraIcon from "@/views/user/profile/components/icons/CameraIcon.vue";
-import Croppie from "croppie"
-import 'croppie/croppie.css'
+import { useImageCropper } from '@/composables/useImageCropper.js'
 
 const props = defineProps(['photo'])
 const myPhoto = ref(props.photo)
@@ -14,31 +13,26 @@ watch(() => props.photo, newVal => {
 const fileInputRef = useTemplateRef('file-input-ref')
 const modalRef = useTemplateRef('modal-ref')
 const croppieRef = useTemplateRef('croppie-ref')
-let croppie = null
+
+const { init: initCroppie, crop: doCrop, destroy: destroyCroppie } = useImageCropper({
+  viewportWidth: 200,
+  viewportHeight: 200,
+  viewportType: 'square',
+  boundaryWidth: 300,
+  boundaryHeight: 300,
+})
 
 async function openModal(photo) {
   modalRef.value.showModal()
   await nextTick()
-  if (!croppie) {
-    croppie = new Croppie(croppieRef.value, {
-      viewport: {width: 200, height: 200, type: 'square'},
-      boundary: {width: 300, height: 300},
-      enableOrientation: true,
-      enforceBoundary: true,
-    })
-  }
-  croppie.bind({
-    url: photo,
-  })
+  initCroppie(croppieRef.value, photo)
 }
 
 async function crop() {
-  if (!croppie)
-    return
-  myPhoto.value = await croppie.result({
-    type: 'base64',
-    size: 'viewport',
-  })
+  const result = await doCrop()
+  if (result) {
+    myPhoto.value = result
+  }
   modalRef.value.close()
 }
 
@@ -56,7 +50,7 @@ function onFileChange(e) {
 }
 
 onBeforeUnmount(() => {
-  croppie?.destroy()
+  destroyCroppie()
 })
 
 defineExpose({
