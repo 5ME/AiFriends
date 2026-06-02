@@ -7,8 +7,7 @@
  * 生产部署可设置 VITE_CLOUD_BASE：VITE_CLOUD_BASE=https://your-server npm run build
  */
 const isBuild = import.meta.env.MODE === 'production'
-const devPlatform = import.meta.env.VITE_PLATFORM || 'django'
-const platform = isBuild ? 'cloud' : devPlatform
+const platform = import.meta.env.VITE_PLATFORM || (isBuild ? 'cloud' : 'django')
 
 const CLOUD_BASE = import.meta.env.VITE_CLOUD_BASE || 'https://115.190.245.146'
 
