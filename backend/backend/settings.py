@@ -150,17 +150,14 @@ USE_TZ = True
 
 # 设置static和media静态文件路径
 STATIC_URL = 'static/'
-if not DEBUG:
-    STATIC_ROOT = BASE_DIR / 'static'  # 生产阶段使用
-else:
-    STATICFILES_DIRS = [  # 开发阶段使用，生产阶段需要注释掉
-        BASE_DIR / 'static',
-    ]
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # collectstatic 输出目录
 
 if DEBUG:
-    MEDIA_URL = 'http://127.0.0.1:8000/media/'
-else:
-    MEDIA_URL = 'https://115.190.245.146/media/'
+    STATICFILES_DIRS = [BASE_DIR / 'static']  # 前端构建产物位置
+
+MEDIA_URL = os.environ.get('MEDIA_URL') or (
+    'http://127.0.0.1:8000/media/' if DEBUG else 'https://115.190.245.146/media/'
+)
 MEDIA_ROOT = BASE_DIR / 'media'
 
 

@@ -48,11 +48,6 @@ npm run preview     # Preview production build locally
 wsl docker compose up -d   # 启动 PostgreSQL 17 + pgvector + Redis 7
 ```
 
-| Service | Port | Credentials |
-|---------|------|-------------|
-| PostgreSQL 17 + pgvector | `55432:5432` | `.env` (PG_* variables) |
-| Redis 7 | `6379:6379` | — |
-
 **Celery Worker:**
 
 ```bash
@@ -62,12 +57,19 @@ celery -A backend worker --loglevel=info --pool=solo
 
 ### Production Deployment
 
-1. Set `platform = 'cloud'` in `frontend/src/js/config/config.js`
-2. `cd frontend && npm run build`
-3. `cd backend && python manage.py collectstatic`
-4. Start gunicorn: `gunicorn --workers 3 --bind unix:gunicorn.sock backend.wsgi:application`
-5. Start Celery Worker: `celery -A backend worker --loglevel=info --pool=solo`
-6. Nginx reverse-proxies to the gunicorn socket (see `服务器部署.md` for full Nginx config)
+1. `cd frontend && npm run build`（自动使用 cloud 模式）
+2. `cd backend && python manage.py collectstatic`
+3. Start gunicorn: `gunicorn --workers 3 --bind unix:gunicorn.sock backend.wsgi:application`
+4. Start Celery Worker: `celery -A backend worker --loglevel=info --pool=solo`
+5. Nginx reverse-proxies to the gunicorn socket (see `服务器部署.md` for full Nginx config)
+
+**前端 platform 自动切换：**
+
+| 场景 | 命令 | 使用的 API 地址 |
+|------|------|----------------|
+| 开发热更新 | `npm run dev` | `http://127.0.0.1:8000` |
+| 本地打包测试 | `$env:VITE_PLATFORM='django'; npm run build` | `http://127.0.0.1:8000` |
+| 生产部署 | `npm run build` | `VITE_CLOUD_BASE` 或 `https://115.190.245.146` |
 
 ## Architecture
 
@@ -85,13 +87,15 @@ The frontend is built into `backend/static/frontend/`. Django serves the SPA via
 
 ### Environment / platform modes
 
-`frontend/src/js/config/config.js` exports a `platform` variable with three modes that control all base URLs:
+`frontend/src/js/config/config.js` 根据 Vite MODE 和 `VITE_PLATFORM` 环境变量自动切换：
 
-| Mode | HTTP base | Used for |
-|------|-----------|----------|
-| `vue` | `http://127.0.0.1:8000` | Frontend-only dev (Vite proxies to Django) |
-| `django` | `http://127.0.0.1:8000` | Backend dev (Django serves everything) |
-| `cloud` | `https://115.190.245.146` | Production |
+| Mode | HTTP base | 触发方式 |
+|------|-----------|---------|
+| `vue` | `http://127.0.0.1:8000` | `VITE_PLATFORM=vue npm run dev` |
+| `django` | `http://127.0.0.1:8000` | `npm run dev`（默认）|
+| `cloud` | `VITE_CLOUD_BASE` 或 `https://115.190.245.146` | `npm run build`（默认）|
+
+不再需要手动改 `platform` 变量。`npm run dev` 和 `npm run build` 会自动选择合适的模式。
 
 ### JWT auth flow
 

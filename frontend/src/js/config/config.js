@@ -16,14 +16,18 @@ const CONFIG_API = {
   VAD_URL: '',
 }
 
-if (!isBuild && platform === 'vue') {
+if (platform === 'vue') {
   CONFIG_API.HTTP_URL = 'http://127.0.0.1:8000'
   CONFIG_API.VAD_URL = 'http://localhost:5173/vad/'
-} else if (!isBuild && platform === 'django') {
+} else if (platform === 'django') {
   CONFIG_API.HTTP_URL = 'http://127.0.0.1:8000'
   CONFIG_API.VAD_URL = 'http://127.0.0.1:8000/static/frontend/vad/'
+} else if (platform === 'docker') {
+  // Docker Compose — 前端和 API 在同一 nginx 反向代理，空字符串 = 同源请求
+  CONFIG_API.HTTP_URL = ''
+  CONFIG_API.VAD_URL = '/static/frontend/vad/'
 } else {
-  // npm run build — 生产模式，URL 从环境变量读取
+  // platform === 'cloud'
   CONFIG_API.HTTP_URL = CLOUD_BASE
   CONFIG_API.VAD_URL = `${CLOUD_BASE}/static/frontend/vad/`
 }

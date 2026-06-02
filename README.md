@@ -27,66 +27,79 @@ AI 虚拟角色聊天平台 — 用户可创建 AI 角色并与之进行文字 +
 - Celery + Redis 异步任务队列（Memory Agent 摘要 + 文档处理）
 - 健康检查端点（GET /api/health/）+ Request ID 全链路追踪
 
-## 快速开始
+## 本地开发
 
-### 后端
+日常开发需要启动 **4 个进程**：
+
+### 1. 基础设施（PG + Redis）
+
+```bash
+wsl docker compose up -d postgres redis   # 项目根目录执行
+```
+
+### 2. 后端（Django）
 
 ```bash
 cd backend
-# 1. 配置环境变量
-cp .env.example .env
-# 编辑 .env 填入 API_KEY 等必填项
-
-# 2. 安装依赖
-pip install -r requirements.txt
-
-# 3. 数据库迁移
+cp .env.example .env          # 首次：配置 API_KEY 等环境变量
+pip install -r ../requirements.txt
 python manage.py migrate
-
-# 4. 启动开发服务器
-python manage.py runserver        # http://127.0.0.1:8000
+python manage.py runserver    # http://127.0.0.1:8000
 ```
 
-### 基础设施（Docker Compose）
+### 3. 前端（Vite HMR）
 
 ```bash
-wsl docker compose up -d   # 启动 PostgreSQL 17 + pgvector + Redis 7
+cd frontend
+npm install                   # 首次
+npm run dev                   # http://localhost:5173，API 自动指向 :8000
 ```
 
-### Celery Worker
+### 4. Celery Worker
 
 ```bash
 cd backend
 celery -A backend worker --loglevel=info --pool=solo
 ```
 
-> Memory Agent 摘要和文档处理通过 Celery 异步执行，需同时运行 Django 和 Celery Worker。
+> Memory Agent 和文档处理通过 Celery 异步执行，本地开发必须同时运行 Django + Celery。
 
-### 运行测试
+### 前端 platform 模式
+
+`npm run dev` 和 `npm run build` 自动选择 API 地址，不再需要手动改 `config.js`：
+
+| 命令 | 模式 | API 地址 |
+|------|------|---------|
+| `npm run dev` | django（默认） | `http://127.0.0.1:8000` |
+| `VITE_PLATFORM=vue npm run dev` | vue（纯前端） | `http://127.0.0.1:8000` |
+| `npm run build` | cloud（生产） | `https://115.190.245.146` |
+| `$env:VITE_PLATFORM='django'; npm run build` | django（本地打包） | `http://127.0.0.1:8000` |
+
+---
+
+## 部署
+
+### 手动部署（云服务器）
+
+```bash
+cd frontend && npm run build        # 自动使用 cloud 模式
+cd backend
+python manage.py collectstatic
+gunicorn --workers 3 --bind unix:gunicorn.sock backend.wsgi:application
+celery -A backend worker --loglevel=info --pool=solo
+# Nginx 反向代理配置详见 服务器部署.md
+```
+
+> 生产部署前请确保 `.env` 中 `DJANGO_SECRET_KEY` 已设置且 `DJANGO_DEBUG=false`。
+
+---
+
+## 运行测试
 
 ```bash
 cd backend
 python -m pytest web/tests/ -v   # 99 个测试
 ```
-
-### 前端
-
-```bash
-cd frontend
-npm install
-npm run dev                       # http://localhost:5173
-```
-
-> 开发时前端默认以 `vue` 模式运行，API 请求指向 `http://127.0.0.1:8000`。  
-> 环境模式在 `frontend/src/js/config/config.js` 中切换：`vue`（纯前端开发）、`django`（后端开发）、`cloud`（生产）。
-
-### 生产部署
-
-1. 设置 `platform = 'cloud'` → `frontend/src/js/config/config.js`
-2. `cd frontend && npm run build` → 构建产物输出到 `backend/static/frontend/`
-3. `cd backend && python manage.py collectstatic`
-4. 启动 Gunicorn：`gunicorn --workers 3 --bind unix:gunicorn.sock backend.wsgi:application`
-5. Nginx 反向代理到 Gunicorn socket（详见 `服务器部署.md`）
 
 ## 架构
 
@@ -128,25 +141,33 @@ AiFriends/
 │   │   ├── models/                       # 数据模型
 │   │   │   ├── user.py                   #   UserProfile
 │   │   │   ├── character.py              #   Character、Voice
-│   │   │   └── friend.py                 #   Friend、Message、SystemPrompt
-│   │   │   └── document.py               #   DocumentChunk (pgvector 向量字段)
+│   │   │   ├── friend.py                 #   Friend、Message、SystemPrompt
+│   │   │   └── document.py               #   UserDocument、DocumentChunk (pgvector)
 │   │   │
 │   │   ├── views/                        # API 视图（文件即视图，无序列化器）
 │   │   │   ├── index.py                  #   前端 SPA 入口视图
+│   │   │   ├── health.py                 #   健康检查端点
 │   │   │   ├── user/account/             #   登录、注册、登出、刷新令牌、获取用户信息
 │   │   │   ├── user/profile/             #   个人资料更新
 │   │   │   ├── create/character/         #   角色 CRUD + 音色列表
-│   │   │   │   └── voice/                #   阿里云音色自定义（预留）
+│   │   │   │   └── voice/custom/         #   自定义音色（阿里云 API）
 │   │   │   ├── homepage/                 #   首页角色列表
 │   │   │   ├── friend/                   #   好友关系管理 + is_friend 检查
 │   │   │   │   └── message/
 │   │   │   │       ├── chat/             #   LangGraph 聊天 agent + SSE 流式
 │   │   │   │       ├── asr/              #   语音识别（DashScope WS）
-│   │   │   │       └── memory/           #   LangGraph 记忆摘要 agent
+│   │   │   │       └── memory/           #   LangGraph 记忆摘要 agent (Celery)
+│   │   │   ├── document/                 #   文档上传/列表/删除 + Celery 异步处理
 │   │   │   └── utils/                    #   图片清理等工具
 │   │   │
+│   │   ├── middleware/                   # 中间件
+│   │   │   └── request_id.py            #   Request ID + 请求耗时日志
+│   │   │
 │   │   ├── documents/                    # RAG 知识库
-│   │   │   └── utils/                    #   自定义嵌入、文档插入、分块测试
+│   │   │   ├── loaders/                  #   文档加载器（txt/md/pdf）
+│   │   │   └── services/                 #   embedding + chunker
+│   │   │
+│   │   ├── tasks.py                      # Celery autodiscover 入口
 │   │   │
 │   │   ├── templates/                    # Django 模板
 │   │   │   └── index.html                #   SPA 入口（开发时渲染 Vite 构建产物）
@@ -157,8 +178,7 @@ AiFriends/
 │   │
 │   ├── static/frontend/                  # Vite 构建输出（生产）
 │   ├── media/                            # 用户上传文件（头像、角色背景等）
-│   ├── manage.py                         # Django CLI 入口
-│   └── requirements.txt                  # Python 依赖
+│   └── manage.py                         # Django CLI 入口
 │
 ├── frontend/                             # Vue 3 SPA 前端
 │   ├── src/
@@ -181,17 +201,24 @@ AiFriends/
 │   │   │
 │   │   ├── router/index.js               # Vue Router（路由表 + 登录守卫）
 │   │   ├── stores/user.js                # Pinia 用户状态 + JWT 令牌
+│   │   ├── composables/                  # 可复用逻辑
+│   │   │   ├── useImageCropper.js        #   Croppie 图片裁剪
+│   │   │   └── useDocumentPolling.js     #   文档处理状态轮询
 │   │   └── js/                           # 工具模块
-│   │       ├── config/config.js          #   环境常量（vue/django/cloud 三模式）
+│   │       ├── config/config.js          #   环境自动切换（vue/django/cloud）
 │   │       ├── http/api.js               #   Axios 封装 + JWT 自动刷新
 │   │       └── http/streamApi.js         #   SSE 流式客户端（AI 聊天）
 │   │
-│   ├── public/
-│   │   └── favicon.ico
+│   ├── components/knowledge/             # 知识库组件
+│   │   ├── UploadZone.vue                #   拖拽上传
+│   │   └── DocumentCard.vue              #   文档卡片
+│   ├── views/KnowledgeBase.vue           # 知识库页面
+│   ├── public/favicon.ico
 │   ├── index.html                        # HTML 入口
 │   ├── vite.config.js                    # Vite 构建配置
 │   └── package.json                      # Node 依赖 + 脚本
 │
+├── .github/workflows/test.yml            # GitHub Actions CI
 ├── AGENTS.md                             # Codex agent 指令
 └── CLAUDE.md                             # Claude Code 项目指南
 ```
