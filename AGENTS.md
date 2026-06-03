@@ -8,7 +8,7 @@ AI Friends — a full-stack web app where users create AI characters ("friends")
 
 - **Backend:** Django 6.0 + Django REST Framework + JWT auth (PostgreSQL 17 + pgvector 0.8)
 - **Frontend:** Vue 3 (Composition API) + Vite 7 + Pinia + Vue Router 5 + Tailwind CSS 4 + daisyUI 5
-- **AI:** Alibaba DashScope (Qwen models) via OpenAI-compatible API. LangChain/LangGraph for orchestration. LanceDB for vector storage.
+- **AI:** Alibaba DashScope (Qwen models) via OpenAI-compatible API. LangChain/LangGraph for orchestration. pgvector for vector storage.
 - **Voice:** DashScope TTS (WebSocket streaming) + ASR (WebSocket). Browser-side VAD via `@ricky0123/vad-web` (Silero VAD on ONNX).
 
 ## Commands
@@ -91,7 +91,7 @@ On the homepage, clicking a character card opens `CharacterDetail.vue` (a modal)
 
 Two separate LangGraph state graphs:
 
-1. **Chat agent** (`web/views/friend/message/chat/graph.py`) — `deepseek-v3.2` model with tools: `get_time` and `search_knowledge_base` (LanceDB vector search over Bailian docs). Streams tokens via SSE. Also streams TTS audio chunks (base64 mp3) over the same SSE connection using a separate DashScope WebSocket.
+1. **Chat agent** (`web/views/friend/message/chat/graph.py`) — `deepseek-v3.2` model with tools: `get_time` and `search_knowledge_base` (pgvector vector search over Bailian docs). Streams tokens via SSE. Also streams TTS audio chunks (base64 mp3) over the same SSE connection using a separate DashScope WebSocket.
 
 2. **Memory agent** (`web/views/friend/message/memory/graph.py`) — `tongyi-xiaomi-analysis-flash` model. Triggers every 10 messages to summarize conversation and write into `Friend.memory` field.
 
@@ -106,4 +106,4 @@ The frontend uses `@microsoft/fetch-event-source` (`js/http/streamApi.js`) to PO
 
 ### RAG / knowledge base
 
-`backend/web/documents/` contains LanceDB vector storage and a custom embeddings wrapper (`custom_embeddings.py`) that calls DashScope's embedding API. Documents are inserted via `insert_documents.py`. The chat agent's `search_knowledge_base` tool queries this store.
+`backend/web/documents/` contains pgvector vector storage and a custom embeddings wrapper (`custom_embeddings.py`) that calls DashScope's embedding API. Documents are inserted via `insert_documents.py`. The chat agent's `search_knowledge_base` tool queries this store.

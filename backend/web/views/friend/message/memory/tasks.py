@@ -50,8 +50,11 @@ def update_memory_task(friend_id: int):
         res = app_graph.invoke(inputs)
         friend.memory = res['messages'][-1].content
 
-        # 使用任务开始时的快照计数，避免 LLM 调用期间新消息导致计数偏大
-        friend.last_summarized_count = msg_count
+        # 只推进本次实际摘要的消息数，防止积压超过 30 条时遗漏中间消息
+        # 如果有剩余 backlog，下次触发时继续处理
+        skip = friend.last_summarized_count
+        take = min(msg_count - skip, 30)
+        friend.last_summarized_count = skip + take
         friend.save()
 
         logger.info('Memory 任务完成, friend_id=%d, memory_len=%d',

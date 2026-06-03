@@ -2,7 +2,6 @@
 
 import django.db.models.deletion
 from django.db import migrations, models
-from pgvector.django import HnswIndex
 
 
 class Migration(migrations.Migration):
@@ -68,12 +67,11 @@ class Migration(migrations.Migration):
             ),
             reverse_code=migrations.RunPython.noop,
         ),
-        migrations.AddIndex(
-            model_name='documentchunk',
-            index=HnswIndex(
-                fields=['embedding'],
-                name='document_chunk_embedding_hnsw_idx',
-                opclasses=['vector_cosine_ops'],
-            ),
+        # HNSW 索引用 RunSQL 创建，避免 makemigrations 自动生成 RemoveIndex
+        # （HnswIndex 无法放入模型 Meta.indexes，会触发系统检查报错）
+        migrations.RunSQL(
+            sql="CREATE INDEX IF NOT EXISTS document_chunk_embedding_hnsw_idx "
+                "ON web_documentchunk USING hnsw (embedding vector_cosine_ops);",
+            reverse_sql="DROP INDEX IF EXISTS document_chunk_embedding_hnsw_idx;",
         ),
     ]

@@ -185,10 +185,7 @@ class MessageChatView(APIView):
             Message.objects.create(
                 friend=friend,
                 user_message=message[:5000],
-                input=json.dumps(
-                    [m.model_dump() for m in inputs['messages']],
-                    ensure_ascii=False
-                )[:50000],
+                input=[m.model_dump() for m in inputs['messages']],
                 output=''.join(full_output)[:5000],
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,

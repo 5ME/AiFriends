@@ -27,8 +27,8 @@ urlpatterns = [
 # 仅限开发阶段使用。生产阶段需要在nginx里配置。
 if settings.DEBUG:
     urlpatterns += static(
-        '/assets/',
-        document_root=settings.BASE_DIR / 'static/frontend/assets'
+        settings.STATIC_URL,
+        document_root=settings.BASE_DIR / 'static'
     )
     urlpatterns += static(
         '/media/',

@@ -11,6 +11,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        # pgvector 扩展必须在创建 vector 列之前启用
+        migrations.RunSQL('CREATE EXTENSION IF NOT EXISTS vector'),
         migrations.CreateModel(
             name='DocumentChunk',
             fields=[

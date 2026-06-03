@@ -1,26 +1,35 @@
 /**
- * <ul>
- * <li><code>vue</code>: 前端模式（开发阶段）</li>
- * <li><code>django</code>: 后端模式（开发阶段）</li>
- * <li><code>cloud</code>: 云端模式（上线阶段）</li>
- * </ul>
+ * 自动根据 Vite MODE 切换环境，不再手动改 platform 变量：
+ * - npm run dev  → MODE=development → 使用 devPlatform（默认 django）
+ * - npm run build → MODE=production  → 使用 cloud 模式，URL 从环境变量注入
+ *
+ * 开发时可设置 VITE_PLATFORM 覆盖：VITE_PLATFORM=vue npm run dev
+ * 生产部署可设置 VITE_CLOUD_BASE：VITE_CLOUD_BASE=https://your-server npm run build
  */
-const platform = 'django'
+const isBuild = import.meta.env.MODE === 'production'
+const platform = import.meta.env.VITE_PLATFORM || (isBuild ? 'cloud' : 'django')
+
+const CLOUD_BASE = import.meta.env.VITE_CLOUD_BASE || 'https://115.190.245.146'
 
 const CONFIG_API = {
-  HTTP_URL: "",
-  VAD_URL: "",
+  HTTP_URL: '',
+  VAD_URL: '',
 }
 
-if (platform === "vue") {
-  CONFIG_API.HTTP_URL = "http://127.0.0.1:8000"
-  CONFIG_API.VAD_URL = "http://localhost:5173/vad/"
-} else if (platform === "django") {
-  CONFIG_API.HTTP_URL = "http://127.0.0.1:8000"
-  CONFIG_API.VAD_URL = "http://127.0.0.1:8000/static/frontend/vad/"
-} else if (platform === "cloud") {
-  CONFIG_API.HTTP_URL = "https://115.190.245.146"
-  CONFIG_API.VAD_URL = "https://115.190.245.146/static/frontend/vad/"
+if (platform === 'vue') {
+  CONFIG_API.HTTP_URL = 'http://127.0.0.1:8000'
+  CONFIG_API.VAD_URL = 'http://localhost:5173/vad/'
+} else if (platform === 'django') {
+  CONFIG_API.HTTP_URL = 'http://127.0.0.1:8000'
+  CONFIG_API.VAD_URL = 'http://127.0.0.1:8000/static/frontend/vad/'
+} else if (platform === 'docker') {
+  // Docker Compose — 前端和 API 在同一 nginx 反向代理，空字符串 = 同源请求
+  CONFIG_API.HTTP_URL = ''
+  CONFIG_API.VAD_URL = '/static/frontend/vad/'
+} else {
+  // platform === 'cloud'
+  CONFIG_API.HTTP_URL = CLOUD_BASE
+  CONFIG_API.VAD_URL = `${CLOUD_BASE}/static/frontend/vad/`
 }
 
 export default CONFIG_API

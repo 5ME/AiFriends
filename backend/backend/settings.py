@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -23,11 +25,18 @@ load_dotenv()
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-change-me-in-production')
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() == 'true'
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-dev-only-not-for-production'
+    else:
+        raise ImproperlyConfigured(
+            'DJANGO_SECRET_KEY environment variable is required when DEBUG=False'
+        )
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '127.0.0.1').split(',')
 
@@ -141,17 +150,14 @@ USE_TZ = True
 
 # 设置static和media静态文件路径
 STATIC_URL = 'static/'
-if not DEBUG:
-    STATIC_ROOT = BASE_DIR / 'static'  # 生产阶段使用
-else:
-    STATICFILES_DIRS = [  # 开发阶段使用，生产阶段需要注释掉
-        BASE_DIR / 'static',
-    ]
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # collectstatic 输出目录
 
 if DEBUG:
-    MEDIA_URL = 'http://127.0.0.1:8000/media/'
-else:
-    MEDIA_URL = 'https://115.190.245.146/media/'
+    STATICFILES_DIRS = [BASE_DIR / 'static']  # 前端构建产物位置
+
+MEDIA_URL = os.environ.get('MEDIA_URL') or (
+    'http://127.0.0.1:8000/media/' if DEBUG else 'https://115.190.245.146/media/'
+)
 MEDIA_ROOT = BASE_DIR / 'media'
 
 
