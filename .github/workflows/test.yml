@@ -55,12 +55,8 @@ jobs:
         env:
           PGOPTIONS: '-c client_min_messages=WARNING'
 
-      - name: Run migrations
-        run: |
-          cd backend
-          python manage.py migrate
-
       - name: Run tests
         run: |
+          mkdir -p backend/static
           cd backend
           python -m pytest web/tests/ -v
