@@ -55,16 +55,11 @@ def update_memory_task(friend_id: int):
         res = app_graph.invoke(inputs)
         friend.memory = res['messages'][-1].content
 
-        # 提取 token 用量
+        # 提取 token 用量（放在 save 后避免 save 失败时产生矛盾记录）
         token_count = 0
         last_msg = res['messages'][-1]
         if hasattr(last_msg, 'usage_metadata') and last_msg.usage_metadata:
             token_count = last_msg.usage_metadata.get('total_tokens', 0)
-        duration_ms = int((time.time() - start) * 1000)
-        record_api_usage(
-            user_id=user_id, api_type='llm', model_name='deepseek-v4-flash',
-            token_count=token_count, duration_ms=duration_ms, success=True,
-        )
 
         # 只推进本次实际摘要的消息数，防止积压超过 30 条时遗漏中间消息
         # 如果有剩余 backlog，下次触发时继续处理
@@ -72,6 +67,12 @@ def update_memory_task(friend_id: int):
         take = min(msg_count - skip, 30)
         friend.last_summarized_count = skip + take
         friend.save()
+
+        duration_ms = int((time.time() - start) * 1000)
+        record_api_usage(
+            user_id=user_id, api_type='llm', model_name='deepseek-v4-flash',
+            token_count=token_count, duration_ms=duration_ms, success=True,
+        )
 
         logger.info('Memory 任务完成, friend_id=%d, memory_len=%d',
                     friend_id, len(friend.memory or ''))

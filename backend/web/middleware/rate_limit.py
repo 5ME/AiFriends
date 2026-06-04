@@ -128,6 +128,8 @@ class RateLimitMiddleware:
         now_ms = int(time.time() * 1000)
         window_ms = rule['window_sec'] * 1000
         member = f'{now_ms}:{uuid.uuid4().hex[:8]}'
+        # 触发 lazy init（redis_client property 中初始化 _lua）
+        self.redis_client
         result = self._lua(
             keys=[key],
             args=[now_ms, window_ms, rule['max_req'], member],
