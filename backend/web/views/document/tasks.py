@@ -41,7 +41,7 @@ def process_document_task(doc_id: int):
             return
 
         # 4. 批量 embedding
-        embeddings = CustomEmbeddings()
+        embeddings = CustomEmbeddings(user_id=doc.owner_id)
         texts = [c.page_content for c in chunks]
         vectors = embeddings.embed_documents(texts)
 

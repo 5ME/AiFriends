@@ -4,6 +4,7 @@ import json
 import os
 import queue
 import threading
+import time
 import uuid
 from typing import List, Dict
 
@@ -19,6 +20,7 @@ from rest_framework.views import APIView
 from websockets.client import ClientConnection
 
 from web.models.friend import Friend, Message, SystemPrompt
+from web.utils.usage import record_api_usage
 from web.views.friend.message.chat.graph import ChatGraph
 from web.views.friend.message.memory.tasks import update_memory_task
 import logging
@@ -153,14 +155,18 @@ class MessageChatView(APIView):
             friend: Friend,
             message: str
     ):
+        start_time = time.time()
         mq = queue.Queue()
         logger.info('Chat Agent 开始, friend_id=%s', friend.id)
         voice_id = friend.character.voice.voice_id if friend.character.voice else ''
-        thread = threading.Thread(target=self.work, args=(app, inputs, mq, voice_id))
+        user_id = friend.user_profile_id
+        thread = threading.Thread(target=self.work, args=(app, inputs, mq, voice_id, user_id))
         thread.start()
 
         full_output = []
         full_usage = {}
+        has_error = False
+        error_message = ''
 
         while True:
             msg = mq.get()
@@ -168,7 +174,9 @@ class MessageChatView(APIView):
             if msg is None:
                 break
             if msg.get('error', None):
-                yield f'data: {json.dumps({"error": msg["error"]}, ensure_ascii=False)}\n\n'
+                has_error = True
+                error_message = msg['error']
+                yield f'data: {json.dumps({"error": error_message}, ensure_ascii=False)}\n\n'
             if msg.get('content', None):
                 full_output.append(msg['content'])
                 yield f'data: {json.dumps({'content': msg['content']}, ensure_ascii=False)}\n\n'
@@ -181,6 +189,16 @@ class MessageChatView(APIView):
         input_tokens = full_usage.get('input_tokens', 0)
         output_tokens = full_usage.get('output_tokens', 0)
         total_tokens = full_usage.get('total_tokens', 0)
+        duration_ms = int((time.time() - start_time) * 1000)
+        record_api_usage(
+            user_id=user_id,
+            api_type='llm',
+            model_name='deepseek-v3.2',
+            token_count=total_tokens,
+            duration_ms=duration_ms,
+            success=not has_error,
+            error_message=error_message,
+        )
         try:
             Message.objects.create(
                 friend=friend,
@@ -207,9 +225,10 @@ class MessageChatView(APIView):
             inputs,
             mq: queue.Queue,
             voice_id: str,
+            user_id: int,
     ):
         try:
-            asyncio.run(self.run_tts_task(app, inputs, mq, voice_id))
+            asyncio.run(self.run_tts_task(app, inputs, mq, voice_id, user_id))
         except Exception:
             logger.exception('Chat Agent 执行异常')
             mq.put_nowait({'error': '系统异常，请稍后重试'})
@@ -222,6 +241,7 @@ class MessageChatView(APIView):
             inputs,
             mq: queue.Queue,
             voice_id: str,
+            user_id: int,
     ):
         task_id = uuid.uuid4().hex
         wss_url = os.getenv('WSS_URL')
@@ -257,7 +277,7 @@ class MessageChatView(APIView):
                 if json.loads(msg)['header']['event'] == 'task-started':
                     break
             await asyncio.gather(
-                self.tts_sender(ws, task_id, app, inputs, mq),
+                self.tts_sender(ws, task_id, app, inputs, mq, user_id),
                 self.tts_receiver(ws, mq)
             )
 
@@ -267,36 +287,58 @@ class MessageChatView(APIView):
             task_id: str,
             app: CompiledStateGraph,
             inputs,
-            mq: queue.Queue
+            mq: queue.Queue,
+            user_id: int,
     ):
-        async for msg, metadata in app.astream(inputs, stream_mode="messages"):
-            if isinstance(msg, BaseMessageChunk):
-                if msg.content:
-                    await ws.send(json.dumps({
-                        "header": {
-                            "action": "continue-task",
-                            "task_id": task_id,  # 随机uuid
-                            "streaming": "duplex"
-                        },
-                        "payload": {
-                            "input": {
-                                "text": msg.content,
+        start = time.time()
+        total_chars = 0
+        success = True
+        error_message = ''
+        try:
+            async for msg, metadata in app.astream(inputs, stream_mode="messages"):
+                if isinstance(msg, BaseMessageChunk):
+                    if msg.content:
+                        total_chars += len(msg.content)
+                        await ws.send(json.dumps({
+                            "header": {
+                                "action": "continue-task",
+                                "task_id": task_id,  # 随机uuid
+                                "streaming": "duplex"
+                            },
+                            "payload": {
+                                "input": {
+                                    "text": msg.content,
+                                }
                             }
-                        }
-                    }))
-                    mq.put_nowait({'content': msg.content})
-                if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
-                    mq.put_nowait({'usage': msg.usage_metadata})
-        await ws.send(json.dumps({
-            "header": {
-                "action": "finish-task",
-                "task_id": task_id,
-                "streaming": "duplex"
-            },
-            "payload": {
-                "input": {}  # input不能省去，否则会报错
-            }
-        }))
+                        }))
+                        mq.put_nowait({'content': msg.content})
+                    if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
+                        mq.put_nowait({'usage': msg.usage_metadata})
+            await ws.send(json.dumps({
+                "header": {
+                    "action": "finish-task",
+                    "task_id": task_id,
+                    "streaming": "duplex"
+                },
+                "payload": {
+                    "input": {}  # input不能省去，否则会报错
+                }
+            }))
+        except Exception as e:
+            success = False
+            error_message = str(e)[:500]
+            raise
+        finally:
+            duration_ms = int((time.time() - start) * 1000)
+            record_api_usage(
+                user_id=user_id,
+                api_type='tts',
+                model_name='cosyvoice-v3-flash',
+                token_count=total_chars,
+                duration_ms=duration_ms,
+                success=success,
+                error_message=error_message,
+            )
 
     async def tts_receiver(
             self,

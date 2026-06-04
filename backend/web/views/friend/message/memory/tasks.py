@@ -1,11 +1,13 @@
 """Memory Agent 异步任务 — Celery Worker 中执行，不阻塞聊天请求"""
 import logging
+import time
 
 from langchain_core.messages import SystemMessage, HumanMessage
 from openai import APIStatusError
 from backend.celery import app
 
 from web.models.friend import Friend, Message, SystemPrompt
+from web.utils.usage import record_api_usage
 from web.views.friend.message.memory.graph import MemoryGraph
 
 logger = logging.getLogger(__name__)
@@ -38,8 +40,11 @@ def create_human_message(friend: Friend) -> HumanMessage:
 @app.task(max_retries=1)
 def update_memory_task(friend_id: int):
     """异步更新好友记忆摘要。失败由下一次触发自然重试。"""
+    start = time.time()
+    user_id = None
     try:
         friend = Friend.objects.get(id=friend_id)
+        user_id = friend.user_profile_id
         msg_count = Message.objects.filter(friend=friend).count()
         logger.info('Memory 任务开始, friend_id=%d, msg_count=%d', friend_id, msg_count)
 
@@ -49,6 +54,17 @@ def update_memory_task(friend_id: int):
         }
         res = app_graph.invoke(inputs)
         friend.memory = res['messages'][-1].content
+
+        # 提取 token 用量
+        token_count = 0
+        last_msg = res['messages'][-1]
+        if hasattr(last_msg, 'usage_metadata') and last_msg.usage_metadata:
+            token_count = last_msg.usage_metadata.get('total_tokens', 0)
+        duration_ms = int((time.time() - start) * 1000)
+        record_api_usage(
+            user_id=user_id, api_type='llm', model_name='deepseek-v4-flash',
+            token_count=token_count, duration_ms=duration_ms, success=True,
+        )
 
         # 只推进本次实际摘要的消息数，防止积压超过 30 条时遗漏中间消息
         # 如果有剩余 backlog，下次触发时继续处理
@@ -61,6 +77,13 @@ def update_memory_task(friend_id: int):
                     friend_id, len(friend.memory or ''))
     except Exception as exc:
         logger.exception('Memory 任务失败, friend_id=%d', friend_id)
+        if user_id is not None:
+            duration_ms = int((time.time() - start) * 1000)
+            record_api_usage(
+                user_id=user_id, api_type='llm', model_name='deepseek-v4-flash',
+                token_count=0, duration_ms=duration_ms,
+                success=False, error_message=str(exc)[:500],
+            )
         # 4xx 客户端错误（400/401/403/404 等）是永久性故障，重试无意义
         # 但 429 RateLimit 是临时限流，应重试
         if isinstance(exc, APIStatusError) and 400 <= exc.status_code < 500 and exc.status_code != 429:

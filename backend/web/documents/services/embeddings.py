@@ -1,4 +1,5 @@
 import os
+import time
 
 from langchain_core.embeddings import Embeddings
 from openai import OpenAI
@@ -12,7 +13,8 @@ class CustomEmbeddings(Embeddings):
     自定义向量化类，对接 OpenAI 兼容的 Embedding API。
     用于将文档或查询语句转换为向量。
     """
-    def __init__(self):
+    def __init__(self, user_id=None):
+        self.user_id = user_id
         self.client = OpenAI(
             api_key=os.getenv("API_KEY"),
             base_url=os.getenv("API_BASE")
@@ -20,10 +22,12 @@ class CustomEmbeddings(Embeddings):
 
     def embed_documents(self, texts):
         """
-        批量将文档列表转换为向量。
+        批量将文档列表转换为向量。每个 batch 记录一条 APIUsage。
         :param texts: 待向量化的文本列表
         :return: 向量列表
         """
+        from web.utils.usage import record_api_usage
+
         batch_size = 10  # 每次请求处理 10 条数据
         all_embeddings = []
         for i in range(0, len(texts), batch_size):
@@ -34,14 +38,32 @@ class CustomEmbeddings(Embeddings):
                 continue
 
             # 调用 Embedding 接口
+            start = time.time()
             try:
                 response = self.client.embeddings.create(
                     model="text-embedding-v4",
                     input=batch,
                     dimensions=1024  # 指定向量维度为 1024
                 )
+                if self.user_id is not None:
+                    duration_ms = int((time.time() - start) * 1000)
+                    token_count = response.usage.total_tokens
+                    record_api_usage(
+                        user_id=self.user_id, api_type='embedding',
+                        model_name='text-embedding-v4',
+                        token_count=token_count, duration_ms=duration_ms,
+                        success=True,
+                    )
                 all_embeddings.extend([data.embedding for data in response.data])
-            except Exception:
+            except Exception as e:
+                if self.user_id is not None:
+                    duration_ms = int((time.time() - start) * 1000)
+                    record_api_usage(
+                        user_id=self.user_id, api_type='embedding',
+                        model_name='text-embedding-v4',
+                        token_count=0, duration_ms=duration_ms,
+                        success=False, error_message=str(e)[:500],
+                    )
                 logger.exception('Embedding API 调用失败, batch_index=%d, batch_size=%d',
                                  i // batch_size, len(batch))
                 raise

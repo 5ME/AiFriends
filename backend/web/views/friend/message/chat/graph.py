@@ -40,7 +40,7 @@ class ChatGraph:
             from web.models.document import DocumentChunk
 
             user_id = state.get("user_id")
-            embeddings = CustomEmbeddings()
+            embeddings = CustomEmbeddings(user_id=user_id)
             emb = embeddings.embed_query(query)
             table = DocumentChunk._meta.db_table
             chunks = DocumentChunk.objects.raw(
