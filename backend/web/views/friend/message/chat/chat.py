@@ -234,6 +234,10 @@ class MessageChatView(APIView):
             mq.put_nowait({'error': '系统异常，请稍后重试'})
         finally:
             mq.put_nowait(None)
+        # TTS usage 在同步上下文中写入（避免 async 中调 ORM 的 SynchronousOnlyOperation）
+        if hasattr(self, '_tts_usage'):
+            record_api_usage(**self._tts_usage)
+            del self._tts_usage
 
     async def run_tts_task(
             self,
@@ -330,15 +334,15 @@ class MessageChatView(APIView):
             raise
         finally:
             duration_ms = int((time.time() - start) * 1000)
-            record_api_usage(
-                user_id=user_id,
-                api_type='tts',
-                model_name='cosyvoice-v3-flash',
-                token_count=total_chars,
-                duration_ms=duration_ms,
-                success=success,
-                error_message=error_message,
-            )
+            self._tts_usage = {
+                'user_id': user_id,
+                'api_type': 'tts',
+                'model_name': 'cosyvoice-v3-flash',
+                'token_count': total_chars,
+                'duration_ms': duration_ms,
+                'success': success,
+                'error_message': error_message,
+            }
 
     async def tts_receiver(
             self,
