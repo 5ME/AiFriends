@@ -193,7 +193,7 @@ class MessageChatView(APIView):
         record_api_usage(
             user_id=user_id,
             api_type='llm',
-            model_name='deepseek-v3.2',
+            model_name='deepseek-v4-flash',
             token_count=total_tokens,
             duration_ms=duration_ms,
             success=not has_error,

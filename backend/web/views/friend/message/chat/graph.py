@@ -40,6 +40,7 @@ class ChatGraph:
             from web.models.document import DocumentChunk
 
             user_id = state.get("user_id")
+            logger.info('RAG 知识库检索开始, query=%s, user_id=%s', query[:100], user_id)
             embeddings = CustomEmbeddings(user_id=user_id)
             emb = embeddings.embed_query(query)
             table = DocumentChunk._meta.db_table
@@ -57,7 +58,7 @@ class ChatGraph:
 
         # 主 LLM，负责决策和文本生成
         llm = ChatOpenAI(
-            model="deepseek-v3.2",
+            model="deepseek-v4-flash",
             api_key=os.getenv("API_KEY"),
             base_url=os.getenv("API_BASE"),
             streaming=True,  # 流式输出

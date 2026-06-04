@@ -91,7 +91,7 @@ On the homepage, clicking a character card opens `CharacterDetail.vue` (a modal)
 
 Two separate LangGraph state graphs:
 
-1. **Chat agent** (`web/views/friend/message/chat/graph.py`) — `deepseek-v3.2` model with tools: `get_time` and `search_knowledge_base` (pgvector vector search over Bailian docs). Streams tokens via SSE. Also streams TTS audio chunks (base64 mp3) over the same SSE connection using a separate DashScope WebSocket.
+1. **Chat agent** (`web/views/friend/message/chat/graph.py`) — `deepseek-v4-flash` model with tools: `get_time` and `search_knowledge_base` (pgvector vector search over Bailian docs). Streams tokens via SSE. Also streams TTS audio chunks (base64 mp3) over the same SSE connection using a separate DashScope WebSocket.
 
 2. **Memory agent** (`web/views/friend/message/memory/graph.py`) — `tongyi-xiaomi-analysis-flash` model. Triggers every 10 messages to summarize conversation and write into `Friend.memory` field.
 
