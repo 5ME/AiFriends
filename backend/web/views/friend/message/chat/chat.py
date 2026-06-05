@@ -27,6 +27,21 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# 工具使用规则 — 注入为 Chat Agent 第一条 SystemMessage，优先级最高
+TOOL_RULES = (
+    "【知识库查询规则】\n"
+    "你有 search_knowledge_base 工具可以查询知识库。\n"
+    "1. 必须查询的情况：\n"
+    "   - 用户询问专业知识、政策法规、技术原理、数据事实\n"
+    "   - 用户提及文档内容、平台功能、操作指南\n"
+    "   - 任何你不确定、需要查证的信息\n"
+    "2. 可以不查的情况：\n"
+    "   - 纯问候（\"你好\"\"早上好\"）\n"
+    "   - 纯情感交流（\"我今天很难过\"）\n"
+    "   - 纯闲聊（\"你喜欢吃什么\"）\n"
+    "3. 不确定时宁可查询也不要遗漏。"
+)
+
 
 class SSERenderer(BaseRenderer):
     media_type = 'text/event-stream'
@@ -41,24 +56,36 @@ def add_system_prompt(
         friend: Friend,
 ) -> dict[str, List[BaseMessage]]:
     """
-    添加系统提示到输入消息中
-
-    参数:
-    inputs: 包含消息列表的字典，格式为 {'messages': [BaseMessage(...)]}
-    friend: 验证通过的好友模型实例
-
-    返回:
-    更新后的inputs字典，包含添加的系统提示
+    为 Chat Agent 构建 3 层独立 SystemMessage：
+    1. 工具使用规则（代码常量，最高优先级）
+    2. 角色性格 + 长期记忆（Character.system_prompt + Friend.memory）
+    3. 系统级框架约束（DB 单条 SystemPrompt.REPLY）
     """
     msgs = inputs['messages']
-    system_prompts = SystemPrompt.objects.filter(title=SystemPrompt.Title.REPLY).order_by('order_number')
-    prompts = []
-    for sp in system_prompts:
-        prompts.append(sp.prompt)
-    prompts.append(f'\n\n【角色性格】\n\n{friend.character.system_prompt}\n')
-    prompts.append(f'【长期记忆】\n{friend.memory}\n')
-    prompt = ''.join(prompts)
-    return {**inputs, 'messages': [SystemMessage(prompt)] + msgs}
+    system_msgs = []
+
+    # 第 1 条：工具使用规则（代码常量，最高优先级）
+    system_msgs.append(SystemMessage(TOOL_RULES))
+
+    # 第 2 条：角色性格 + 长期记忆
+    personality = friend.character.system_prompt.strip()
+    memory = (friend.memory or "").strip()
+    personality_parts = []
+    if personality:
+        personality_parts.append(f"【角色性格】\n{personality}")
+    if memory:
+        personality_parts.append(f"【与用户的长期记忆】\n{memory}")
+    if personality_parts:
+        system_msgs.append(SystemMessage("\n\n".join(personality_parts)))
+
+    # 第 3 条：系统级框架（DB 单条）
+    framework = SystemPrompt.objects.filter(
+        title=SystemPrompt.Title.REPLY
+    ).first()
+    if framework and framework.prompt.strip():
+        system_msgs.append(SystemMessage(framework.prompt))
+
+    return {**inputs, 'messages': system_msgs + msgs}
 
 
 def add_recent_messages(
