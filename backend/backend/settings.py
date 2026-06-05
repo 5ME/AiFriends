@@ -63,6 +63,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'web.middleware.rate_limit.RateLimitMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -184,7 +185,11 @@ SIMPLE_JWT = {
 # 配置跨域
 CORS_ALLOW_CREDENTIALS = True
 
+# CORS 从环境变量读取（逗号分隔），默认兼容本地开发
+_cors_env = os.environ.get('DJANGO_CORS_ORIGINS', '')
 CORS_ALLOWED_ORIGINS = [
+    origin.strip() for origin in _cors_env.split(',') if origin.strip()
+] or [
     "http://localhost:5173",
 ]
 
@@ -246,6 +251,28 @@ CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/
 
 # 任务完成后才 ack — Worker 崩溃时未完成的任务自动回到队列
 CELERY_TASK_ACKS_LATE = True
+
+# Redis URL for rate limiting (uses DB /1, separate from Celery broker /0)
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
+
+# Rate Limit Rules — (url_prefix, methods, max_requests, window_seconds)
+RATE_LIMIT_RULES = {
+    'login':    ('/api/user/account/login/',        ['POST'], 5,  60),
+    'register': ('/api/user/account/register/',      ['POST'], 3,  60),
+    'chat':     ('/api/friend/message/chat/',        ['POST'], 20, 60),
+    'asr':      ('/api/friend/message/asr/asr/',     ['POST'], 10, 60),
+    'upload':   ('/api/document/upload/',            ['POST'], 10, 60),
+    'default':  ('/api/',                            ['POST', 'PUT', 'PATCH', 'DELETE'], 60, 60),
+}
+
+# Paths excluded from rate limiting
+RATE_LIMIT_SKIP_PATHS = [
+    '/api/health/',
+    '/api/user/account/refresh_token/',
+    '/static/',
+    '/media/',
+    '/admin/',
+]
 
 # 长任务场景，每次只取一个任务避免并发 LLM 调用争抢资源
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1

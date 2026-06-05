@@ -148,7 +148,7 @@ On the homepage, clicking a character card opens `CharacterDetail.vue` (a modal)
 
 Two separate LangGraph state graphs:
 
-1. **Chat agent** (`web/views/friend/message/chat/graph.py`) — `deepseek-v3.2` model with tools: `get_time` and `search_knowledge_base` (pgvector 余弦向量检索，按 `owner_id` 过滤召回全局知识库 + 用户个人文档)。Streams tokens via SSE. Also streams TTS audio chunks (base64 mp3) over the same SSE connection using a separate DashScope WebSocket.
+1. **Chat agent** (`web/views/friend/message/chat/graph.py`) — `deepseek-v4-flash` model with tools: `get_time` and `search_knowledge_base` (pgvector 余弦向量检索，按 `owner_id` 过滤召回全局知识库 + 用户个人文档)。Streams tokens via SSE. Also streams TTS audio chunks (base64 mp3) over the same SSE connection using a separate DashScope WebSocket.
 
 2. **Memory agent** (`web/views/friend/message/memory/graph.py`) — `deepseek-v4-flash` model. 通过 Celery 异步任务 (`web/views/friend/message/memory/tasks.py`) 每 10 条消息触发一次，摘要写入 `Friend.memory` 字段。`last_summarized_count` 字段防止失败重试时遗漏消息。
 

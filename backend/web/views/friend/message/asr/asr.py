@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import time
 import uuid
 import logging
 
@@ -9,6 +10,8 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from web.utils.usage import record_api_usage
 
 logger = logging.getLogger(__name__)
 
@@ -33,44 +36,64 @@ class ASRView(APIView):
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     async def run_asr_task(self, pcm_data):
-        task_id = uuid.uuid4().hex
-        wss_url = os.getenv('WSS_URL')
-        api_key = os.getenv('API_KEY')
-        headers = {'Authorization': f'Bearer {api_key}'}
-        # 发送 run-task 指令：开启语音识别任务
-        async with websockets.connect(wss_url, additional_headers=headers) as ws:
-            await ws.send(json.dumps({
-                "header": {
-                    "streaming": "duplex",
-                    "task_id": task_id,
-                    "action": "run-task"
-                },
-                "payload": {
-                    "model": "gummy-realtime-v1",
-                    "parameters": {
-                        "sample_rate": 16000,
-                        "format": "pcm",
-                        "source_language": "auto",
-                        "transcription_enabled": True,
-                        # "translation_enabled": True,
-                        # "translation_target_languages": ["en"]
+        user_id = self.request.user.id
+        start = time.time()
+        success = True
+        error_message = ''
+        try:
+            task_id = uuid.uuid4().hex
+            wss_url = os.getenv('WSS_URL')
+            api_key = os.getenv('API_KEY')
+            headers = {'Authorization': f'Bearer {api_key}'}
+            # 发送 run-task 指令：开启语音识别任务
+            async with websockets.connect(wss_url, additional_headers=headers) as ws:
+                await ws.send(json.dumps({
+                    "header": {
+                        "streaming": "duplex",
+                        "task_id": task_id,
+                        "action": "run-task"
                     },
-                    "input": {},
-                    "task": "asr",
-                    "task_group": "audio",
-                    "function": "recognition"
-                }
-            }))
-            logger.info('ASR WebSocket 已连接, task_id=%s', task_id)
-            async for msg in ws:
-                if json.loads(msg)['header']['event'] == 'task-started':
-                    # 收到 task-started 事件后，再发送待识别的音频流
-                    break
-            _, text = await asyncio.gather(
-                self.asr_sender(ws, task_id, pcm_data),
-                self.asr_receiver(ws)
+                    "payload": {
+                        "model": "gummy-realtime-v1",
+                        "parameters": {
+                            "sample_rate": 16000,
+                            "format": "pcm",
+                            "source_language": "auto",
+                            "transcription_enabled": True,
+                            # "translation_enabled": True,
+                            # "translation_target_languages": ["en"]
+                        },
+                        "input": {},
+                        "task": "asr",
+                        "task_group": "audio",
+                        "function": "recognition"
+                    }
+                }))
+                logger.info('ASR WebSocket 已连接, task_id=%s', task_id)
+                async for msg in ws:
+                    if json.loads(msg)['header']['event'] == 'task-started':
+                        # 收到 task-started 事件后，再发送待识别的音频流
+                        break
+                _, text = await asyncio.gather(
+                    self.asr_sender(ws, task_id, pcm_data),
+                    self.asr_receiver(ws)
+                )
+                return text
+        except Exception as e:
+            success = False
+            error_message = str(e)[:500]
+            raise
+        finally:
+            duration_ms = int((time.time() - start) * 1000)
+            record_api_usage(
+                user_id=user_id,
+                api_type='asr',
+                model_name='gummy-realtime-v1',
+                token_count=len(pcm_data) // 2,  # PCM16 采样点数
+                duration_ms=duration_ms,
+                success=success,
+                error_message=error_message,
             )
-            return text
 
     async def asr_sender(self, ws, task_id, pcm_data):
         chunk = 3200

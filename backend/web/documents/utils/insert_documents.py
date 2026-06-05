@@ -20,7 +20,7 @@ def _insert_with_loader(title: str, file_path: str, file_type: str):
     )
     DocumentChunk.objects.filter(document=sys_doc).delete()
 
-    embeddings = CustomEmbeddings()
+    embeddings = CustomEmbeddings(user_id=None)  # 系统知识库，不记录 usage
     texts = [c.page_content for c in chunks]
     vectors = embeddings.embed_documents(texts)
 
