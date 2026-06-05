@@ -8,6 +8,7 @@ Chat Agent Tool-Calling 脚本化评估
   python -m pytest web/tests/test_tool_calling.py -v -s -m slow
 """
 
+import os
 import pytest
 
 from langchain_core.messages import HumanMessage
@@ -15,6 +16,9 @@ from langchain_core.messages import HumanMessage
 from web.views.friend.message.chat.graph import ChatGraph
 from web.views.friend.message.chat.chat import add_system_prompt
 from web.models.friend import SystemPrompt
+
+if not os.getenv("API_KEY"):
+    pytest.skip("API_KEY environment variable not set — skipping slow API tests", allow_module_level=True)
 
 
 # ── 测试问题集 ──────────────────────────────────────────
@@ -64,15 +68,19 @@ def _run_eval(app, test_friend, questions: list[str], rounds: int = 3) -> tuple[
     hits = 0
     total = 0
     for question in questions:
-        for _ in range(rounds):
+        print(f"  [{questions.index(question) + 1}/{len(questions)}] {question[:40]}...", flush=True)
+        for round_num in range(rounds):
             inputs = {
                 'messages': [HumanMessage(question)],
                 'user_id': test_friend.user_profile_id,
             }
             inputs = add_system_prompt(inputs, test_friend)
-            result = app.invoke(inputs)
-            if _has_search_tool_call(result):
-                hits += 1
+            try:
+                result = app.invoke(inputs)
+                if _has_search_tool_call(result):
+                    hits += 1
+            except Exception as e:
+                print(f"\n[WARN] invoke failed for '{question[:30]}...' round {round_num + 1}: {e}")
             total += 1
     return hits, total
 
@@ -88,14 +96,12 @@ def chat_app():
 @pytest.fixture
 def system_prompt_reply(db):
     """确保至少有一条 reply 类型的 SystemPrompt（add_system_prompt 依赖它）"""
-    prompts = SystemPrompt.objects.filter(title=SystemPrompt.Title.REPLY)
-    if not prompts.exists():
+    if not SystemPrompt.objects.filter(title=SystemPrompt.Title.REPLY).exists():
         SystemPrompt.objects.create(
             title=SystemPrompt.Title.REPLY,
             order_number=0,
             prompt="你是一个友好的 AI 助手，根据对话历史回答用户的问题。",
         )
-    return list(prompts)
 
 
 # ── Baseline 测试 ────────────────────────────────────────
@@ -103,7 +109,7 @@ def system_prompt_reply(db):
 @pytest.mark.slow
 @pytest.mark.django_db
 class TestToolCallingBaseline:
-    """Baseline: 当前 v4-flash + 现有 prompt 的 tool-call 命中率"""
+    """Baseline: 当前 ChatGraph 配置的模型的 tool-call 命中率"""
 
     def test_explicit_search(self, chat_app, friend, system_prompt_reply):
         """明确需要检索 -- 期望 >= 90%"""
