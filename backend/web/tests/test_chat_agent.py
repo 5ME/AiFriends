@@ -77,25 +77,31 @@ class TestChatGraphRouting:
         last = result["messages"][-1]
         assert last.content == "The time is 12:00"
 
-    @patch("web.models.document.DocumentChunk.objects.raw")
     @patch("web.views.friend.message.chat.graph.CustomEmbeddings")
     @patch("web.views.friend.message.chat.graph.ChatOpenAI")
-    def test_search_knowledge_base_tool(self, mock_llm_class, mock_embeddings_class,
-                                         mock_raw):
-        """search_knowledge_base uses pgvector to search and return results"""
+    @patch("django.db.backends.base.base.BaseDatabaseWrapper.cursor")
+    def test_search_knowledge_base_tool(self, mock_cursor_method, mock_llm_class,
+                                         mock_embeddings_class):
+        """search_knowledge_base JOIN 查询 + 返回 [来源] 标记"""
         from web.views.friend.message.chat.graph import ChatGraph
+
+        # cursor() 返回 cursor 实例（支持 context manager）
+        mock_cursor_instance = MagicMock()
+        # __enter__ 返回自身，确保 with connection.cursor() as cursor:
+        # 中的 cursor 仍指向同一个 mock（保有 fetchall.return_value 等）
+        mock_cursor_instance.__enter__.return_value = mock_cursor_instance
+        mock_cursor_instance.fetchall.return_value = [
+            (1, "阿里云百炼平台介绍内容...", 2, 5, "平台使用指南.pdf", 0.12),
+            (2, "另一段检索内容...", 7, 5, "平台使用指南.pdf", 0.18),
+        ]
+        mock_cursor_method.return_value = mock_cursor_instance
 
         # Mock CustomEmbeddings
         mock_embeddings = MagicMock()
         mock_embeddings.embed_query.return_value = [0.1] * 1024
         mock_embeddings_class.return_value = mock_embeddings
 
-        # Mock DocumentChunk.objects.raw() to return a fake chunk
-        mock_chunk = MagicMock()
-        mock_chunk.content = "Aliyun Bailian platform introduction..."
-        mock_raw.return_value = [mock_chunk]
-
-        # Mock LLM to trigger the search_knowledge_base tool
+        # Mock LLM: 触发 search_knowledge_base 工具调用
         mock_llm = MagicMock()
         mock_llm.invoke.side_effect = [
             AIMessage(
@@ -113,11 +119,14 @@ class TestChatGraphRouting:
         mock_llm_class.return_value = mock_llm
 
         app = ChatGraph.create_app()
-        result = app.invoke({"messages": [HumanMessage(content="What is Bailian")]})
+        result = app.invoke({"messages": [HumanMessage(content="What is Bailian")], "user_id": 42})
 
+        # 验证 ToolMessage 包含来源标记
         tool_messages = [m for m in result["messages"] if isinstance(m, ToolMessage)]
         assert len(tool_messages) >= 1
-        assert "Bailian" in tool_messages[0].content
+        content = tool_messages[0].content
+        assert "[来源1: 平台使用指南.pdf 第3段]" in content
+        assert "阿里云百炼平台介绍内容" in content
 
     def test_get_time_tool_format(self):
         """get_time tool returns correct time format YYYY-MM-DD HH:MM:SS"""
