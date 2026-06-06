@@ -87,14 +87,9 @@ class TestChatGraphRouting:
 
         # cursor() 返回 cursor 实例（支持 context manager）
         mock_cursor_instance = MagicMock()
-        # description 供 RawQuery.get_columns() 推导列名（旧代码 path 用）
-        mock_cursor_instance.description = [
-            ("id", None, None, None, None, None, None),
-            ("content", None, None, None, None, None, None),
-            ("chunk_index", None, None, None, None, None, None),
-            ("document_id", None, None, None, None, None, None),
-            ("title", None, None, None, None, None, None),
-        ]
+        # __enter__ 返回自身，确保 with connection.cursor() as cursor:
+        # 中的 cursor 仍指向同一个 mock（保有 fetchall.return_value 等）
+        mock_cursor_instance.__enter__.return_value = mock_cursor_instance
         mock_cursor_instance.fetchall.return_value = [
             (1, "阿里云百炼平台介绍内容...", 2, 5, "平台使用指南.pdf", 0.12),
             (2, "另一段检索内容...", 7, 5, "平台使用指南.pdf", 0.18),

@@ -2,6 +2,8 @@ import logging
 import os
 from typing import TypedDict, Annotated, Sequence
 
+from django.db import connection
+
 from django.utils.timezone import localtime, now
 from langchain_core.messages import BaseMessage
 from langchain_core.tools import tool
@@ -49,22 +51,67 @@ class ChatGraph:
             - 纯情感倾诉（"我今天心情不好"）
             - 纯角色扮演闲聊（"你喜欢什么颜色"）
             """
-            from web.models.document import DocumentChunk
+            from web.models.document import DocumentChunk, UserDocument
+            from web.models.retrieval_trace import RetrievalTrace
 
             user_id = state.get("user_id")
             logger.info('RAG 知识库检索开始, query=%s, user_id=%s', query[:100], user_id)
+
             embeddings = CustomEmbeddings(user_id=user_id)
             emb = embeddings.embed_query(query)
-            table = DocumentChunk._meta.db_table
-            chunks = DocumentChunk.objects.raw(
-                f"SELECT id, content, chunk_index, document_id "
-                f"FROM {table} "
-                f"WHERE owner_id IS NULL OR owner_id = %s "
-                f"ORDER BY embedding <=> %s::vector LIMIT 3",
-                [user_id, emb]
-            )
-            context = '\n\n'.join([f'内容片段：{i + 1}\n{c.content}' for i, c in enumerate(chunks)])
-            return f'从知识库中找到以下相关信息：\n\n{context}\n\n'
+
+            chunk_table = DocumentChunk._meta.db_table
+            doc_table = UserDocument._meta.db_table
+
+            # 使用 cursor 执行 JOIN 查询，一次拿到 title + distance
+            with connection.cursor() as cursor:
+                cursor.execute(f"""
+                    SELECT dc.id, dc.content, dc.chunk_index, dc.document_id,
+                           ud.title AS document_title,
+                           dc.embedding <=> %s::vector AS distance
+                    FROM {chunk_table} dc
+                    LEFT JOIN {doc_table} ud ON dc.document_id = ud.id
+                    WHERE dc.owner_id IS NULL OR dc.owner_id = %s
+                    ORDER BY dc.embedding <=> %s::vector
+                    LIMIT 3
+                """, [emb, user_id, emb])
+                rows = cursor.fetchall()
+
+            if not rows:
+                return "知识库中未找到相关信息。"
+
+            parts = ["从知识库中找到以下相关信息：\n"]
+            for i, row in enumerate(rows):
+                _, content, chunk_index, document_id, title, distance = row
+                # 明确 if/elif/else 构建来源标签（避免三目运算符优先级歧义）
+                if title:
+                    source_label = title
+                elif document_id:
+                    source_label = f"文档{document_id}"
+                else:
+                    source_label = "系统知识库"
+                # chunk_index 在 DB 中为 0-based，展示时转为 1-based
+                parts.append(f"[来源{i+1}: {source_label} 第{chunk_index + 1}段]")
+                parts.append(content)
+                parts.append("")
+
+                # 写入检索 trace（fail-safe：DB 故障不影响工具返回值）
+                if document_id:
+                    try:
+                        RetrievalTrace.objects.create(
+                            user_id=user_id,
+                            query=query,
+                            document_id=document_id,
+                            chunk_index=chunk_index,
+                            distance=float(distance),
+                        )
+                    except Exception:
+                        logger.exception(
+                            'RetrievalTrace 写入失败, document_id=%s', document_id
+                        )
+
+            logger.info('RAG 检索完成, hits=%d', len(rows))
+            return "\n".join(parts)
 
         tools = [get_time, search_knowledge_base]
 
