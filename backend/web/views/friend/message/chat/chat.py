@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import queue
+import re
 import threading
 import time
 import uuid
@@ -10,7 +11,7 @@ from typing import List, Dict
 
 import websockets
 from django.http import StreamingHttpResponse
-from langchain_core.messages import HumanMessage, BaseMessageChunk, BaseMessage, SystemMessage, AIMessage
+from langchain_core.messages import HumanMessage, BaseMessageChunk, BaseMessage, SystemMessage, AIMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -41,6 +42,9 @@ TOOL_RULES = (
     "   - 纯闲聊（\"你喜欢吃什么\"）\n"
     "3. 不确定时宁可查询也不要遗漏。"
 )
+
+# 匹配 search_knowledge_base 返回的来源标记：[来源1: 文档标题 第3段]
+CITATION_RE = re.compile(r'\[来源(\d+): (.+?) 第(\d+)段\]')
 
 
 class SSERenderer(BaseRenderer):
@@ -200,6 +204,9 @@ class MessageChatView(APIView):
             # print('====>', msg)
             if msg is None:
                 break
+            # 转发 RAG 引用来源到 SSE（在 content 之前到达，前端可提前展示来源）
+            if msg.get('citations', None):
+                yield f'data: {json.dumps({"citations": msg["citations"]}, ensure_ascii=False)}\n\n'
             if msg.get('error', None):
                 has_error = True
                 error_message = msg['error']
@@ -327,7 +334,21 @@ class MessageChatView(APIView):
         error_message = ''
         try:
             async for msg, metadata in app.astream(inputs, stream_mode="messages"):
-                if isinstance(msg, BaseMessageChunk):
+                # 检测知识库检索结果 ToolMessage，提取引用来源
+                # LangGraph 时序：ToolMessage 在第一个 AIMessageChunk 之前到达，
+                # 确保 citations 事件先于 content 发送到前端
+                if isinstance(msg, ToolMessage) and msg.name == "search_knowledge_base":
+                    citations = []
+                    for m in CITATION_RE.finditer(msg.content):
+                        citations.append({
+                            "index": int(m.group(1)),
+                            "title": m.group(2),
+                            "chunk_index": int(m.group(3)),
+                        })
+                    if citations:
+                        mq.put_nowait({'citations': citations})
+
+                elif isinstance(msg, BaseMessageChunk):
                     if msg.content:
                         total_chars += len(msg.content)
                         await ws.send(json.dumps({
