@@ -66,6 +66,7 @@ class RetrievalTrace(models.Model):
 | **不关联 Message** | tool 执行时 Message 尚不存在（SSE 流结束后才保存），存 `user` + `created_at` 足以按时间关联 |
 | **`distance` 而非 `score`** | pgvector `<=>` 返回余弦距离（越小越相似），存原始值不转换，评估时可按需换算 |
 | **`document` 可空** | 系统知识库 chunk 可能 `document_id` 为 NULL |
+| **系统知识库 chunk 不写 trace** | 无 `document_id` → 跳过落库。系统知识库的检索命中率、distance 分布无法通过 RetrievalTrace 评估。如需评估，后续给系统知识库 chunk 关联 document |
 | **user + created_at 复合索引** | 查询 "用户最近检索了什么" 高频，覆盖索引 |
 
 ### 2.3 迁移
@@ -122,20 +123,30 @@ def search_knowledge_base(query: str, state: Annotated[dict, InjectedState]) -> 
     parts = ["从知识库中找到以下相关信息：\n"]
     for i, row in enumerate(rows):
         _, content, chunk_index, document_id, title, distance = row
-        source_label = title or f"文档{document_id}" if document_id else "系统知识库"
-        parts.append(f"[来源{i+1}: {source_label} 第{chunk_index}段]")
+        # 明确 if/elif/else：避免三目运算符优先级歧义
+        if title:
+            source_label = title
+        elif document_id:
+            source_label = f"文档{document_id}"
+        else:
+            source_label = "系统知识库"
+        # chunk_index 为 0-based，展示时 +1 为人类友好的 1-based
+        parts.append(f"[来源{i+1}: {source_label} 第{chunk_index + 1}段]")
         parts.append(content)
         parts.append("")
 
-        # 写入检索 trace
+        # 写入检索 trace（fail-safe：落库失败不影响工具返回值）
         if document_id:
-            RetrievalTrace.objects.create(
-                user_id=user_id,
-                query=query,
-                document_id=document_id,
-                chunk_index=chunk_index,
-                distance=float(distance),
-            )
+            try:
+                RetrievalTrace.objects.create(
+                    user_id=user_id,
+                    query=query,
+                    document_id=document_id,
+                    chunk_index=chunk_index,
+                    distance=float(distance),
+                )
+            except Exception:
+                logger.exception('RetrievalTrace 写入失败, document_id=%s', document_id)
 
     logger.info('RAG 检索完成, hits=%d', len(rows))
     return "\n".join(parts)
@@ -220,11 +231,16 @@ while True:
     if msg.get('citations', None):
         yield f'data: {json.dumps({"citations": msg["citations"]}, ensure_ascii=False)}\n\n'
     if msg.get('error', None):
-        ...
+        has_error = True
+        error_message = msg['error']
+        yield f'data: {json.dumps({"error": error_message}, ensure_ascii=False)}\n\n'
     if msg.get('content', None):
-        ...
+        full_output.append(msg['content'])
+        yield f'data: {json.dumps({"content": msg["content"]}, ensure_ascii=False)}\n\n'
     if msg.get('audio', None):
-        ...
+        yield f'data: {json.dumps({"audio": msg["audio"]}, ensure_ascii=False)}\n\n'
+    if msg.get('usage', None):
+        full_usage = msg['usage']
 ```
 
 ### 4.4 SSE 事件格式
@@ -256,7 +272,26 @@ data: [DONE]
 
 ### 5.1 已有测试适配
 
-`test_chat_agent.py:test_search_knowledge_base_tool` — mock 了 `CustomEmbeddings` + `DocumentChunk.objects.raw`。需改为 mock `connection.cursor()`。
+`test_chat_agent.py:test_search_knowledge_base_tool` — mock 了 `CustomEmbeddings` + `DocumentChunk.objects.raw`。需改为 mock `connection.cursor()`。cursor 涉及 context manager protocol（`__enter__`/`__exit__`），mock 代码比原来的 `objects.raw` 稍长：
+
+```python
+from unittest.mock import MagicMock, patch
+
+@patch("django.db.connection.cursor")
+def test_search_knowledge_base_returns_source_markers(self, mock_cursor):
+    # cursor() 返回一个 context manager，__enter__ 返回 cursor 实例
+    mock_cursor_instance = MagicMock()
+    mock_cursor_instance.fetchall.return_value = [
+        (1, "检索到的内容", 0, 1, "测试文档.pdf", 0.12),
+        (2, "另一段内容", 3, 1, "测试文档.pdf", 0.18),
+    ]
+    mock_cursor.return_value.__enter__.return_value = mock_cursor_instance
+
+    result = search_knowledge_base("test query", {"user_id": 1})
+    assert "[来源1: 测试文档.pdf 第1段]" in result
+    assert "检索到的内容" in result
+    assert mock_cursor_instance.execute.called
+```
 
 ### 5.2 新增测试
 
