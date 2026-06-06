@@ -93,6 +93,7 @@ class TestChatGraphRouting:
             ("content", None, None, None, None, None, None),
             ("chunk_index", None, None, None, None, None, None),
             ("document_id", None, None, None, None, None, None),
+            ("title", None, None, None, None, None, None),
         ]
         mock_cursor_instance.fetchall.return_value = [
             (1, "阿里云百炼平台介绍内容...", 2, 5, "平台使用指南.pdf", 0.12),
@@ -123,7 +124,7 @@ class TestChatGraphRouting:
         mock_llm_class.return_value = mock_llm
 
         app = ChatGraph.create_app()
-        result = app.invoke({"messages": [HumanMessage(content="What is Bailian")]})
+        result = app.invoke({"messages": [HumanMessage(content="What is Bailian")], "user_id": 42})
 
         # 验证 ToolMessage 包含来源标记
         tool_messages = [m for m in result["messages"] if isinstance(m, ToolMessage)]
