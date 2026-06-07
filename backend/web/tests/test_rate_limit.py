@@ -1,5 +1,5 @@
 """Rate Limit Middleware Tests"""
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from rest_framework import status
 
@@ -106,7 +106,7 @@ class TestRateLimitGetUnlimited:
 
     def test_get_not_rate_limited(self, db, api_client):
         # GET 请求不应调用 _check_rate_limit
-        resp = api_client.get('/api/health/')
+        resp = api_client.get('/api/homepage/index/')
         assert resp.status_code == 200
 
     def test_get_homepage_not_rate_limited(self, db, api_client):
@@ -117,7 +117,16 @@ class TestRateLimitGetUnlimited:
 class TestRateLimitSkipPaths:
     """跳过路径不限流"""
 
-    def test_health_never_rate_limited(self, db, api_client):
+    @patch("web.views.health.app.control.inspect")
+    @patch("web.views.health.redis.Redis.from_url")
+    def test_health_never_rate_limited(self, mock_redis, mock_inspect, db,
+                                        api_client):
+        """health 端点应被限流跳过，不考虑 health 内部检查状态"""
+        mock_redis.return_value = MagicMock()
+        mock_insp = MagicMock()
+        mock_insp.ping.return_value = {"worker@host": {"ok": "pong"}}
+        mock_inspect.return_value = mock_insp
+
         resp = api_client.get('/api/health/')
         assert resp.status_code == 200
 
