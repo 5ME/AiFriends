@@ -247,13 +247,13 @@ LOGGING = {
 }
 
 # Celery — Redis broker（异步任务队列）
-CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
 
 # 任务完成后才 ack — Worker 崩溃时未完成的任务自动回到队列
 CELERY_TASK_ACKS_LATE = True
 
 # Redis URL for rate limiting (uses DB /1, separate from Celery broker /0)
-REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1')
 
 # Rate Limit Rules — (url_prefix, methods, max_requests, window_seconds)
 RATE_LIMIT_RULES = {

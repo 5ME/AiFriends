@@ -1,4 +1,5 @@
 import io
+from unittest.mock import patch
 
 import pytest
 from PIL import Image
@@ -9,6 +10,14 @@ from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
 import django.conf
+
+
+@pytest.fixture(autouse=True)
+def _disable_rate_limit_for_tests():
+    """全局 disable 限流 — test_rate_limit.py 通过自己的 @patch 覆盖此 fixture"""
+    with patch('web.middleware.rate_limit.RateLimitMiddleware._check_rate_limit',
+               return_value=(True, 999)):
+        yield
 
 from web.models.user import UserProfile
 from web.models.character import Character, Voice
