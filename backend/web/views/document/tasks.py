@@ -60,7 +60,8 @@ def process_document_task(doc_id: int):
 
         doc.status = 'completed'
         doc.chunks_count = len(objs)
-        doc.save()
+        doc.celery_task_id = ''
+        doc.save(update_fields=['status', 'chunks_count', 'celery_task_id'])
         logger.info('文档处理完成, doc_id=%d, chunks=%d', doc_id, len(objs))
 
     except UserDocument.DoesNotExist:
@@ -68,15 +69,21 @@ def process_document_task(doc_id: int):
         return
     except Exception as exc:
         logger.exception('文档处理失败, doc_id=%d', doc_id)
-        # 尝试更新状态为 failed
+        # 尝试更新状态为 failed（不更新 celery_task_id）
         try:
             doc.status = 'failed'
             doc.error_message = str(exc)[:500]
-            doc.save()
+            doc.save(update_fields=['status', 'error_message'])
         except Exception:
             pass
-        # 4xx 永久故障不重试（429 除外），其余重试一次
+        # 4xx 永久故障不重试（429 除外），清空 task_id
+        # 其余重试一次，保留 task_id 以支持重试期间撤销
         if isinstance(exc, APIStatusError) and \
                400 <= exc.status_code < 500 and exc.status_code != 429:
+            try:
+                doc.celery_task_id = ''
+                doc.save(update_fields=['celery_task_id'])
+            except Exception:
+                pass
             return
         raise process_document_task.retry(exc=exc, countdown=10)
