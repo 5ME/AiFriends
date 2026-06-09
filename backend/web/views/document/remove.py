@@ -29,8 +29,9 @@ class DocumentRemoveView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # 撤销正在排队的 Celery 任务
-        if doc.celery_task_id and doc.status in ('pending', 'processing'):
+        # 撤销正在排队的 Celery 任务（只判断 task_id 非空，不判断 status）
+        # status='failed' 时 task_id 非空 = retry pending，同样需要撤销
+        if doc.celery_task_id:
             try:
                 app.control.revoke(doc.celery_task_id)
                 logger.info('已撤销 Celery 任务, doc_id=%d, task_id=%s',

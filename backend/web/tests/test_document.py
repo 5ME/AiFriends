@@ -328,10 +328,10 @@ class TestDocumentRemove:
     @patch("web.views.document.remove.app.control.revoke")
     def test_delete_completed_doc_skips_revoke(self, mock_revoke, auth_client,
                                                 user_profile):
-        """删除 completed 文档 → revoke 不调用"""
+        """删除 completed 文档（task_id 为空）→ revoke 不调用"""
         doc = UserDocument.objects.create(
             title='completed-doc', owner=user_profile, status='completed',
-            celery_task_id='task-completed-789',
+            celery_task_id='',
         )
         resp = auth_client.post('/api/document/remove/', {'id': doc.id})
         assert resp.status_code == 200
@@ -341,9 +341,9 @@ class TestDocumentRemove:
     @patch("web.views.document.remove.app.control.revoke")
     def test_delete_during_retry_revokes_task(self, mock_revoke, auth_client,
                                                user_profile):
-        """task 失败重试中用户删除 → revoke 被调用"""
+        """task 失败重试中（status=failed + task_id 非空）→ revoke 被调用"""
         doc = UserDocument.objects.create(
-            title='retrying-doc', owner=user_profile, status='processing',
+            title='retrying-doc', owner=user_profile, status='failed',
             celery_task_id='task-retrying-123',
         )
         resp = auth_client.post('/api/document/remove/', {'id': doc.id})
