@@ -135,3 +135,75 @@ class TestDocumentProcessing:
         doc.refresh_from_db()
         # PDF 可能无文字 → failed 或 completed 都可接受
         assert doc.status in ('completed', 'failed')
+
+    @patch("web.views.document.tasks.CustomEmbeddings")
+    def test_task_clears_celery_task_id_on_completion(
+            self, mock_embeddings, user_profile):
+        """task 执行成功 → celery_task_id 清空"""
+        emb_mock = MagicMock()
+        emb_mock.embed_documents.return_value = [[0.1] * 1024, [0.2] * 1024]
+        mock_embeddings.return_value = emb_mock
+
+        from web.views.document.tasks import process_document_task
+        doc = _dummy_upload(user_profile, 'test.txt')
+        # 模拟上传时已设置 task_id
+        doc.celery_task_id = 'task-before-complete'
+        doc.save(update_fields=['celery_task_id'])
+
+        process_document_task(doc.id)
+
+        doc.refresh_from_db()
+        assert doc.status == 'completed'
+        assert doc.celery_task_id == ''
+
+    @patch("web.views.document.tasks.CustomEmbeddings")
+    def test_task_clears_celery_task_id_on_permanent_failure(
+            self, mock_embeddings, user_profile):
+        """4xx API 错误 → celery_task_id 清空，不重试"""
+        from openai import APIStatusError
+        response_mock = MagicMock()
+        response_mock.status_code = 400
+        emb_mock = MagicMock()
+        emb_mock.embed_documents.side_effect = APIStatusError(
+            'Bad request', response=response_mock, body=None
+        )
+        mock_embeddings.return_value = emb_mock
+
+        from web.views.document.tasks import process_document_task
+        doc = _dummy_upload(user_profile, 'test.txt')
+        doc.celery_task_id = 'task-permanent-fail'
+        doc.save(update_fields=['celery_task_id'])
+
+        process_document_task(doc.id)
+
+        doc.refresh_from_db()
+        assert doc.status == 'failed'
+        assert doc.celery_task_id == ''
+
+    @patch("web.views.document.tasks.process_document_task.retry")
+    @patch("web.views.document.tasks.CustomEmbeddings")
+    def test_task_keeps_celery_task_id_on_retryable_failure(
+            self, mock_embeddings, mock_retry, user_profile):
+        """5xx / 网络异常 → celery_task_id 保留，task 被 retry"""
+        from celery.exceptions import Retry
+        mock_retry.side_effect = Retry()
+
+        emb_mock = MagicMock()
+        emb_mock.embed_documents.side_effect = Exception("Network timeout")
+        mock_embeddings.return_value = emb_mock
+
+        from web.views.document.tasks import process_document_task
+        doc = _dummy_upload(user_profile, 'test.txt')
+        doc.celery_task_id = 'task-retryable'
+        doc.save(update_fields=['celery_task_id'])
+
+        # retry 会抛出 Retry 异常（Celery 标准行为）
+        try:
+            process_document_task(doc.id)
+        except Retry:
+            pass
+
+        doc.refresh_from_db()
+        assert doc.status == 'failed'
+        assert doc.celery_task_id == 'task-retryable'
+        mock_retry.assert_called_once()
