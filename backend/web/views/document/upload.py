@@ -92,7 +92,20 @@ class DocumentUploadView(APIView):
             file_type=ext,
             status='pending',
         )
-        process_document_task.delay(doc.id)
+
+        try:
+            task = process_document_task.delay(doc.id)
+            doc.celery_task_id = task.id
+            doc.save(update_fields=['celery_task_id'])
+        except Exception as e:
+            logger.exception('Celery 任务投递失败, doc_id=%d', doc.id)
+            doc.status = 'failed'
+            doc.error_message = f'任务投递失败: {str(e)[:500]}'
+            doc.save(update_fields=['status', 'error_message'])
+            return Response(
+                {'message': '文件已上传但异步处理启动失败，请稍后重试'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         logger.info('文档上传成功, doc_id=%d, title=%s', doc.id, doc.title)
         return Response(

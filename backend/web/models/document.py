@@ -19,6 +19,8 @@ class UserDocument(models.Model):
     )
     error_message = models.TextField(blank=True, default='')
     chunks_count = models.IntegerField(default=0)
+    celery_task_id = models.CharField(max_length=255, blank=True, default='',
+                                      help_text='Celery task ID for revocation')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
