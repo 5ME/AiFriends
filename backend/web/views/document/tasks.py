@@ -19,7 +19,7 @@ def process_document_task(doc_id: int):
     try:
         doc = UserDocument.objects.get(id=doc_id)
         doc.status = 'processing'
-        doc.save()
+        doc.save(update_fields=['status'])
         logger.info('文档处理开始, doc_id=%d, title=%s', doc_id, doc.title)
 
         # 拼接完整文件路径（file_url 存的是相对路径如 documents/xxx.pdf）
@@ -36,7 +36,8 @@ def process_document_task(doc_id: int):
         if not chunks or all(not c.page_content.strip() for c in chunks):
             doc.status = 'failed'
             doc.error_message = '文档无可提取文字，可能是扫描件或空文件'
-            doc.save()
+            doc.celery_task_id = ''
+            doc.save(update_fields=['status', 'error_message', 'celery_task_id'])
             logger.warning('文档无文字, doc_id=%d', doc_id)
             return
 

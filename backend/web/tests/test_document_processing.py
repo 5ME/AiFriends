@@ -66,9 +66,11 @@ class TestDocumentProcessing:
 
     @patch("web.views.document.tasks.CustomEmbeddings")
     def test_empty_content_marks_failed(self, mock_embeddings, user_profile):
-        """空文件 → status=failed"""
+        """空文件 → status=failed, celery_task_id 清空"""
         from web.views.document.tasks import process_document_task
         doc = _dummy_upload(user_profile, 'test.txt')
+        doc.celery_task_id = 'task-empty-content'
+        doc.save(update_fields=['celery_task_id'])
         # 清空文件内容
         import os
         from django.conf import settings
@@ -79,6 +81,7 @@ class TestDocumentProcessing:
         doc.refresh_from_db()
         assert doc.status == 'failed'
         assert '无' in doc.error_message
+        assert doc.celery_task_id == ''  # 永久终止 → task_id 清空
 
     def test_document_already_deleted_skips_silently(self, user_profile):
         """文档已被用户删除 → DoesNotExist → 静默跳过"""
