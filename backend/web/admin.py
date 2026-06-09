@@ -39,8 +39,10 @@ class UserDocumentAdmin(admin.ModelAdmin):
                     'chunks_count', 'created_at')
     search_fields = ('title', 'owner__user__username')
     list_filter = ('status', 'file_type')
-    readonly_fields = ('chunks_count', 'celery_task_id', 'created_at', 'updated_at')
+    readonly_fields = ('chunks_count', 'celery_task_id', 'error_message',
+                       'created_at', 'updated_at')
     raw_id_fields = ('owner',)
+    list_select_related = ('owner__user',)
 
 
 @admin.register(DocumentChunk)
@@ -49,5 +51,5 @@ class DocumentChunkAdmin(admin.ModelAdmin):
     search_fields = ('content', 'document__title')
     list_filter = ('document__file_type',)
     exclude = ('embedding',)
-    list_select_related = ('document', 'owner')
+    list_select_related = ('document__owner__user', 'owner__user')
     raw_id_fields = ('document', 'owner')
