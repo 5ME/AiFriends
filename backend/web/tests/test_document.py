@@ -114,7 +114,8 @@ class TestInsertDocuments:
         from web.models.document import UserDocument, DocumentChunk
 
         mock_embeddings = MagicMock()
-        mock_embeddings.embed_documents.return_value = [[0.0] * 1024]
+        mock_embeddings.embed_documents.side_effect = \
+            lambda texts: [[0.0] * 1024 for _ in texts]
         mock_embeddings_class.return_value = mock_embeddings
 
         insert_documents()
@@ -129,6 +130,8 @@ class TestInsertDocuments:
         ).count()
         assert chunk_count_2 == chunk_count_1
         assert UserDocument.objects.filter(title='百炼平台概述').count() == 1
+        # 验证至少调用过一次（4 个文档各 1 次，第二次执行 hash 匹配不再调）
+        assert mock_embeddings.embed_documents.call_count >= 1
 
     @patch("web.documents.utils.insert_documents.CustomEmbeddings")
     def test_insert_markdown_documents_idempotent(self, mock_embeddings_class, db):
@@ -136,7 +139,8 @@ class TestInsertDocuments:
         from web.models.document import UserDocument, DocumentChunk
 
         mock_embeddings = MagicMock()
-        mock_embeddings.embed_documents.return_value = [[0.0] * 1024]
+        mock_embeddings.embed_documents.side_effect = \
+            lambda texts: [[0.0] * 1024 for _ in texts]
         mock_embeddings_class.return_value = mock_embeddings
 
         insert_markdown_documents()
@@ -150,6 +154,8 @@ class TestInsertDocuments:
             document__title='百炼平台概述 Markdown'
         ).count()
         assert count_2 == count_1
+        # 验证至少调用过一次
+        assert mock_embeddings.embed_documents.call_count >= 1
 
     def test_delete_only_own_chunks(self, db):
         """insert_documents 只删自己文档的 chunks"""
@@ -164,7 +170,8 @@ class TestInsertDocuments:
 
         with patch("web.documents.utils.insert_documents.CustomEmbeddings") as mock_class:
             mock_embeddings = MagicMock()
-            mock_embeddings.embed_documents.return_value = [[0.0] * 1024]
+            mock_embeddings.embed_documents.side_effect = \
+                lambda texts: [[0.0] * 1024 for _ in texts]
             mock_class.return_value = mock_embeddings
 
             insert_documents()
@@ -179,6 +186,114 @@ class TestInsertDocuments:
         ).count()
         assert other_count == 1
         assert DocumentChunk.objects.get(document=other_doc).content == 'keep me'
+        # 验证 content_hash 已设置
+        own_chunks = DocumentChunk.objects.filter(document__title='百炼平台概述')
+        for c in own_chunks:
+            assert c.content_hash != ''
+            assert len(c.content_hash) == 64
+
+    @patch("web.documents.utils.insert_documents.CustomEmbeddings")
+    def test_repeat_insert_skips_embedding(self, mock_embeddings_class, db):
+        """重复导入且内容不变 → 不调用 embedding API"""
+        from web.documents.utils.insert_documents import insert_documents
+
+        mock_embeddings = MagicMock()
+        mock_embeddings.embed_documents.side_effect = \
+            lambda texts: [[0.0] * 1024 for _ in texts]
+        mock_embeddings_class.return_value = mock_embeddings
+
+        insert_documents()
+        # 重置 mock，第二次执行
+        mock_embeddings.embed_documents.reset_mock()
+        insert_documents()
+
+        # 第二次执行不应调用 embedding
+        mock_embeddings.embed_documents.assert_not_called()
+
+    @patch("web.documents.utils.insert_documents.CustomEmbeddings")
+    def test_new_document_is_imported(self, mock_embeddings_class, db):
+        """新增 raw 文件的文档 → 正常导入"""
+        from web.documents.utils.insert_documents import insert_documents
+        from web.models.document import DocumentChunk
+
+        mock_embeddings = MagicMock()
+        mock_embeddings.embed_documents.side_effect = \
+            lambda texts: [[0.0] * 1024 for _ in texts]
+        mock_embeddings_class.return_value = mock_embeddings
+
+        insert_documents()
+
+        # 新增的 claude-prompting-best-practices.md 应被导入
+        count = DocumentChunk.objects.filter(
+            document__title='Claude Prompting Best Practices'
+        ).count()
+        assert count > 0
+
+        # coding-plan-overview.md 也应被导入
+        count2 = DocumentChunk.objects.filter(
+            document__title='Coding Plan Overview'
+        ).count()
+        assert count2 > 0
+
+    @patch("web.documents.utils.insert_documents.CustomEmbeddings")
+    def test_extra_chunks_are_removed(self, mock_embeddings_class, db):
+        """旧 chunks 中有新文件不存在的 index → 被删除"""
+        from web.documents.utils.insert_documents import insert_documents
+        from web.models.document import UserDocument, DocumentChunk
+
+        # 手动创建多余的旧 chunk（index=99 不在新文件中）
+        sys_doc, _ = UserDocument.objects.get_or_create(
+            title='百炼平台概述', defaults={'status': 'completed'}
+        )
+        DocumentChunk.objects.create(
+            content='extra chunk', embedding=[0.0] * 1024,
+            document=sys_doc, chunk_index=99,
+            content_hash='abc123',
+        )
+        assert DocumentChunk.objects.filter(
+            document=sys_doc, chunk_index=99
+        ).exists()
+
+        mock_embeddings = MagicMock()
+        mock_embeddings.embed_documents.side_effect = \
+            lambda texts: [[0.0] * 1024 for _ in texts]
+        mock_embeddings_class.return_value = mock_embeddings
+
+        insert_documents()
+
+        # 多余的 chunk_index=99 应被删除
+        assert not DocumentChunk.objects.filter(
+            document=sys_doc, chunk_index=99
+        ).exists()
+
+    @patch("web.documents.utils.insert_documents.CustomEmbeddings")
+    def test_historical_empty_hash_triggers_reembed(self, mock_embeddings_class, db):
+        """content_hash='' 的历史数据 → 触发重新 embedding"""
+        from web.documents.utils.insert_documents import insert_documents
+        from web.models.document import UserDocument, DocumentChunk
+
+        # 手动创建旧格式数据（content_hash=''）
+        sys_doc, _ = UserDocument.objects.get_or_create(
+            title='百炼平台概述', defaults={'status': 'completed'}
+        )
+        DocumentChunk.objects.create(
+            content='stale content', embedding=[0.0] * 1024,
+            document=sys_doc, chunk_index=0,
+            content_hash='',  # 旧数据无 hash
+        )
+
+        mock_embeddings = MagicMock()
+        mock_embeddings.embed_documents.side_effect = \
+            lambda texts: [[0.1] * 1024 for _ in texts]
+        mock_embeddings_class.return_value = mock_embeddings
+
+        insert_documents()
+
+        # 旧 chunk 应被替换，hash 应更新为非空
+        chunks = DocumentChunk.objects.filter(document=sys_doc)
+        for c in chunks:
+            assert c.content_hash != ''
+            assert len(c.content_hash) == 64
 
 
 class TestDocumentUpload:
