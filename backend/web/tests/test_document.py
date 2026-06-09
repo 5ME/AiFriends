@@ -265,6 +265,8 @@ class TestInsertDocuments:
         assert not DocumentChunk.objects.filter(
             document=sys_doc, chunk_index=99
         ).exists()
+        # 正常 chunk 应保留
+        assert DocumentChunk.objects.filter(document=sys_doc).count() > 0
 
     @patch("web.documents.utils.insert_documents.CustomEmbeddings")
     def test_historical_empty_hash_triggers_reembed(self, mock_embeddings_class, db):
@@ -294,6 +296,10 @@ class TestInsertDocuments:
         for c in chunks:
             assert c.content_hash != ''
             assert len(c.content_hash) == 64
+        # 旧内容应已被新内容替换
+        assert not DocumentChunk.objects.filter(
+            document=sys_doc, content='stale content'
+        ).exists()
 
 
 class TestDocumentUpload:
