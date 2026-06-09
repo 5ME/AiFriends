@@ -225,6 +225,7 @@ class TestDocumentUpload:
     @patch("web.views.document.upload.process_document_task.delay")
     def test_upload_txt_success(self, mock_delay, auth_client, user_profile):
         """正常上传 .txt"""
+        mock_delay.return_value.id = 'test-task-id'
         file = SimpleUploadedFile('hello.txt', b'Hello World',
                                   content_type='text/plain')
         resp = auth_client.post('/api/document/upload/', {'file': file})
@@ -238,6 +239,31 @@ class TestDocumentUpload:
         assert doc.title == 'hello.txt'
         # 验证 Celery 任务已被触发
         mock_delay.assert_called_once_with(doc.id)
+
+    @patch("web.views.document.upload.process_document_task.delay")
+    def test_upload_enqueue_failure(self, mock_delay, auth_client):
+        """delay() 抛异常 → doc 标记 failed，返回 500"""
+        mock_delay.side_effect = Exception("Broker connection error")
+        file = SimpleUploadedFile('test.txt', b'Hello', content_type='text/plain')
+        resp = auth_client.post('/api/document/upload/', {'file': file})
+        assert resp.status_code == 500
+        assert '处理启动失败' in resp.data['message']
+        doc = UserDocument.objects.latest('id')
+        assert doc.status == 'failed'
+        assert '任务投递失败' in doc.error_message
+
+    @patch("web.views.document.upload.process_document_task.delay")
+    def test_upload_saves_celery_task_id(self, mock_delay, auth_client):
+        """正常上传 → celery_task_id 非空"""
+        mock_result = MagicMock()
+        mock_result.id = 'test-task-uuid-123'
+        mock_delay.return_value = mock_result
+        file = SimpleUploadedFile('hello.txt', b'Hello World',
+                                  content_type='text/plain')
+        resp = auth_client.post('/api/document/upload/', {'file': file})
+        assert resp.status_code == 201
+        doc = UserDocument.objects.get(id=resp.data['id'])
+        assert doc.celery_task_id == 'test-task-uuid-123'
 
 
 class TestDocumentRemove:
@@ -272,6 +298,71 @@ class TestDocumentRemove:
         """删除不存在的文档 → 404"""
         resp = auth_client.post('/api/document/remove/', {'id': 99999})
         assert resp.status_code == 404
+
+    @patch("web.views.document.remove.app.control.revoke")
+    def test_delete_pending_doc_revokes_task(self, mock_revoke, auth_client,
+                                              user_profile):
+        """删除 pending 文档 → revoke 被调用"""
+        doc = UserDocument.objects.create(
+            title='pending-doc', owner=user_profile, status='pending',
+            celery_task_id='task-pending-123',
+        )
+        resp = auth_client.post('/api/document/remove/', {'id': doc.id})
+        assert resp.status_code == 200
+        mock_revoke.assert_called_once_with('task-pending-123')
+        assert not UserDocument.objects.filter(id=doc.id).exists()
+
+    @patch("web.views.document.remove.app.control.revoke")
+    def test_delete_processing_doc_revokes_task(self, mock_revoke, auth_client,
+                                                 user_profile):
+        """删除 processing 文档 → revoke 被调用"""
+        doc = UserDocument.objects.create(
+            title='processing-doc', owner=user_profile, status='processing',
+            celery_task_id='task-processing-456',
+        )
+        resp = auth_client.post('/api/document/remove/', {'id': doc.id})
+        assert resp.status_code == 200
+        mock_revoke.assert_called_once_with('task-processing-456')
+        assert not UserDocument.objects.filter(id=doc.id).exists()
+
+    @patch("web.views.document.remove.app.control.revoke")
+    def test_delete_completed_doc_skips_revoke(self, mock_revoke, auth_client,
+                                                user_profile):
+        """删除 completed 文档 → revoke 不调用"""
+        doc = UserDocument.objects.create(
+            title='completed-doc', owner=user_profile, status='completed',
+            celery_task_id='task-completed-789',
+        )
+        resp = auth_client.post('/api/document/remove/', {'id': doc.id})
+        assert resp.status_code == 200
+        mock_revoke.assert_not_called()
+        assert not UserDocument.objects.filter(id=doc.id).exists()
+
+    @patch("web.views.document.remove.app.control.revoke")
+    def test_delete_during_retry_revokes_task(self, mock_revoke, auth_client,
+                                               user_profile):
+        """task 失败重试中用户删除 → revoke 被调用"""
+        doc = UserDocument.objects.create(
+            title='retrying-doc', owner=user_profile, status='processing',
+            celery_task_id='task-retrying-123',
+        )
+        resp = auth_client.post('/api/document/remove/', {'id': doc.id})
+        assert resp.status_code == 200
+        mock_revoke.assert_called_once_with('task-retrying-123')
+        assert not UserDocument.objects.filter(id=doc.id).exists()
+
+    @patch("web.views.document.remove.app.control.revoke")
+    def test_revoke_failure_does_not_block_delete(self, mock_revoke, auth_client,
+                                                   user_profile):
+        """revoke 抛异常 → 删除仍成功"""
+        mock_revoke.side_effect = Exception("Revoke failed")
+        doc = UserDocument.objects.create(
+            title='revoke-fail-doc', owner=user_profile, status='pending',
+            celery_task_id='task-revoke-fail',
+        )
+        resp = auth_client.post('/api/document/remove/', {'id': doc.id})
+        assert resp.status_code == 200
+        assert not UserDocument.objects.filter(id=doc.id).exists()
 
 
 class TestDocumentList:
