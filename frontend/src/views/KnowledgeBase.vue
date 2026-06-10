@@ -33,9 +33,6 @@
       </div>
     </div>
 
-    <!-- 上传/删除错误提示 -->
-    <p v-if="uploadError" class="text-error text-sm mt-2">{{ uploadError }}</p>
-
     <!-- daisyUI 删除确认 Modal -->
     <dialog class="modal" :class="{ 'modal-open': showDeleteModal }">
       <div class="modal-box">
@@ -56,9 +53,10 @@ import UploadZone from '@/components/knowledge/UploadZone.vue'
 import DocumentCard from '@/components/knowledge/DocumentCard.vue'
 import { uploadDocument, removeDocument } from '@/js/http/api.js'
 import { useDocumentPolling } from '@/composables/useDocumentPolling.js'
+import { useToast } from '@/composables/useToast'
 
 const { documents, startPolling, refresh } = useDocumentPolling()
-const uploadError = ref('')
+const toast = useToast()
 const deleteTargetId = ref(null)
 const showDeleteModal = ref(false)
 
@@ -67,12 +65,12 @@ onMounted(() => {
 })
 
 async function handleUpload(file, done) {
-  uploadError.value = ''
   try {
     await uploadDocument(file)
+    toast.success('文档已上传，处理中...')
     await refresh()
   } catch (e) {
-    uploadError.value = e.response?.data?.message || '上传失败，请重试'
+    toast.error(e.response?.data?.message || '上传失败，请重试')
   } finally {
     done()
   }
@@ -91,9 +89,10 @@ async function handleDelete() {
 
   try {
     await removeDocument(docId)
+    toast.success('文档已删除')
   } catch (e) {
     documents.value.splice(idx, 0, removed)
-    uploadError.value = e.response?.data?.message || '删除失败'
+    toast.error(e.response?.data?.message || '删除失败')
   }
 }
 </script>

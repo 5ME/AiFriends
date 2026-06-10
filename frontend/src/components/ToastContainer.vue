@@ -7,8 +7,12 @@
     <div
       v-for="t in toasts"
       :key="t.id"
-      :class="['alert', `alert-${t.type}`]"
-      class="shadow-lg"
+      :class="{
+        'alert alert-soft alert-success': t.type === 'success',
+        'alert alert-soft alert-error': t.type === 'error',
+        'alert alert-soft alert-warning': t.type === 'warning',
+        'alert alert-soft alert-info': t.type === 'info',
+      }"
       role="alert"
     >
       <!-- success icon: 勾选圆圈 -->
