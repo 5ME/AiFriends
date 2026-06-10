@@ -40,6 +40,8 @@ class DocumentChunk(models.Model):
     )
     chunk_index = models.IntegerField(default=0)
     token_count = models.IntegerField(default=0)
+    content_hash = models.CharField(max_length=64, blank=True, default='',
+                                    help_text='SHA-256 of content for incremental update')
     metadata = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
 
