@@ -1,4 +1,4 @@
-import { reactive } from 'vue'
+import { reactive, readonly } from 'vue'
 
 const state = reactive({
   toasts: []
@@ -25,7 +25,7 @@ export function useToast() {
   }
 
   return {
-    toasts: state.toasts,
+    toasts: readonly(state.toasts),
     success: (msg) => add('success', msg),
     error:   (msg) => add('error', msg, 0),
     warning: (msg) => add('warning', msg),
