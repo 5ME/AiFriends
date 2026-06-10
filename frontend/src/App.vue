@@ -1,5 +1,5 @@
 <script setup>
-
+import ToastContainer from '@/components/ToastContainer.vue'
 import NavBar from "@/components/navbar/NavBar.vue";
 import {onMounted} from "vue";
 import api from "@/js/http/api.js";
@@ -32,6 +32,7 @@ onMounted(async () => {
   <NavBar>
     <RouterView/>
   </NavBar>
+  <ToastContainer />
 </template>
 
 <style scoped>
