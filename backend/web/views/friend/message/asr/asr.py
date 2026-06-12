@@ -27,7 +27,7 @@ class ASRView(APIView):
                                 status=status.HTTP_400_BAD_REQUEST)
             logger.info('ASR 开始')
             pcm_data = audio.read()
-            # 在同步上下文中获取 UserProfile.id，避免 async 内触发懒加载 DB 查询
+            # 使用 UserProfile.id 而非 User.id — APIUsage.user 是 UserProfile 的 FK
             user_id = self.request.user.userprofile.id
             text = asyncio.run(self.run_asr_task(pcm_data, user_id))
             logger.info('ASR 完成, text_length=%d', len(text))

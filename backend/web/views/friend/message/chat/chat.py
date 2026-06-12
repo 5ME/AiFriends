@@ -268,9 +268,12 @@ class MessageChatView(APIView):
             asyncio.run(self.run_tts_task(app, inputs, mq, voice_id, user_id))
         except Exception:
             logger.exception('Chat Agent 执行异常')
-            mq.put_nowait({'error': '系统异常，请稍后重试'})
+            try:
+                mq.put({'error': '系统异常，请稍后重试'})
+            except queue.Full:
+                logger.warning('队列满，错误消息丢弃')
         finally:
-            mq.put_nowait(None)
+            mq.put(None)  # 阻塞确保哨兵送达；消费者死掉时 daemon 线程随 worker 退出清理
         # TTS usage 在同步上下文中写入（避免 async 中调 ORM 的 SynchronousOnlyOperation）
         if hasattr(self, '_tts_usage'):
             record_api_usage(**self._tts_usage)
