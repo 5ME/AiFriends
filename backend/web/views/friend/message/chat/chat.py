@@ -187,11 +187,14 @@ class MessageChatView(APIView):
             message: str
     ):
         start_time = time.time()
-        mq = queue.Queue()
+        mq = queue.Queue(maxsize=500)
         logger.info('Chat Agent 开始, friend_id=%s', friend.id)
         voice_id = friend.character.voice.voice_id if friend.character.voice else ''
         user_id = friend.user_profile_id
-        thread = threading.Thread(target=self.work, args=(app, inputs, mq, voice_id, user_id))
+        thread = threading.Thread(
+            target=self.work, args=(app, inputs, mq, voice_id, user_id),
+            daemon=True,  # 非 daemon 线程会在 worker 退出时阻止进程关闭
+        )
         thread.start()
 
         full_output = []

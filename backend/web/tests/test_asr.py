@@ -100,3 +100,35 @@ class TestASREndpoint:
             {"audio": _dummy_audio()},
         )
         assert resp.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+
+    @patch("web.views.friend.message.asr.asr.record_api_usage")
+    @patch("web.views.friend.message.asr.asr.websockets.connect")
+    def test_asr_usage_uses_userprofile_id(
+        self, mock_ws_connect, mock_record, auth_client, user, db, mock_asr_ws,
+    ):
+        """ASR usage 应记录 UserProfile.id 而非 User.id（防止 FK 错账）"""
+        from django.contrib.auth.models import User
+        from web.models.user import UserProfile
+
+        mock_ws_connect.return_value = mock_asr_ws
+
+        # 构造 User.id != UserProfile.id 的场景：
+        # 创建一个 dummy User+UserProfile 占位，使 UserProfile 自增序列偏移
+        dummy_user = User.objects.create_user(username="asr_test_dummy")
+        UserProfile.objects.create(user=dummy_user)
+
+        # 删除测试用户的 Profile 并重建，使其获得一个不同于 User.id 的新 id
+        old_up = UserProfile.objects.get(user=user)
+        old_up.delete()
+        new_up = UserProfile.objects.create(user=user)
+        assert user.id != new_up.id, "前置条件失败：User.id 应不等于 UserProfile.id"
+
+        resp = auth_client.post(
+            "/api/friend/message/asr/asr/",
+            {"audio": _dummy_audio()},
+        )
+        assert resp.status_code == status.HTTP_200_OK
+        mock_record.assert_called_once()
+        assert mock_record.call_args[1]["user_id"] == new_up.id, (
+            f"应传 UserProfile.id({new_up.id})，而非 User.id({user.id})"
+        )

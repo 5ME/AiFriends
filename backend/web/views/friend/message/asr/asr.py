@@ -27,7 +27,9 @@ class ASRView(APIView):
                                 status=status.HTTP_400_BAD_REQUEST)
             logger.info('ASR 开始')
             pcm_data = audio.read()
-            text = asyncio.run(self.run_asr_task(pcm_data))
+            # 在同步上下文中获取 UserProfile.id，避免 async 内触发懒加载 DB 查询
+            user_id = self.request.user.userprofile.id
+            text = asyncio.run(self.run_asr_task(pcm_data, user_id))
             logger.info('ASR 完成, text_length=%d', len(text))
             return Response({'message': 'success', 'text': text})
         except Exception:
@@ -35,8 +37,7 @@ class ASRView(APIView):
             return Response({'message': '系统异常'},
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    async def run_asr_task(self, pcm_data):
-        user_id = self.request.user.id
+    async def run_asr_task(self, pcm_data, user_id):
         start = time.time()
         success = True
         error_message = ''
