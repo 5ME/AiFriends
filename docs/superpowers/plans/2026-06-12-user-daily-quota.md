@@ -182,11 +182,13 @@ logger = logging.getLogger(__name__)
 def record_api_usage(*, user_id, api_type, model_name,
                      token_count=0, duration_ms=0,
                      success=True, error_message='',
-                     update_quota=True):
+                     update_quota=True,
+                     quota_deduct=None):
     """记录 AI API 调用用量 + 更新用户每日配额。
 
     update_quota=False 用于系统功能（如 Memory Agent），
-    用量仍写入 APIUsage 但跳过量配额更新。
+    用量仍写入 APIUsage 但跳过配额更新。
+    quota_deduct 用于扣除 LLM 系统 overhead（不传则默认 = token_count）。
     """
     try:
         from web.models.usage import APIUsage
@@ -207,17 +209,18 @@ def record_api_usage(*, user_id, api_type, model_name,
         return
 
     try:
-        _update_quota(user_id, api_type, token_count)
+        deduct = quota_deduct if quota_deduct is not None else token_count
+        _update_quota(user_id, api_type, deduct)
     except Exception:
         logger.exception('UserQuota 更新失败: user=%s, type=%s', user_id, api_type)
 
 
-def _update_quota(user_id, api_type, token_count):
+def _update_quota(user_id, api_type, deduct):
     from django.db.models import F
     from django.utils import timezone
     from web.models.quota import UserQuota
 
-    quota_value = _quota_value(api_type, token_count)
+    quota_value = _quota_value(api_type, deduct)
     field_name = API_TYPE_TO_FIELD[api_type]
 
     quota, _ = UserQuota.objects.get_or_create(
@@ -261,6 +264,7 @@ In `settings.py`, find a suitable location after existing app-specific settings 
 ```python
 # 用户每日 API 配额
 QUOTA_LLM_TOKENS_PER_DAY = 10_000
+QUOTA_LLM_OVERHEAD_RATIO = 1.8  # 中文 token/char 经验系数（扣除系统 prompt overhead）
 QUOTA_TTS_CHARS_PER_DAY = 10_000
 QUOTA_ASR_SECONDS_PER_DAY = 300
 QUOTA_EMBEDDING_TOKENS_PER_DAY = 50_000
@@ -326,30 +330,61 @@ Expected: 5 passed
 
 ---
 
-### Task 6: Chat View — LLM 配额检查
+### Task 6: Chat View — LLM 配额检查 + 系统开销扣除
 
 **File:** Modify: `backend/web/views/friend/message/chat/chat.py`
 
-- [ ] **Step 1: 在 post() 中加配额检查**
+- [ ] **Step 1: 添加 imports**
 
-At the top of `chat.py`, add import:
+At the top of `chat.py`, add:
 ```python
 from web.utils.quota import check_quota
+from django.conf import settings
 ```
 
-In `post()`, after `friend = friends.first()` (line 155) and before `app = ChatGraph.create_app()` (line 156), insert:
+- [ ] **Step 2: 在 post() 中加配额检查**
+
+In `post()`, after `friend = friends.first()` and before `app = ChatGraph.create_app()`, insert:
 
 ```python
         # === 用户每日 LLM 配额检查 ===
         allowed, cur, limit = check_quota(friend.user_profile_id, 'llm')
         if not allowed:
-            return Response(
+            return JsonResponse(
                 {'message': f'今日对话配额已用尽({cur}/{limit})，请明天再试'},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 ```
 
-- [ ] **Step 2: 运行 Chat Agent 测试**
+- [ ] **Step 3: 在 event_stream() 中计算系统开销**
+
+Replace the existing `record_api_usage` call (near line ~232) with:
+
+```python
+        # === 计算 LLM 系统 overhead（从配额中扣除） ===
+        framework_prompt = SystemPrompt.objects.filter(
+            title=SystemPrompt.Title.REPLY
+        ).first()
+        system_chars = (
+            len(TOOL_RULES) +
+            len("【角色性格】\n") + len(friend.character.system_prompt.strip()) +
+            len((framework_prompt.prompt if framework_prompt else "").strip())
+        )
+        system_overhead = int(system_chars * settings.QUOTA_LLM_OVERHEAD_RATIO)
+
+        record_api_usage(
+            user_id=user_id,
+            api_type='llm',
+            model_name='deepseek-v4-flash',
+            token_count=total_tokens,
+            duration_ms=duration_ms,
+            success=not has_error,
+            error_message=error_message,
+            quota_deduct=max(0, total_tokens - system_overhead),
+        )
+```
+
+- [ ] **Step 4: 运行 Chat Agent 测试**
 
 ```bash
 cd backend && python -m pytest web/tests/test_chat_agent.py -v
@@ -731,6 +766,29 @@ class TestRecordApiUsageQuota:
         assert UserQuota.objects.get(user=user_profile).llm_tokens_used == 100
         assert UserQuota.objects.get(user=other_profile).llm_tokens_used == 200
 
+    def test_quota_deduct_uses_given_value(self, user_profile):
+        """quota_deduct 参数 → 配额扣除传入值而非 token_count"""
+        record_api_usage(
+            user_id=user_profile.id, api_type='llm',
+            model_name='deepseek-v4-flash',
+            token_count=500,      # API 记录完整值
+            quota_deduct=200,     # 配额只扣 200（模拟 overhead 扣除后）
+        )
+        today = timezone.localdate()
+        quota = UserQuota.objects.get(user=user_profile, date=today)
+        assert quota.llm_tokens_used == 200
+
+    def test_quota_deduct_none_uses_token_count(self, user_profile):
+        """quota_deduct=None → 配额默认使用 token_count"""
+        record_api_usage(
+            user_id=user_profile.id, api_type='llm',
+            model_name='deepseek-v4-flash',
+            token_count=300,
+            # quota_deduct 不传
+        )
+        quota = UserQuota.objects.get(user=user_profile, date=timezone.localdate())
+        assert quota.llm_tokens_used == 300
+
 
 @pytest.mark.django_db
 class TestUserQuotaModel:
@@ -759,7 +817,7 @@ class TestUserQuotaModel:
 cd backend && python -m pytest web/tests/test_quota.py -v
 ```
 
-Expected: all new tests pass (15 tests)
+Expected: all new tests pass (17 tests)
 
 ---
 
@@ -867,7 +925,7 @@ Expected: 4 passed
 cd backend && python -m pytest web/tests/ -v
 ```
 
-Expected: ~163 tests passed (148 existing + 15 new)
+Expected: ~170 tests passed (148 existing + 17 new + 4 integration + 1 TTS)
 
 - [ ] **Step 2: Commit**
 
@@ -883,7 +941,9 @@ feat: P1-A1 用户每日 API 配额系统
 - Chat/ASR/Embedding 超限返回 HTTP 429
 - TTS 超限静默降级纯文本（_stream_llm_only 降级路径）
 - ASR 采样点 → 秒转换（token_count // 16000）
-- 12 + 4 个新测试（单元 + 集成）
+- 17 + 5 个新测试（单元 + 集成）
+- LLM 系统 overhead 从配额扣除（QUOTA_LLM_OVERHEAD_RATIO=1.8）
+- record_api_usage 新增 quota_deduct 参数
 
 Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 '@

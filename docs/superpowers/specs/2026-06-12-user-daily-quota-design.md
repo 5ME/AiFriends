@@ -121,6 +121,7 @@ Chat 超限返回 HTTP 429，TTS 超限静默降级纯文本——行为不同�
 ```python
 # settings.py
 QUOTA_LLM_TOKENS_PER_DAY = 10_000          # ~20 轮对话
+QUOTA_LLM_OVERHEAD_RATIO = 1.8            # 中文 token/char 经验系数（扣除系统 prompt）
 QUOTA_TTS_CHARS_PER_DAY = 10_000           # ~20 条语音
 QUOTA_ASR_SECONDS_PER_DAY = 300            # ~20 次语音输入
 QUOTA_EMBEDDING_TOKENS_PER_DAY = 50_000    # ~100 个 chunk
@@ -153,6 +154,74 @@ else:
 
 `check_quota()` 比较时使用相同的 `asr_seconds_used` 字段，单位一致。
 
+### 2.7 LLM 系统开销扣除
+
+Chat Agent 每次调用会注入 3 层 SystemMessage（工具规则 + 角色设定 + 框架约束），这些是系统级固定开销，不由用户触发。当前 `total_tokens` 将所有上下文合并计算，用户配额被不合理稀释。
+
+**实测数据（消息 #83，红孩儿角色）：**
+
+```
+工具规则 (220 chars)        → ~420 token  ← 系统
+角色性格 (28 chars)         →  ~65 token  ← 系统
+框架约束 (132 chars)        → ~250 token  ← 系统
+用户消息 (11 chars)         →  ~22 token  ← 用户
+AI 回复                     →  160 token  ← 用户
+────────────────────────────────────────
+总消耗: 917 token
+系统 overhead: ~735 token (80%)
+用户实际:      ~182 token
+```
+
+**方案**：基于实际 system prompt 内容长度估算 overhead，从配额中扣除。
+
+```python
+# settings.py
+QUOTA_LLM_OVERHEAD_RATIO = 1.8  # 中英文混合 token/char 经验系数
+
+# chat.py — add_system_prompt() 之后计算
+system_chars = (
+    len(TOOL_RULES) +
+    len("【角色性格】\n") + len(friend.character.system_prompt) +
+    len(framework.prompt if framework else "")
+)
+system_overhead = int(system_chars * QUOTA_LLM_OVERHEAD_RATIO)
+```
+
+**扣除 vs 不扣除：**
+
+| 组成部分 | 扣？ | 理由 |
+|---------|------|------|
+| 工具规则 (TOOL_RULES) | ✅ 扣 | 代码常量，用户不可见 |
+| 角色设定 (system_prompt) | ✅ 扣 | 创建者选的，不是用户选的 |
+| 框架约束 (SystemPrompt.REPLY) | ✅ 扣 | 平台配置，用户不可控 |
+| 长期记忆 (memory) | ❌ 不扣 | 用户历史对话产物 |
+| 历史对话 | ❌ 不扣 | 用户行为 |
+| 用户消息 + AI 回复 | ❌ 不扣 | 用户行为 + 结果 |
+
+**`record_api_usage` 适配**：新增 `quota_deduct` 参数，不传时默认 = `token_count`（保持 TTS/ASR/Embedding 不变）。
+
+```python
+# Chat Agent
+record_api_usage(
+    ...,
+    token_count=total_tokens,
+    quota_deduct=max(0, total_tokens - system_overhead),
+)
+# TTS/ASR/Embedding — 不传 quota_deduct，默认 token_count
+```
+
+**自适应验证**：
+
+| 场景 | system_prompt | overhead | quota_deduct (total=917) |
+|------|-------------|---------|------|
+| 红孩儿 (28 chars) | 394 chars | 709 | 208 |
+| 丰富角色 (500 chars) | 866 chars | 1559 | 0（≥total，全免） |
+| 超丰富角色 (1000 chars) | 1366 chars | 2459 | 0 |
+
+**已知简化**：`add_system_prompt()` 中 Layer 2 的模板文本（`"【与用户的长期记忆】\n"` 标签 + `"\n\n"` 分隔符 ~14 chars → ~26 token）未单独计入 overhead。这些是系统格式开销，在当前 10000/天限额下 ~0.3%，在 ±20% 误差容忍范围内。后续升级 tiktoken 时可一并修正。
+
+**误差分析**：系数 1.8 对中英文混合有 ±20% 误差。在 10000/天限额下，±100 token = 1%，可接受。以后可升级为 tiktoken 精确计算。
+
 ---
 
 ## 三、`record_api_usage()` 增强
@@ -163,10 +232,12 @@ else:
 def record_api_usage(*, user_id, api_type, model_name,
                      token_count=0, duration_ms=0,
                      success=True, error_message='',
-                     update_quota=True):  # 新增：是否更新 UserQuota
+                     update_quota=True,         # 是否更新 UserQuota
+                     quota_deduct=None):         # 配额扣除值（默认 = token_count）
     """记录 AI API 调用用量 + 更新用户每日配额。
 
     update_quota=False 用于系统功能（如 Memory Agent），不扣用户额度。
+    quota_deduct 用于 LLM 系统开销扣除（Chat Agent 传入扣除 overhead 后的值）。
     """
     try:
         from web.models.usage import APIUsage
@@ -181,18 +252,19 @@ def record_api_usage(*, user_id, api_type, model_name,
         )
     except Exception:
         logger.exception('APIUsage 写入失败: user=%s, type=%s', user_id, api_type)
-        return  # 不安全的写入失败，配额也不更新
+        return  # APIUsage 写入失败，配额也不更新
 
     if not (update_quota and user_id is not None):
         return
 
-    # 配额原子更新（新增）
+    # 配额原子更新
     try:
         from django.db.models import F
         from django.utils import timezone
-        from web.models.quota import UserQuota  # 新增模型
+        from web.models.quota import UserQuota
 
-        quota_value = _quota_value(api_type, token_count)
+        deduct = quota_deduct if quota_deduct is not None else token_count
+        quota_value = _quota_value(api_type, deduct)
 
         quota, _ = UserQuota.objects.get_or_create(
             user_id=user_id,
@@ -217,7 +289,7 @@ def record_api_usage(*, user_id, api_type, model_name,
 | 调用方 | 改动 |
 |--------|------|
 | Memory Agent (`tasks.py:73,84`) | 加 `update_quota=False` |
-| Chat Agent (`chat.py:232`) | 无需改动（默认 `True`） |
+| Chat Agent (`chat.py:232`) | 加 `quota_deduct=max(0, total_tokens - system_overhead)` |
 | TTS (`chat.py` `_tts_usage`) | 无需改动 |
 | ASR (`asr.py:91`) | 无需改动 |
 | Embedding | 无需改动 |
@@ -330,3 +402,4 @@ Celery 任务执行 → process_document_task()
 | 10 | Memory Agent 不更新配额 | `record_api_usage(update_quota=False)` 不修改 UserQuota |
 | 11 | ASR 采样点 → 秒转换正确 | `len(pcm_data)//2 // 16000` = 实际秒数 |
 | 12 | `F()` 原子更新不丢计数 | 模拟并发调用 |
+| 13 | LLM 系统开销从配额扣除 | `quota_deduct` < `token_count` 时配额只扣扣除后的值 |
