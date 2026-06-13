@@ -1,5 +1,6 @@
 """Tests for check_quota, record_api_usage quota update, and UserQuota model"""
 import time
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
@@ -63,7 +64,7 @@ class TestCheckQuota:
         # 今天超限
         assert check_quota(user_profile.id, 'llm')[0] is False
         # 模拟明天：新日期无记录 → 从 0 开始
-        with patch.object(timezone, 'localdate', return_value=today.replace(day=today.day + 1)):
+        with patch.object(timezone, 'localdate', return_value=today + timedelta(days=1)):
             assert check_quota(user_profile.id, 'llm')[0] is True
 
     @override_settings(QUOTA_LLM_TOKENS_PER_DAY=0)
