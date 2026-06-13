@@ -3,6 +3,7 @@ from django.contrib import admin
 from web.models.document import UserDocument, DocumentChunk
 from web.models.character import Character, Voice
 from web.models.friend import Friend, Message, SystemPrompt
+from web.models.usage import APIUsage
 from web.models.user import UserProfile
 
 
@@ -53,3 +54,15 @@ class DocumentChunkAdmin(admin.ModelAdmin):
     exclude = ('embedding',)
     list_select_related = ('document__owner__user', 'owner__user')
     raw_id_fields = ('document', 'owner')
+
+
+@admin.register(APIUsage)
+class APIUsageAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'api_type', 'model_name',
+                    'token_count', 'duration_ms', 'success', 'created_at')
+    search_fields = ('user__user__username', 'model_name')
+    list_filter = ('api_type', 'success', 'created_at')
+    readonly_fields = ('id', 'user', 'api_type', 'model_name',
+                       'token_count', 'duration_ms', 'success',
+                       'error_message', 'created_at')
+    list_select_related = ('user__user',)

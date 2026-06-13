@@ -18,6 +18,7 @@ from web.views.friend.message.chat.chat import MessageChatView
 from web.views.friend.message.get_history import GetHistoryView
 from web.views.friend.remove import FriendRemoveView
 from web.views.health import HealthView
+from web.views.usage_summary import UsageSummaryView
 from web.views.homepage.index import HomepageIndexView
 from web.views.index import index
 from web.views.user.account.get_user_info import GetUserInfoView
@@ -29,6 +30,7 @@ from web.views.user.profile.update import UpdateProfileView
 
 urlpatterns = [
     path('api/health/', HealthView.as_view()),
+    path('api/admin/usage/summary/', UsageSummaryView.as_view()),
 
     path('api/user/account/login/', LoginView.as_view()),
     path('api/user/account/logout/', LogoutView.as_view()),
