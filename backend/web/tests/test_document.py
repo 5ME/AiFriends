@@ -386,6 +386,15 @@ class TestDocumentUpload:
         doc = UserDocument.objects.get(id=resp.data['id'])
         assert doc.celery_task_id == 'test-task-uuid-123'
 
+    @patch("web.views.document.upload.check_quota")
+    def test_upload_quota_exceeded_returns_429(self, mock_check, auth_client):
+        """embedding 配额超限 → 上传被拒"""
+        mock_check.return_value = (False, 50_000, 50_000)
+        file = SimpleUploadedFile("test.txt", b"hello world", content_type="text/plain")
+        resp = auth_client.post("/api/document/upload/", {"file": file})
+        assert resp.status_code == 429
+        assert "配额" in resp.json()["message"]
+
 
 class TestDocumentRemove:
     """POST /api/document/remove/ 删除文档"""

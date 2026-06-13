@@ -10,7 +10,8 @@ import uuid
 from typing import List, Dict
 
 import websockets
-from django.http import StreamingHttpResponse
+from django.conf import settings
+from django.http import JsonResponse, StreamingHttpResponse
 from langchain_core.messages import HumanMessage, BaseMessageChunk, BaseMessage, SystemMessage, AIMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
 from rest_framework import status
@@ -21,6 +22,7 @@ from rest_framework.views import APIView
 from websockets.client import ClientConnection
 
 from web.models.friend import Friend, Message, SystemPrompt
+from web.utils.quota import check_quota
 from web.utils.usage import record_api_usage
 from web.views.friend.message.chat.graph import ChatGraph
 from web.views.friend.message.memory.tasks import update_memory_task
@@ -153,6 +155,13 @@ class MessageChatView(APIView):
             response['Cache-Control'] = 'no-cache'
             return response
         friend = friends.first()
+        # === 用户每日 LLM 配额检查 ===
+        allowed, cur, limit = check_quota(friend.user_profile_id, 'llm')
+        if not allowed:
+            return JsonResponse(
+                {'message': f'今日对话配额已用尽({cur}/{limit})，请明天再试'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
         app = ChatGraph.create_app()
         inputs = {
             'messages': [HumanMessage(message)],
@@ -187,11 +196,14 @@ class MessageChatView(APIView):
             message: str
     ):
         start_time = time.time()
-        mq = queue.Queue()
+        mq = queue.Queue(maxsize=500)
         logger.info('Chat Agent 开始, friend_id=%s', friend.id)
         voice_id = friend.character.voice.voice_id if friend.character.voice else ''
         user_id = friend.user_profile_id
-        thread = threading.Thread(target=self.work, args=(app, inputs, mq, voice_id, user_id))
+        thread = threading.Thread(
+            target=self.work, args=(app, inputs, mq, voice_id, user_id),
+            daemon=True,  # 非 daemon 线程会在 worker 退出时阻止进程关闭
+        )
         thread.start()
 
         full_output = []
@@ -224,6 +236,16 @@ class MessageChatView(APIView):
         output_tokens = full_usage.get('output_tokens', 0)
         total_tokens = full_usage.get('total_tokens', 0)
         duration_ms = int((time.time() - start_time) * 1000)
+        # === 计算 LLM 系统 overhead（工具规则 + 角色设定 + 框架约束），从配额扣除 ===
+        framework = SystemPrompt.objects.filter(
+            title=SystemPrompt.Title.REPLY
+        ).first()
+        system_chars = (
+            len(TOOL_RULES) +
+            len("【角色性格】\n") + len(friend.character.system_prompt.strip()) +
+            len((framework.prompt if framework else "").strip())
+        )
+        system_overhead = int(system_chars * settings.QUOTA_LLM_OVERHEAD_RATIO)
         record_api_usage(
             user_id=user_id,
             api_type='llm',
@@ -232,6 +254,7 @@ class MessageChatView(APIView):
             duration_ms=duration_ms,
             success=not has_error,
             error_message=error_message,
+            quota_deduct=max(0, total_tokens - system_overhead),
         )
         try:
             Message.objects.create(
@@ -261,13 +284,20 @@ class MessageChatView(APIView):
             voice_id: str,
             user_id: int,
     ):
+        # === TTS 配额检查（sync 上下文，避免 async 内调 ORM） ===
+        tts_allowed, _, _ = check_quota(user_id, 'tts')
+        if not tts_allowed:
+            logger.warning('TTS 跳过：今日配额已用尽, user_id=%s', user_id)
         try:
-            asyncio.run(self.run_tts_task(app, inputs, mq, voice_id, user_id))
+            asyncio.run(self.run_tts_task(app, inputs, mq, voice_id, user_id, tts_allowed))
         except Exception:
             logger.exception('Chat Agent 执行异常')
-            mq.put_nowait({'error': '系统异常，请稍后重试'})
+            try:
+                mq.put({'error': '系统异常，请稍后重试'})
+            except queue.Full:
+                logger.warning('队列满，错误消息丢弃')
         finally:
-            mq.put_nowait(None)
+            mq.put(None)  # 阻塞确保哨兵送达；消费者死掉时 daemon 线程随 worker 退出清理
         # TTS usage 在同步上下文中写入（避免 async 中调 ORM 的 SynchronousOnlyOperation）
         if hasattr(self, '_tts_usage'):
             record_api_usage(**self._tts_usage)
@@ -280,8 +310,13 @@ class MessageChatView(APIView):
             mq: queue.Queue,
             voice_id: str,
             user_id: int,
+            tts_allowed: bool = True,
     ):
         task_id = uuid.uuid4().hex
+        if not tts_allowed:
+            # 跳过 TTS：只跑 LLM 文字流，TTS usage 不记录（无 _tts_usage）
+            await self._stream_llm_only(app, inputs, mq, user_id)
+            return
         wss_url = os.getenv('WSS_URL')
         api_key = os.getenv('API_KEY')
         headers = {'Authorization': f'Bearer {api_key}'}
@@ -406,3 +441,36 @@ class MessageChatView(APIView):
                 event = data['header']['event']
                 if event in ['task-finished', 'task-failed']:
                     break
+
+    async def _stream_llm_only(
+            self,
+            app: CompiledStateGraph,
+            inputs,
+            mq: queue.Queue,
+            user_id: int,
+    ):
+        """仅 LLM 文字流的降级路径 — TTS 配额超限或 TTS 失败时使用。"""
+        try:
+            async for msg, metadata in app.astream(inputs, stream_mode="messages"):
+                if isinstance(msg, ToolMessage) and msg.name == "search_knowledge_base":
+                    citations = []
+                    for m in CITATION_RE.finditer(msg.content):
+                        citations.append({
+                            "index": int(m.group(1)),
+                            "title": m.group(2),
+                            "chunk_index": int(m.group(3)),
+                        })
+                    if citations:
+                        mq.put_nowait({'citations': citations})
+
+                elif isinstance(msg, BaseMessageChunk):
+                    if msg.content:
+                        mq.put_nowait({'content': msg.content})
+                    if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
+                        mq.put_nowait({'usage': msg.usage_metadata})
+        except Exception:
+            logger.exception('LLM 文字流异常（TTS 降级模式）')
+            try:
+                mq.put_nowait({'error': '系统异常，请稍后重试'})
+            except queue.Full:
+                pass

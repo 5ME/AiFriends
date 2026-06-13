@@ -72,6 +72,7 @@ def update_memory_task(friend_id: int):
         record_api_usage(
             user_id=user_id, api_type='llm', model_name='deepseek-v4-flash',
             token_count=token_count, duration_ms=duration_ms, success=True,
+            update_quota=False,
         )
 
         logger.info('Memory 任务完成, friend_id=%d, memory_len=%d',
@@ -84,6 +85,7 @@ def update_memory_task(friend_id: int):
                 user_id=user_id, api_type='llm', model_name='deepseek-v4-flash',
                 token_count=0, duration_ms=duration_ms,
                 success=False, error_message=str(exc)[:500],
+                update_quota=False,
             )
         # 4xx 客户端错误（400/401/403/404 等）是永久性故障，重试无意义
         # 但 429 RateLimit 是临时限流，应重试

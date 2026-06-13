@@ -1,0 +1,35 @@
+<h2>Toast 需要支持哪些类型？</h2>
+<p class="subtitle">不同类型有不同的颜色和图标，用于不同场景</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="success" onclick="toggleSelect(this)">
+    <div class="content">
+      <h3>✅ success — 成功</h3>
+      <p>绿色。场景：上传成功、保存成功、操作完成</p>
+    </div>
+  </div>
+  <div class="option" data-choice="error" onclick="toggleSelect(this)">
+    <div class="content">
+      <h3>❌ error — 错误</h3>
+      <p>红色。场景：上传失败、网络异常、表单校验失败</p>
+    </div>
+  </div>
+  <div class="option" data-choice="warning" onclick="toggleSelect(this)">
+    <div class="content">
+      <h3>⚠️ warning — 警告</h3>
+      <p>橙色。场景：文件过大警告、即将超限</p>
+    </div>
+  </div>
+  <div class="option" data-choice="info" onclick="toggleSelect(this)">
+    <div class="content">
+      <h3>ℹ️ info — 信息</h3>
+      <p>蓝色。场景：操作提示、功能说明</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 1.5rem;">
+  <p class="subtitle" style="font-size: 0.85rem; opacity: 0.6;">
+    可多选。建议至少选 success + error，覆盖现状中所有 errorMessage 场景。
+  </p>
+</div>

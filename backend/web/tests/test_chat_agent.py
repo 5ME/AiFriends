@@ -283,6 +283,53 @@ class TestChatSSEEndpoint:
         )
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
 
+    @patch("web.views.friend.message.chat.chat.check_quota")
+    def test_quota_exceeded_returns_429(self, mock_check, auth_client, friend):
+        """LLM 配额超限 → 429"""
+        mock_check.return_value = (False, 10_000, 10_000)
+        resp = auth_client.post(
+            "/api/friend/message/chat/",
+            {"friend_id": friend.id, "message": "你好"},
+        )
+        assert resp.status_code == 429
+        assert "配额" in resp.json()["message"]
+
+    @patch("web.views.friend.message.chat.chat.check_quota")
+    @patch("web.views.friend.message.chat.chat.ChatGraph.create_app")
+    def test_tts_quota_exceeded_skips_audio(
+        self, mock_create_app, mock_check, auth_client, friend, mock_compiled_graph,
+    ):
+        """TTS 配额超限 → 文字流正常，无音频"""
+        mock_create_app.return_value = mock_compiled_graph
+
+        def side_effect(user_id, api_type):
+            if api_type == 'llm':
+                return (True, 0, 10_000)
+            elif api_type == 'tts':
+                return (False, 10_000, 10_000)
+            return (True, 0, 10_000)
+        mock_check.side_effect = side_effect
+
+        resp = auth_client.post(
+            "/api/friend/message/chat/",
+            {"friend_id": friend.id, "message": "Hi"},
+        )
+        assert resp.status_code == 200
+
+        content = b"".join(resp.streaming_content).decode("utf-8")
+        lines = content.strip().split("\n\n")
+
+        # 有文字
+        content_lines = [l for l in lines if "content" in l and "[DONE]" not in l]
+        assert len(content_lines) >= 1, f"Expected content events, got: {lines}"
+
+        # 无音频
+        audio_lines = [l for l in lines if "audio" in l]
+        assert len(audio_lines) == 0, "TTS 配额超限不应有音频"
+
+        # 有 DONE 哨兵
+        assert any("[DONE]" in l for l in lines)
+
 
 class TestKnowledgeBaseToolDescription:
     """search_knowledge_base tool description 不应限定百炼平台"""

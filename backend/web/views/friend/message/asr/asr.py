@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from web.utils.quota import check_quota
 from web.utils.usage import record_api_usage
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,35 @@ class ASRView(APIView):
                                 status=status.HTTP_400_BAD_REQUEST)
             logger.info('ASR 开始')
             pcm_data = audio.read()
-            text = asyncio.run(self.run_asr_task(pcm_data))
+            # 使用 UserProfile.id 而非 User.id — APIUsage.user 是 UserProfile 的 FK
+            user_id = self.request.user.userprofile.id
+            # === 用户每日 ASR 配额检查（sync 上下文） ===
+            allowed, cur, limit = check_quota(user_id, 'asr')
+            if not allowed:
+                return Response(
+                    {'message': f'今日语音识别配额已用尽({cur}/{limit})，可继续打字聊天'},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
+            result = asyncio.run(self.run_asr_task(pcm_data))
+            text = result['text']
+            success = result['success']
+            error_message = result['error_message']
+            duration_ms = result['duration_ms']
+
+            # record_api_usage 在 sync 上下文调用（避免 async 内调 ORM）
+            record_api_usage(
+                user_id=user_id,
+                api_type='asr',
+                model_name='gummy-realtime-v1',
+                token_count=len(pcm_data) // 2,  # PCM16 采样点数
+                duration_ms=duration_ms,
+                success=success,
+                error_message=error_message,
+            )
+
+            if not success:
+                raise Exception(error_message)
+
             logger.info('ASR 完成, text_length=%d', len(text))
             return Response({'message': 'success', 'text': text})
         except Exception:
@@ -36,10 +65,10 @@ class ASRView(APIView):
                             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     async def run_asr_task(self, pcm_data):
-        user_id = self.request.user.id
         start = time.time()
         success = True
         error_message = ''
+        text = ''
         try:
             task_id = uuid.uuid4().hex
             wss_url = os.getenv('WSS_URL')
@@ -78,22 +107,17 @@ class ASRView(APIView):
                     self.asr_sender(ws, task_id, pcm_data),
                     self.asr_receiver(ws)
                 )
-                return text
         except Exception as e:
             success = False
             error_message = str(e)[:500]
-            raise
         finally:
             duration_ms = int((time.time() - start) * 1000)
-            record_api_usage(
-                user_id=user_id,
-                api_type='asr',
-                model_name='gummy-realtime-v1',
-                token_count=len(pcm_data) // 2,  # PCM16 采样点数
-                duration_ms=duration_ms,
-                success=success,
-                error_message=error_message,
-            )
+        return {
+            'text': text,
+            'success': success,
+            'error_message': error_message,
+            'duration_ms': duration_ms,
+        }
 
     async def asr_sender(self, ws, task_id, pcm_data):
         chunk = 3200

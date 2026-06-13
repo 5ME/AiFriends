@@ -9,6 +9,7 @@ from backend.celery import app
 from web.documents.loaders import get_loader
 from web.documents.services import CustomEmbeddings, chunk_documents
 from web.models.document import UserDocument, DocumentChunk
+from web.utils.quota import check_quota
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,18 @@ def process_document_task(doc_id: int):
         doc = UserDocument.objects.get(id=doc_id)
         doc.status = 'processing'
         doc.save(update_fields=['status'])
+
+        # === 用户每日 embedding 配额检查 ===
+        if doc.owner_id:
+            allowed, cur, limit = check_quota(doc.owner_id, 'embedding')
+            if not allowed:
+                doc.status = 'failed'
+                doc.error_message = f'今日文档处理配额已用尽({cur}/{limit})'
+                doc.celery_task_id = ''
+                doc.save(update_fields=['status', 'error_message', 'celery_task_id'])
+                logger.warning('文档处理跳过: 配额已用尽, doc_id=%d, user_id=%d', doc_id, doc.owner_id)
+                return
+
         logger.info('文档处理开始, doc_id=%d, title=%s', doc_id, doc.title)
 
         # 拼接完整文件路径（file_url 存的是相对路径如 documents/xxx.pdf）

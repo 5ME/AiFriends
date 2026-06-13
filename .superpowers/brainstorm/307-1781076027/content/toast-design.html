@@ -1,0 +1,66 @@
+<h2>Phase 2.1: Toast 基础设施 — 设计方案</h2>
+<p class="subtitle">基于 daisyUI 5 Toast + Alert 组件，封装 Vue 3 Composable</p>
+
+<div class="section">
+  <h3>三个文件</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="text-align: left; font-family: monospace; font-size: 0.85rem;">
+      <p style="margin: 0.3em 0;"><strong>src/composables/useToast.js</strong> ← Composable（状态 + 方法）</p>
+      <p style="margin: 0.3em 0;"><strong>src/components/ToastContainer.vue</strong> ← 渲染层（daisyUI 样式）</p>
+      <p style="margin: 0.3em 0;"><strong>src/App.vue</strong> ← 修改：引用 ToastContainer</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>调用方式</h3>
+  <div class="mockup">
+    <div class="mockup-body" style="text-align: left; font-size: 0.82rem;">
+      <code style="color: #a5d6ff;">toast.success</code><code>(</code><code style="color: #c3e88d;">'上传成功'</code><code>)</code><br>
+      <code style="color: #a5d6ff;">toast.error</code><code>(</code><code style="color: #c3e88d;">'网络异常'</code><code>)</code><br>
+      <code style="color: #a5d6ff;">toast.warning</code><code>(</code><code style="color: #c3e88d;">'文件过大'</code><code>)</code><br>
+      <code style="color: #a5d6ff;">toast.info</code><code>(</code><code style="color: #c3e88d;">'提示信息'</code><code>)</code>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>视觉效果（顶部居中）</h3>
+  <div class="mockup">
+    <div class="mockup-header">Toast 堆叠示意 — daisyUI 原生样式</div>
+    <div class="mockup-body" style="padding: 1rem;">
+      <div style="margin: 0.3rem auto; width: 360px; padding: 0.8rem 1rem; border-radius: 8px; background: #dc2626; color: white; display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; opacity: 1;">
+        <span>❌</span> 上传失败，文件格式不支持
+      </div>
+      <div style="margin: 0.3rem auto; width: 360px; padding: 0.8rem 1rem; border-radius: 8px; background: #16a34a; color: white; display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; opacity: 0.85;">
+        <span>✅</span> 文档已上传，处理中...
+      </div>
+      <div style="margin: 0.3rem auto; width: 360px; padding: 0.8rem 1rem; border-radius: 8px; background: #2563eb; color: white; display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; opacity: 0.7;">
+        <span>ℹ️</span> 新消息提醒已开启
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>行为规则</h3>
+  <table style="width:100%; border-collapse: collapse; font-size: 0.85rem;">
+    <tr style="border-bottom: 1px solid #334155;"><td style="padding: 0.5em 0.8em;">自动消失</td><td style="padding: 0.5em 0.8em;">success / info / warning ：3 秒后淡出</td></tr>
+    <tr style="border-bottom: 1px solid #334155;"><td style="padding: 0.5em 0.8em;">手动关闭</td><td style="padding: 0.5em 0.8em;">error ：需点击 X 关闭（防止错过关键错误）</td></tr>
+    <tr style="border-bottom: 1px solid #334155;"><td style="padding: 0.5em 0.8em;">堆叠</td><td style="padding: 0.5em 0.8em;">多条 toast 从上到下排列，最多 5 条</td></tr>
+    <tr style="border-bottom: 1px solid #334155;"><td style="padding: 0.5em 0.8em;">动画</td><td style="padding: 0.5em 0.8em;">进入：滑入 + 淡入 / 退出：淡出</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <div class="cards">
+    <div class="card">
+      <div class="card-body">
+        <h3>设计决策</h3>
+        <p>Composable 非 Pinia — toast 是通知，不是数据</p>
+        <p>daisyUI 原生样式 — 不重复造轮子</p>
+        <p>error 手动关闭 — 用户需要看到错误信息</p>
+      </div>
+    </div>
+  </div>
+</div>
