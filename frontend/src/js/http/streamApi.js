@@ -47,7 +47,7 @@ export default async function streamApi(url, options = {}) {
 
         if (!response.ok || !response.headers.get('content-type')?.includes('text/event-stream')) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.detail || `请求失败: ${response.status}`);
+          throw new Error(errorData.message || errorData.detail || `请求失败: ${response.status}`);
         }
       },
 

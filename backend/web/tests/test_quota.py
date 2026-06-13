@@ -158,6 +158,29 @@ class TestRecordApiUsageQuota:
         assert UserQuota.objects.get(user=user_profile).llm_tokens_used == 100
         assert UserQuota.objects.get(user=other_profile).llm_tokens_used == 200
 
+    def test_quota_deduct_uses_given_value(self, user_profile):
+        """quota_deduct 参数 → 配额扣除传入值而非 token_count"""
+        record_api_usage(
+            user_id=user_profile.id, api_type='llm',
+            model_name='deepseek-v4-flash',
+            token_count=500,      # API 记录完整值
+            quota_deduct=200,     # 配额只扣 200（模拟 overhead 扣除后）
+        )
+        today = timezone.localdate()
+        quota = UserQuota.objects.get(user=user_profile, date=today)
+        assert quota.llm_tokens_used == 200
+
+    def test_quota_deduct_none_uses_token_count(self, user_profile):
+        """quota_deduct=None → 配额默认使用 token_count"""
+        record_api_usage(
+            user_id=user_profile.id, api_type='llm',
+            model_name='deepseek-v4-flash',
+            token_count=300,
+            # quota_deduct 不传
+        )
+        quota = UserQuota.objects.get(user=user_profile, date=timezone.localdate())
+        assert quota.llm_tokens_used == 300
+
 
 @pytest.mark.django_db
 class TestUserQuotaModel:

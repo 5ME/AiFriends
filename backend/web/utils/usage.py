@@ -9,11 +9,13 @@ logger = logging.getLogger(__name__)
 def record_api_usage(*, user_id, api_type, model_name,
                      token_count=0, duration_ms=0,
                      success=True, error_message='',
-                     update_quota=True):
+                     update_quota=True,
+                     quota_deduct=None):
     """记录 AI API 调用用量 + 更新用户每日配额。
 
     update_quota=False 用于系统功能（如 Memory Agent），
     用量仍写入 APIUsage 但跳过配额更新。
+    quota_deduct 用于扣除 LLM 系统 overhead（不传则默认 = token_count）。
     """
     try:
         from web.models.usage import APIUsage
@@ -34,17 +36,18 @@ def record_api_usage(*, user_id, api_type, model_name,
         return
 
     try:
-        _update_quota(user_id, api_type, token_count)
+        deduct = quota_deduct if quota_deduct is not None else token_count
+        _update_quota(user_id, api_type, deduct)
     except Exception:
         logger.exception('UserQuota 更新失败: user=%s, type=%s', user_id, api_type)
 
 
-def _update_quota(user_id, api_type, token_count):
+def _update_quota(user_id, api_type, deduct):
     from django.db.models import F
     from django.utils import timezone
     from web.models.quota import UserQuota
 
-    quota_value = _quota_value(api_type, token_count)
+    quota_value = _quota_value(api_type, deduct)
     field_name = API_TYPE_TO_FIELD[api_type]
 
     quota, _ = UserQuota.objects.get_or_create(

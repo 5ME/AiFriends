@@ -10,6 +10,7 @@ import uuid
 from typing import List, Dict
 
 import websockets
+from django.conf import settings
 from django.http import JsonResponse, StreamingHttpResponse
 from langchain_core.messages import HumanMessage, BaseMessageChunk, BaseMessage, SystemMessage, AIMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
@@ -235,6 +236,16 @@ class MessageChatView(APIView):
         output_tokens = full_usage.get('output_tokens', 0)
         total_tokens = full_usage.get('total_tokens', 0)
         duration_ms = int((time.time() - start_time) * 1000)
+        # === 计算 LLM 系统 overhead（工具规则 + 角色设定 + 框架约束），从配额扣除 ===
+        framework = SystemPrompt.objects.filter(
+            title=SystemPrompt.Title.REPLY
+        ).first()
+        system_chars = (
+            len(TOOL_RULES) +
+            len("【角色性格】\n") + len(friend.character.system_prompt.strip()) +
+            len((framework.prompt if framework else "").strip())
+        )
+        system_overhead = int(system_chars * settings.QUOTA_LLM_OVERHEAD_RATIO)
         record_api_usage(
             user_id=user_id,
             api_type='llm',
@@ -243,6 +254,7 @@ class MessageChatView(APIView):
             duration_ms=duration_ms,
             success=not has_error,
             error_message=error_message,
+            quota_deduct=max(0, total_tokens - system_overhead),
         )
         try:
             Message.objects.create(

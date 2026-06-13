@@ -161,7 +161,7 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
       },
       onerror(err) {
         console.log(err)
-        emits('appendToLastMessage', err.message || '发送失败')
+        // 错误消息统一由 catch 块展示，此处只做清理
         stopAudio()
       },
     })
