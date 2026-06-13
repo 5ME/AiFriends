@@ -3,7 +3,9 @@ from unittest.mock import patch, MagicMock
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
+from model_bakery import baker
 from web.models.document import UserDocument, DocumentChunk
+from web.models.user import UserProfile
 
 
 def _dummy_upload(user_profile, filename='test.txt'):
@@ -182,6 +184,21 @@ class TestDocumentProcessing:
         doc.refresh_from_db()
         assert doc.status == 'failed'
         assert doc.celery_task_id == ''
+
+    @patch("web.views.document.tasks.check_quota")
+    def test_celery_quota_exceeded_marks_failed(self, mock_check, user_profile):
+        """Celery 任务内配额超限 → doc.status='failed'"""
+        mock_check.return_value = (False, 50_000, 50_000)
+        user = baker.make(UserProfile)
+        doc = baker.make(
+            UserDocument, owner=user, file_url="documents/test.txt",
+            file_type="txt", status="pending",
+        )
+        from web.views.document.tasks import process_document_task
+        process_document_task(doc.id)
+        doc.refresh_from_db()
+        assert doc.status == "failed"
+        assert "配额" in doc.error_message
 
     @patch("web.views.document.tasks.process_document_task.retry")
     @patch("web.views.document.tasks.CustomEmbeddings")

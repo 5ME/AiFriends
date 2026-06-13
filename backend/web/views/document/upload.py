@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from web.models.document import UserDocument
+from web.utils.quota import check_quota
 from web.views.document.tasks import process_document_task
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,15 @@ class DocumentUploadView(APIView):
         error = _validate_file(file)
         if error:
             return Response({'message': error}, status=status.HTTP_400_BAD_REQUEST)
+
+        # === 用户每日 embedding 配额检查 ===
+        user_id = request.user.userprofile.id
+        allowed, cur, limit = check_quota(user_id, 'embedding')
+        if not allowed:
+            return Response(
+                {'message': f'今日文档处理配额已用尽({cur}/{limit})，请明天再试'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
 
         ext = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else ''
 

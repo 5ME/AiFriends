@@ -132,3 +132,14 @@ class TestASREndpoint:
         assert mock_record.call_args[1]["user_id"] == new_up.id, (
             f"应传 UserProfile.id({new_up.id})，而非 User.id({user.id})"
         )
+
+    @patch("web.views.friend.message.asr.asr.check_quota")
+    def test_quota_exceeded_returns_429(self, mock_check, auth_client):
+        """ASR 配额超限 → 429"""
+        mock_check.return_value = (False, 300, 300)
+        resp = auth_client.post(
+            "/api/friend/message/asr/asr/",
+            {"audio": _dummy_audio()},
+        )
+        assert resp.status_code == 429
+        assert "配额" in resp.json()["message"]

@@ -283,6 +283,17 @@ class TestChatSSEEndpoint:
         )
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
 
+    @patch("web.views.friend.message.chat.chat.check_quota")
+    def test_quota_exceeded_returns_429(self, mock_check, auth_client, friend):
+        """LLM 配额超限 → 429"""
+        mock_check.return_value = (False, 10_000, 10_000)
+        resp = auth_client.post(
+            "/api/friend/message/chat/",
+            {"friend_id": friend.id, "message": "你好"},
+        )
+        assert resp.status_code == 429
+        assert "配额" in resp.json()["message"]
+
 
 class TestKnowledgeBaseToolDescription:
     """search_knowledge_base tool description 不应限定百炼平台"""

@@ -11,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from web.utils.quota import check_quota
 from web.utils.usage import record_api_usage
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,13 @@ class ASRView(APIView):
             pcm_data = audio.read()
             # 使用 UserProfile.id 而非 User.id — APIUsage.user 是 UserProfile 的 FK
             user_id = self.request.user.userprofile.id
+            # === 用户每日 ASR 配额检查（sync 上下文） ===
+            allowed, cur, limit = check_quota(user_id, 'asr')
+            if not allowed:
+                return Response(
+                    {'message': f'今日语音识别配额已用尽({cur}/{limit})，可继续打字聊天'},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
             text = asyncio.run(self.run_asr_task(pcm_data, user_id))
             logger.info('ASR 完成, text_length=%d', len(text))
             return Response({'message': 'success', 'text': text})
