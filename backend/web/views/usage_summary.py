@@ -18,7 +18,13 @@ class UsageSummaryView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        days = int(request.query_params.get('days', 7))
+        try:
+            days = int(request.query_params.get('days', 7))
+        except (ValueError, TypeError):
+            return Response(
+                {'message': 'days 参数格式错误，需为整数'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         user_id = request.query_params.get('user_id')
 
         since = timezone.now().date() - timedelta(days=days - 1)

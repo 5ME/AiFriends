@@ -102,6 +102,12 @@ class TestUsageSummary:
         resp = _admin_client().get("/api/admin/usage/summary/?days=60")
         assert len(resp.json()['summary']) == 2
 
+    def test_invalid_days_returns_400(self, db):
+        """days=abc → 400"""
+        resp = _admin_client().get("/api/admin/usage/summary/?days=abc")
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert "days" in resp.json()["message"]
+
     def test_filters_in_response(self, db):
         """响应包含 filters 元数据"""
         resp = _admin_client().get("/api/admin/usage/summary/?days=3")
