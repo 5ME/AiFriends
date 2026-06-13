@@ -4,6 +4,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+from django.conf import settings
 from django.test import override_settings
 from django.utils import timezone
 
@@ -21,26 +22,28 @@ class TestCheckQuota:
         allowed, cur, limit = check_quota(user_profile.id, 'llm')
         assert allowed is True
         assert cur == 0
-        assert limit == 10_000
+        assert limit == settings.QUOTA_LLM_TOKENS_PER_DAY
 
     def test_over_limit_returns_denied(self, user_profile):
         """配额已超 → allowed=False"""
+        max_tokens = settings.QUOTA_LLM_TOKENS_PER_DAY
         today = timezone.localdate()
         UserQuota.objects.create(
             user=user_profile, date=today,
-            llm_tokens_used=10_000,
+            llm_tokens_used=max_tokens,
         )
         allowed, cur, limit = check_quota(user_profile.id, 'llm')
         assert allowed is False
-        assert cur == 10_000
-        assert limit == 10_000
+        assert cur == max_tokens
+        assert limit == max_tokens
 
     def test_different_api_types_independent(self, user_profile):
         """不同 API 类型独立计数"""
+        max_tokens = settings.QUOTA_LLM_TOKENS_PER_DAY
         today = timezone.localdate()
         UserQuota.objects.create(
             user=user_profile, date=today,
-            llm_tokens_used=10_000,  # LLM 已满
+            llm_tokens_used=max_tokens,  # LLM 已满
             tts_chars_used=0,
         )
         # LLM 超限
@@ -56,10 +59,11 @@ class TestCheckQuota:
 
     def test_cross_day_isolation(self, user_profile):
         """跨天配额隔离"""
+        max_tokens = settings.QUOTA_LLM_TOKENS_PER_DAY
         today = timezone.localdate()
         UserQuota.objects.create(
             user=user_profile, date=today,
-            llm_tokens_used=10_000,
+            llm_tokens_used=max_tokens,
         )
         # 今天超限
         assert check_quota(user_profile.id, 'llm')[0] is False
