@@ -48,6 +48,6 @@ class DocumentRemoveView(APIView):
 
         # 级联删除 DocumentChunks（Django CASCADE）
         doc.delete()
-        logger.info('文档已删除, doc_id=%d, title=%s', doc_id, doc.title)
+        logger.info('文档已删除, doc_id=%s, title=%s', doc_id, doc.title)
 
         return Response({'message': '删除成功'})

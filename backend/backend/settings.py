@@ -281,12 +281,25 @@ QUOTA_TTS_CHARS_PER_DAY = 100_000
 QUOTA_ASR_SECONDS_PER_DAY = 3_000
 QUOTA_EMBEDDING_TOKENS_PER_DAY = 500_000
 
+# APIUsage 原始记录保留天数（超过后自动删除，汇总数据永久保留在 APIUsageDaily）
+API_USAGE_RETENTION_DAYS = 90
+
 # 长任务场景，每次只取一个任务避免并发 LLM 调用争抢资源
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 
 # 软超时 120s / 硬超时 180s（LLM 调用通常 3-8s）
 CELERY_TASK_SOFT_TIME_LIMIT = 120
 CELERY_TASK_TIME_LIMIT = 180
+
+# Celery Beat 定时任务调度
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'cleanup-usage-daily': {
+        'task': 'web.tasks.cleanup_usage.cleanup_usage_task',
+        'schedule': crontab(hour=2, minute=0),
+    },
+}
 
 # 文件上传大小限制 — 用户文档 RAG（Django 默认 2.5MB 太小）
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB

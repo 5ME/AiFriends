@@ -6,7 +6,8 @@ from web.models.user import UserProfile
 class APIUsage(models.Model):
     """记录每次 AI API 调用的用量和耗时。
 
-    TODO: 数据积累 3-6 个月后评估清理策略（按时间分区 / 聚合到小时粒度 / 保留最近 N 天）
+    原始明细保留 API_USAGE_RETENTION_DAYS 天（默认 90），
+    之后由 cleanup_usage_task 聚合到 APIUsageDaily 后删除。
     """
     API_TYPES = [
         ('llm', 'LLM 对话/摘要'),
@@ -33,3 +34,44 @@ class APIUsage(models.Model):
             models.Index(fields=['user', '-created_at']),
             models.Index(fields=['api_type', '-created_at']),
         ]
+
+
+class APIUsageDaily(models.Model):
+    """按天聚合的 API 用量摘要（永久保留）。
+
+    每天凌晨由 Celery Beat 任务从 APIUsage 聚合写入。
+    一条记录 = 一个用户一天一种 API 类型的汇总。
+    注意: model_name 在聚合时被有意丢弃 — 日摘要仅按 api_type 汇总，同类型不同模型合并统计。
+    """
+
+    date = models.DateField()
+    user = models.ForeignKey(
+        UserProfile, on_delete=models.CASCADE,
+        null=True, blank=True,
+    )
+    api_type = models.CharField(max_length=20, choices=APIUsage.API_TYPES)
+    total_tokens = models.IntegerField(default=0)
+    call_count = models.IntegerField(default=0)
+    total_duration_ms = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['date', 'user', 'api_type'],
+                name='unique_daily_user_api',
+                # PostgreSQL treats NULLs as distinct, so multiple user=NULL entries
+                # for the same (date, api_type) will NOT conflict. This is the expected
+                # behavior for system-level calls (knowledge base processing).
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['date']),
+            models.Index(fields=['user', '-date']),
+        ]
+
+    def __str__(self):
+        return (
+            f'<APIUsageDaily date={self.date} user_id={self.user_id} '
+            f'api_type={self.api_type} tokens={self.total_tokens} calls={self.call_count}>'
+        )

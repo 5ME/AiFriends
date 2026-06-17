@@ -224,11 +224,12 @@ Two separate LangGraph state graphs:
 
 ### Celery async tasks
 
-`web/tasks.py` 是 Celery `autodiscover_tasks()` 的入口文件，所有异步任务通过此文件注册导入：
+`web/tasks/` 包（`__init__.py`）是 Celery `autodiscover_tasks()` 的入口，所有异步任务通过此包注册导入：
 
 ```python
 from web.views.friend.message.memory.tasks import update_memory_task    # Memory Agent
 from web.views.document.tasks import process_document_task              # 文档处理
+from web.tasks.cleanup_usage import cleanup_usage_task                # 用量数据清理
 ```
 
 `autodiscover_tasks()` 只扫描 `<app>.tasks` 模块，深度嵌套的 task 文件必须在此入口文件中显式导入。
@@ -276,7 +277,7 @@ documents/
 | `GET /api/document/list/` | 用户文档列表 |
 | `POST /api/document/remove/` | 删除文档 → revoke Celery 任务 → 级联删除 chunks |
 
-**Celery 任务：** `process_document_task(doc_id)` — 文本提取 → 分块 → embedding → 批量写入 DocumentChunk。注册在 `web/tasks.py`。
+**Celery 任务：** `process_document_task(doc_id)` — 文本提取 → 分块 → embedding → 批量写入 DocumentChunk。注册在 `web/tasks/`。
 
 ### RAG citations & RetrievalTrace
 
