@@ -20,13 +20,21 @@ def cleanup_usage_task():
     """
     today = timezone.localdate()
 
-    # 先聚合再删除：确保昨天的数据已写入 APIUsageDaily 再清理过期明细，防止数据丢失
+    # 先聚合再删除：确保数据已写入 APIUsageDaily 再清理过期明细
     yesterday = today - timedelta(days=1)
-    aggregate_usage(yesterday)
+    try:
+        aggregate_usage(yesterday)
+    except Exception:
+        # 聚合失败时跳过删除，保护原始数据不丢失
+        logger.exception('cleanup_usage: 聚合失败，跳过删除以保护数据')
+        return
 
     # 删除 API_USAGE_RETENTION_DAYS 天前的 APIUsage 原始记录（默认 90 天）
-    cutoff = today - timedelta(days=settings.API_USAGE_RETENTION_DAYS)
-    delete_old_records(cutoff)
+    try:
+        cutoff = today - timedelta(days=settings.API_USAGE_RETENTION_DAYS)
+        delete_old_records(cutoff)
+    except Exception:
+        logger.exception('cleanup_usage: 删除过期记录失败')
 
 
 def aggregate_usage(date):
@@ -61,6 +69,11 @@ def aggregate_usage(date):
         )
         for r in rows
     ]
+
+    # PostgreSQL 中 NULL != NULL，UniqueConstraint 对 NULL 列不生效，
+    # 因此 ignore_conflicts=True 无法防止 user=NULL 行重复插入。
+    # 先删除同日期 user=NULL 的行，确保系统调用聚合也幂等。
+    APIUsageDaily.objects.filter(date=date, user=None).delete()
 
     # ignore_conflicts=True + UniqueConstraint(date, user, api_type)
     # 使聚合幂等：重复运行同一日期不会报错，也不会重复插入

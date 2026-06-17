@@ -110,6 +110,26 @@ class TestAggregateUsage:
         assert row.total_tokens == 300
         assert row.call_count == 3
 
+    def test_system_user_null_idempotent(self, db):
+        """user=None 聚合幂等 — 重复运行不产生重复行"""
+        today = timezone.now()
+        APIUsage.objects.create(
+            user=None, api_type='embedding', model_name='m1',
+            token_count=100, duration_ms=0, created_at=today,
+        )
+
+        target_date = timezone.localdate()
+        from web.tasks.cleanup_usage import aggregate_usage
+        # 运行两次：第二次应该覆盖而非追加
+        aggregate_usage(target_date)
+        aggregate_usage(target_date)
+
+        # 只有一行，数据是最新聚合结果（不是 2 行 × 100）
+        rows = APIUsageDaily.objects.filter(
+            user=None, api_type='embedding', date=target_date)
+        assert rows.count() == 1
+        assert rows[0].total_tokens == 100
+
 
 @pytest.mark.django_db
 class TestDeleteOldRecords:
