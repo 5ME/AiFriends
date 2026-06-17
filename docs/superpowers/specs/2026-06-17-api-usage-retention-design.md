@@ -2,7 +2,7 @@
 
 > 日期：2026-06-17  
 > 来源：`docs/superpowers/specs/2026-06-11-next-steps-roadmap.md` P1-A3  
-> 状态：待实施
+> 状态：已实施
 
 ---
 
@@ -60,7 +60,7 @@
 | **优点** | 批量操作，性能好；唯一约束保证幂等 | 重复运行会更新已有行 |
 | **缺点** | 重复运行时静默跳过，不会更新旧值 | N+1 查询，逐行操作慢 |
 
-**选择 A 的理由：** 每天的汇总数据是确定的（同一批原始数据聚合结果不变），不需要 update。`unique_together = (date, user, api_type)` 配合 `ignore_conflicts=True` 一次 SQL 搞定，高效且正确。
+**选择 A 的理由：** 每天的汇总数据是确定的（同一批原始数据聚合结果不变），不需要 update。`UniqueConstraint(date, user, api_type)` 配合 `ignore_conflicts=True` 一次 SQL 搞定，高效且正确。
 
 ### 2.4 调度时间
 
@@ -121,7 +121,7 @@ cleanup_usage_task()    每天 2:00 执行
   │
   ├─ 1. 聚合昨天
   │      yesterday = localdate() - 1day
-  │      APIUsageDaily.aggregate_usage(yesterday)
+  │      aggregate_usage(yesterday)
   │      → filter(created_at__date=yesterday).values(user, api_type)
   │        .annotate(total=Sum, count=Count, duration=Sum)
   │      → bulk_create(ignore_conflicts=True)
@@ -156,8 +156,6 @@ CELERY_BEAT_SCHEDULE = {
 API_USAGE_RETENTION_DAYS = 90
 ```
 
-单独一行，放在其他配额配置附近（`settings.py` 配额区域）。
-
 ---
 
 ## 四、数据生命周期
@@ -181,20 +179,18 @@ Day 90            cleanup_usage_task → DELETE FROM APIUsage WHERE date < cutof
 | 5 | 用户隔离 | 用户 A 和用户 B 的 usage 独立汇总到各自行 |
 | 6 | 系统调用 | `user=None` 的 APIUsage 正常聚合（NULL 行） |
 
-测试文件：`backend/web/tests/test_usage_cleanup.py`
-
 ---
 
 ## 六、实施清单
 
-- [ ] 将 `web/tasks.py` 转为 `web/tasks/__init__.py`（为 `cleanup_usage.py` 腾出空间）
-- [ ] 新增 `APIUsageDaily` 模型（`web/models/usage.py`）
-- [ ] `web/models/__init__.py` 注册 `APIUsageDaily`（`from .usage import APIUsage, APIUsageDaily`）
-- [ ] `makemigrations` 生成迁移
-- [ ] `cleanup_usage_task` Celery 任务（`web/tasks/cleanup_usage.py`）
-- [ ] `settings.py` 添加 `API_USAGE_RETENTION_DAYS` + `CELERY_BEAT_SCHEDULE`
-- [ ] 测试 `backend/web/tests/test_usage_cleanup.py`（6 个用例）
-- [ ] `python -m pytest web/tests/ -v` 全部通过（182 个）
+- [x] 将 `web/tasks.py` 转为 `web/tasks/__init__.py`（为 `cleanup_usage.py` 腾出空间）
+- [x] 新增 `APIUsageDaily` 模型（`web/models/usage.py`）
+- [x] `web/models/__init__.py` 注册 `APIUsageDaily`
+- [x] `makemigrations` 生成迁移
+- [x] `cleanup_usage_task` Celery 任务（`web/tasks/cleanup_usage.py`）
+- [x] `settings.py` 添加 `API_USAGE_RETENTION_DAYS` + `CELERY_BEAT_SCHEDULE`
+- [x] 测试 `backend/web/tests/test_usage_cleanup.py`（6 个用例）
+- [x] `python -m pytest web/tests/ -v` 全部通过（182 个）
 
 ---
 
