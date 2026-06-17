@@ -37,7 +37,15 @@ function handlePushBackMessage(msg) {
 }
 
 function handleAppendToLastMessage(delta) {
-  history.value[history.value.length - 1].content += delta
+  const last = history.value[history.value.length - 1]
+  // citations 对象挂到消息上，文本追加到 content
+  if (typeof delta === 'object') {
+    if (delta.citations) {
+      last.citations = delta.citations
+    }
+  } else {
+    last.content += delta
+  }
   chatHistoryRef.value.scrollToBottom()
 }
 

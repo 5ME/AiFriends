@@ -148,6 +148,10 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
           // 实现输出打断
           return
         }
+        // citations 在 content 之前到达（后端保证时序），先挂载到消息上
+        if (data.citations) {
+          emits('appendToLastMessage', {citations: data.citations})
+        }
         if (data.error) {
           emits('appendToLastMessage', data.error)
           stopAudio()
