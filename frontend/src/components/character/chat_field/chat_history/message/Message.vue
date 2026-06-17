@@ -22,7 +22,21 @@ const user = useUserStore()
       <div class="chat-bubble whitespace-pre-wrap break-all">
         {{ message.content }}
       </div>
-      <!--<div class="chat-footer opacity-50">Delivered</div>-->
+    </div>
+
+    <!--RAG 引用来源：独立于聊天气泡，避免挤压消息空间-->
+    <div v-if="message.role === 'ai' && message.citations?.length"
+         class="collapse collapse-arrow ml-14 mt-0.5 w-fit max-w-80
+                bg-base-200/50 rounded-box">
+      <input type="checkbox" />
+      <div class="collapse-title text-xs font-medium opacity-60">
+        📖 {{ message.citations.length }} 条参考来源
+      </div>
+      <div class="collapse-content text-xs opacity-50">
+        <p v-for="c in message.citations" :key="c.index" class="py-0.5">
+          {{ c.index }}. {{ c.title || '系统知识库' }}
+        </p>
+      </div>
     </div>
 
     <!--用户的话-->
