@@ -6,7 +6,8 @@ from web.models.user import UserProfile
 class APIUsage(models.Model):
     """记录每次 AI API 调用的用量和耗时。
 
-    TODO: 数据积累 3-6 个月后评估清理策略（按时间分区 / 聚合到小时粒度 / 保留最近 N 天）
+    原始明细保留 API_USAGE_RETENTION_DAYS 天（默认 90），
+    之后由 cleanup_usage_task 聚合到 APIUsageDaily 后删除。
     """
     API_TYPES = [
         ('llm', 'LLM 对话/摘要'),
