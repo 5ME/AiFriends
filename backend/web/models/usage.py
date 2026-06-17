@@ -40,6 +40,7 @@ class APIUsageDaily(models.Model):
 
     每天凌晨由 Celery Beat 任务从 APIUsage 聚合写入。
     一条记录 = 一个用户一天一种 API 类型的汇总。
+    注意: model_name 在聚合时被有意丢弃 — 日摘要仅按 api_type 汇总，同类型不同模型合并统计。
     """
 
     date = models.DateField()
@@ -58,6 +59,9 @@ class APIUsageDaily(models.Model):
             models.UniqueConstraint(
                 fields=['date', 'user', 'api_type'],
                 name='unique_daily_user_api',
+                # PostgreSQL treats NULLs as distinct, so multiple user=NULL entries
+                # for the same (date, api_type) will NOT conflict. This is the expected
+                # behavior for system-level calls (knowledge base processing).
             ),
         ]
         indexes = [
@@ -65,7 +69,7 @@ class APIUsageDaily(models.Model):
             models.Index(fields=['user', '-date']),
         ]
 
-    def __repr__(self):
+    def __str__(self):
         return (
             f'<APIUsageDaily date={self.date} user_id={self.user_id} '
             f'api_type={self.api_type} tokens={self.total_tokens} calls={self.call_count}>'
