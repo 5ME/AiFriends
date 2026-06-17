@@ -33,3 +33,40 @@ class APIUsage(models.Model):
             models.Index(fields=['user', '-created_at']),
             models.Index(fields=['api_type', '-created_at']),
         ]
+
+
+class APIUsageDaily(models.Model):
+    """按天聚合的 API 用量摘要（永久保留）。
+
+    每天凌晨由 Celery Beat 任务从 APIUsage 聚合写入。
+    一条记录 = 一个用户一天一种 API 类型的汇总。
+    """
+
+    date = models.DateField()
+    user = models.ForeignKey(
+        UserProfile, on_delete=models.CASCADE,
+        null=True, blank=True,
+    )
+    api_type = models.CharField(max_length=20, choices=APIUsage.API_TYPES)
+    total_tokens = models.IntegerField(default=0)
+    call_count = models.IntegerField(default=0)
+    total_duration_ms = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['date', 'user', 'api_type'],
+                name='unique_daily_user_api',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['date']),
+            models.Index(fields=['user', '-date']),
+        ]
+
+    def __repr__(self):
+        return (
+            f'<APIUsageDaily date={self.date} user_id={self.user_id} '
+            f'api_type={self.api_type} tokens={self.total_tokens} calls={self.call_count}>'
+        )
