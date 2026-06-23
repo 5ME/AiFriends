@@ -39,3 +39,14 @@ class TestComputeMetrics:
         assert m['hit@3'] == 0.0
         assert m['mrr@10'] == 0.0
         assert m['ndcg@10'] == 0.0
+
+    def test_compute_metrics_ndcg_multi_relevant(self):
+        from web.utils.rag_eval import compute_metrics
+        # 多相关（num_relevant=2）覆盖 IDCG 的 min(num_relevant, top_k) 求和路径
+        # hits=[True, False, True]: DCG = 1/log2(2) + 1/log2(4) = 1.0 + 0.5 = 1.5
+        # IDCG = 1/log2(2) + 1/log2(3) = 1.0 + 0.6309 ≈ 1.6309  → NDCG ≈ 0.9197
+        results = [{'hits': [True, False, True], 'num_relevant': 2}]
+        m = compute_metrics(results, top_k=10)
+        dcg = 1.0 / math.log2(2) + 1.0 / math.log2(4)
+        idcg = 1.0 / math.log2(2) + 1.0 / math.log2(3)
+        assert m['ndcg@10'] == pytest.approx(dcg / idcg)
