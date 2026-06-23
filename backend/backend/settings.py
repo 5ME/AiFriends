@@ -281,6 +281,11 @@ QUOTA_TTS_CHARS_PER_DAY = 100_000
 QUOTA_ASR_SECONDS_PER_DAY = 3_000
 QUOTA_EMBEDDING_TOKENS_PER_DAY = 500_000
 
+# RAG 向量检索配置
+RAG_DEFAULT_MAX_RESULTS = 5        # 单次检索默认返回条数（LLM 可通过 max_results 覆盖）
+RAG_SIMILARITY_THRESHOLD = 0.5     # 余弦距离阈值（pgvector <=>，0=完全相同 2=语义相反）
+RAG_MAX_TOOL_CALLS = 5             # 单次对话最多工具调用次数（防止异常循环）
+
 # APIUsage 原始记录保留天数（超过后自动删除，汇总数据永久保留在 APIUsageDaily）
 API_USAGE_RETENTION_DAYS = 90
 
