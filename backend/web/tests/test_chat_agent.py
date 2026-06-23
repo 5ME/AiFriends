@@ -290,6 +290,46 @@ class TestChatGraphRouting:
         tool_messages = [m for m in result["messages"] if isinstance(m, ToolMessage)]
         assert len(tool_messages) >= 1
 
+    @patch("web.views.friend.message.chat.graph.CustomEmbeddings")
+    @patch("web.views.friend.message.chat.graph.ChatOpenAI")
+    @patch("django.db.backends.base.base.BaseDatabaseWrapper.cursor")
+    def test_search_knowledge_base_max_results_clamped(
+            self, mock_cursor_method, mock_llm_class, mock_embeddings_class):
+        """LLM 传入异常大的 max_results → 钳制到 RAG_DEFAULT_MAX_RESULTS"""
+        from web.views.friend.message.chat.graph import ChatGraph
+
+        mock_cursor_instance = MagicMock()
+        mock_cursor_instance.__enter__.return_value = mock_cursor_instance
+        mock_cursor_instance.fetchall.return_value = [
+            (1, "结果1", 0, 5, "doc.pdf", 0.1),
+        ]
+        mock_cursor_method.return_value = mock_cursor_instance
+
+        mock_embeddings = MagicMock()
+        mock_embeddings.embed_query.return_value = [0.1] * 1024
+        mock_embeddings_class.return_value = mock_embeddings
+
+        mock_llm = MagicMock()
+        # LLM 传入异常值 max_results=100
+        mock_llm.invoke.side_effect = [
+            AIMessage(content="", tool_calls=[{
+                "name": "search_knowledge_base",
+                "args": {"query": "test", "max_results": 100},
+                "id": "call_1", "type": "tool_call",
+            }]),
+            AIMessage(content="完成", tool_calls=[]),
+        ]
+        mock_llm.bind_tools.return_value = mock_llm
+        mock_llm_class.return_value = mock_llm
+
+        app = ChatGraph.create_app()
+        app.invoke({"messages": [HumanMessage(content="Query")], "user_id": 42})
+
+        # 100 被钳制到 RAG_DEFAULT_MAX_RESULTS（默认 5），而非原样传入
+        from django.conf import settings
+        params = mock_cursor_instance.execute.call_args_list[0][0][1]
+        assert params[-1] == getattr(settings, 'RAG_DEFAULT_MAX_RESULTS', 5)
+
 
 class TestChatSSEEndpoint:
     """Layer 2: SSE endpoint integration — mock ChatGraph.create_app() + websockets"""

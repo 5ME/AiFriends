@@ -60,8 +60,12 @@ class ChatGraph:
             根据问题类型选择 max_results：简单事实查询传 1-2，需要多角度信息传 3-5。
             """
             # max_results 缺省时回退到配置默认值
+            default_max = getattr(settings, 'RAG_DEFAULT_MAX_RESULTS', 5)
             if max_results is None:
-                max_results = getattr(settings, 'RAG_DEFAULT_MAX_RESULTS', 5)
+                max_results = default_max
+            # 钳制 LLM 传入的值到 [1, default_max]，防止异常/恶意取值导致 SQL LIMIT 过大
+            # （max_results 是 LLM tool call 参数，属不可信输入；工具描述已限定 1-5）
+            max_results = max(1, min(max_results, default_max))
 
             from web.models.document import DocumentChunk, UserDocument
             from web.models.retrieval_trace import RetrievalTrace
@@ -172,6 +176,7 @@ class ChatGraph:
         tool_node = ToolNode(tools)
 
         # 构建图: START → agent → tools ⇄ agent → END
+        # agent ⇄ tools 循环受 RAG_MAX_TOOL_CALLS 上限保护（见 should_continue）
         graph = StateGraph(AgentState)
         graph.add_node('agent', model_call)
         graph.add_node('tools', tool_node)
