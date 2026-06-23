@@ -605,5 +605,23 @@ class TestRetrieveChunks:
         retrieve_chunks("q", top_k=5, user_id=42, track_usage=False)
         mock_emb_class.assert_called_with(user_id=None)
 
+    @patch("web.views.friend.message.chat.graph.CustomEmbeddings")
+    @patch("django.db.backends.base.base.BaseDatabaseWrapper.cursor")
+    def test_retrieve_chunks_top_k_floor(self, mock_cursor_method, mock_emb_class):
+        """top_k <= 0 被钳到 1（防 LIMIT 0/负数）"""
+        from web.views.friend.message.chat.graph import retrieve_chunks
+
+        mock_cursor = MagicMock()
+        mock_cursor.__enter__.return_value = mock_cursor
+        mock_cursor.fetchall.return_value = []
+        mock_cursor_method.return_value = mock_cursor
+        mock_emb = MagicMock()
+        mock_emb.embed_query.return_value = [0.1] * 1024
+        mock_emb_class.return_value = mock_emb
+
+        retrieve_chunks("q", top_k=0, user_id=1)
+        params = mock_cursor.execute.call_args[0][1]
+        assert params[-1] == 1  # top_k 钳到 1，作为 SQL LIMIT 最后一个参数
+
         retrieve_chunks("q", top_k=5, user_id=42, track_usage=True)
         mock_emb_class.assert_called_with(user_id=42)

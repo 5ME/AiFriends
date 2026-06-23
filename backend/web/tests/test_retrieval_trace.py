@@ -30,8 +30,8 @@ class TestSearchKnowledgeBaseResult:
         from web.views.friend.message.chat.graph import ChatGraph
 
         _setup_cursor_mock(mock_cursor_method, [
-            (1, "社保制度介绍...", 0, 3, "社保政策.pdf", 0.15),
-            (2, "养老保险说明...", 4, 3, "社保政策.pdf", 0.22),
+            (1, "社保制度介绍...", 0, 3, "社保政策.pdf", 0.15, {}),
+            (2, "养老保险说明...", 4, 3, "社保政策.pdf", 0.22, {}),
         ])
 
         mock_embeddings = MagicMock()
@@ -112,7 +112,7 @@ class TestSearchKnowledgeBaseResult:
         from web.views.friend.message.chat.graph import ChatGraph
 
         _setup_cursor_mock(mock_cursor_method, [
-            (1, "系统知识内容...", 0, None, None, 0.30),  # NULL document + NULL title
+            (1, "系统知识内容...", 0, None, None, 0.30, {}),  # NULL document + NULL title
         ])
 
         mock_embeddings = MagicMock()
@@ -157,9 +157,9 @@ class TestRetrievalTracePersistence:
         from web.views.friend.message.chat.graph import ChatGraph
 
         _setup_cursor_mock(mock_cursor_method, [
-            (1, "内容A", 2, 1, "DocA", 0.10),
-            (2, "内容B", 5, 1, "DocA", 0.12),
-            (3, "内容C", 1, 2, "DocB", 0.15),
+            (1, "内容A", 2, 1, "DocA", 0.10, {}),
+            (2, "内容B", 5, 1, "DocA", 0.12, {}),
+            (3, "内容C", 1, 2, "DocB", 0.15, {}),
         ])
 
         mock_embeddings = MagicMock()
@@ -203,7 +203,7 @@ class TestRetrievalTracePersistence:
         from web.views.friend.message.chat.graph import ChatGraph
 
         _setup_cursor_mock(mock_cursor_method, [
-            (1, "系统内容", 0, None, None, 0.30),  # NULL document_id
+            (1, "系统内容", 0, None, None, 0.30, {}),  # NULL document_id
         ])
 
         mock_embeddings = MagicMock()
