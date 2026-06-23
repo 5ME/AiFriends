@@ -3,7 +3,8 @@ from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
 from web.models.document import DocumentChunk
-from web.utils.rag_eval import EVAL_USERNAME, get_eval_owner
+from web.models.user import UserProfile
+from web.utils.rag_eval import EVAL_USERNAME
 
 
 class Command(BaseCommand):
@@ -14,7 +15,12 @@ class Command(BaseCommand):
                             help='连 eval UserProfile + User 一起删')
 
     def handle(self, *args, **options):
-        eval_owner = get_eval_owner()
+        # 非创建查找：cleanup 不应在 eval 用户不存在时反而创建它（get_or_create 的副作用）
+        eval_owner = UserProfile.objects.filter(user__username=EVAL_USERNAME).first()
+        if eval_owner is None:
+            self.stdout.write('无 eval 数据，无需清理')
+            return
+
         deleted, _ = DocumentChunk.objects.filter(owner=eval_owner).delete()
         self.stdout.write(self.style.SUCCESS(f'已删除 {deleted} 条 eval chunk'))
 
