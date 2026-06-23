@@ -2,10 +2,11 @@ import logging
 import os
 from typing import TypedDict, Annotated, Sequence
 
+from django.conf import settings
 from django.db import connection
 
 from django.utils.timezone import localtime, now
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, ToolMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.constants import START, END
@@ -31,7 +32,12 @@ class ChatGraph:
 
         # Tool 2: 知识库向量检索（pgvector）
         @tool
-        def search_knowledge_base(query: str, state: Annotated[dict, InjectedState]) -> str:
+        def search_knowledge_base(
+            query: str,
+            max_results: int = None,
+            # state 由 LangGraph ToolNode 注入，给默认值以满足「默认参数后不可接非默认参数」的语法约束
+            state: Annotated[dict, InjectedState] = None,
+        ) -> str:
             """
             在知识库中检索与用户问题相关的文档内容。
 
@@ -50,7 +56,13 @@ class ChatGraph:
             - 纯问候、告别（"你好""再见"）
             - 纯情感倾诉（"我今天心情不好"）
             - 纯角色扮演闲聊（"你喜欢什么颜色"）
+
+            根据问题类型选择 max_results：简单事实查询传 1-2，需要多角度信息传 3-5。
             """
+            # max_results 缺省时回退到配置默认值
+            if max_results is None:
+                max_results = getattr(settings, 'RAG_DEFAULT_MAX_RESULTS', 5)
+
             from web.models.document import DocumentChunk, UserDocument
             from web.models.retrieval_trace import RetrievalTrace
 
@@ -73,12 +85,16 @@ class ChatGraph:
                     LEFT JOIN {doc_table} ud ON dc.document_id = ud.id
                     WHERE dc.owner_id IS NULL OR dc.owner_id = %s
                     ORDER BY dc.embedding <=> %s::vector
-                    LIMIT 3
-                """, [emb, user_id, emb])
+                    LIMIT %s
+                """, [emb, user_id, emb, max_results])
                 rows = cursor.fetchall()
 
+            # 按余弦距离阈值过滤不相关结果
+            threshold = getattr(settings, 'RAG_SIMILARITY_THRESHOLD', 0.5)
+            rows = [r for r in rows if r[5] < threshold]  # r[5] = distance
+
             if not rows:
-                return "知识库中未找到相关信息。"
+                return "知识库中未找到相关信息。请尝试更换关键词后重新检索。"
 
             parts = ["从知识库中找到以下相关信息：\n"]
             for i, row in enumerate(rows):
@@ -142,6 +158,13 @@ class ChatGraph:
         def should_continue(state: AgentState) -> str:
             last_message = state["messages"][-1]
             if last_message.tool_calls:
+                # 统计已完成的工具调用次数，超过上限强制结束，防止异常循环
+                tool_call_count = sum(
+                    1 for msg in state["messages"]
+                    if isinstance(msg, ToolMessage)
+                )
+                if tool_call_count >= getattr(settings, 'RAG_MAX_TOOL_CALLS', 5):
+                    return "end"  # 强制结束，让 LLM 基于已有信息回复
                 return "tools"
             return "end"
 

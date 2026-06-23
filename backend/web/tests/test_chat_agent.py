@@ -281,8 +281,9 @@ class TestChatGraphRouting:
         result = app.invoke({"messages": [HumanMessage(content="Query")], "user_id": 42})
 
         # 验证 max_results=1 被传递到 SQL 的 LIMIT 参数
-        sql = mock_cursor_instance.execute.call_args[0][0]
-        params = mock_cursor_instance.execute.call_args[0][1]
+        # call_args_list[0] 是 SELECT 检索查询（后续 RetrievalTrace INSERT 走同一 mock cursor）
+        sql = mock_cursor_instance.execute.call_args_list[0][0][0]
+        params = mock_cursor_instance.execute.call_args_list[0][0][1]
         assert "LIMIT %s" in sql
         assert params[-1] == 1  # max_results 作为最后一个参数
 
