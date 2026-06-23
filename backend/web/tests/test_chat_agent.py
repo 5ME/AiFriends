@@ -159,6 +159,136 @@ class TestChatGraphRouting:
         assert re.match(time_pattern, tool_msgs[0].content), \
             f"Unexpected format: {tool_msgs[0].content}"
 
+    @patch("web.views.friend.message.chat.graph.CustomEmbeddings")
+    @patch("web.views.friend.message.chat.graph.ChatOpenAI")
+    @patch("django.db.backends.base.base.BaseDatabaseWrapper.cursor")
+    def test_search_knowledge_base_threshold_filters_all(
+            self, mock_cursor_method, mock_llm_class, mock_embeddings_class):
+        """全部结果超阈值 → 返回「未找到相关信息」"""
+        from web.views.friend.message.chat.graph import ChatGraph
+
+        mock_cursor_instance = MagicMock()
+        mock_cursor_instance.__enter__.return_value = mock_cursor_instance
+        # distance=0.8, 0.9 → 均超过 RAG_SIMILARITY_THRESHOLD=0.5
+        mock_cursor_instance.fetchall.return_value = [
+            (1, "不相关内容", 0, 5, "doc.pdf", 0.8),
+            (2, "另一条不相关内容", 1, 5, "doc.pdf", 0.9),
+        ]
+        mock_cursor_method.return_value = mock_cursor_instance
+
+        mock_embeddings = MagicMock()
+        mock_embeddings.embed_query.return_value = [0.1] * 1024
+        mock_embeddings_class.return_value = mock_embeddings
+
+        mock_llm = MagicMock()
+        mock_llm.invoke.side_effect = [
+            AIMessage(content="", tool_calls=[{
+                "name": "search_knowledge_base",
+                "args": {"query": "test", "max_results": 3},
+                "id": "call_1", "type": "tool_call",
+            }]),
+            AIMessage(content="完成", tool_calls=[]),
+        ]
+        mock_llm.bind_tools.return_value = mock_llm
+        mock_llm_class.return_value = mock_llm
+
+        app = ChatGraph.create_app()
+        result = app.invoke({"messages": [HumanMessage(content="Query")], "user_id": 42})
+
+        tool_messages = [m for m in result["messages"] if isinstance(m, ToolMessage)]
+        assert len(tool_messages) >= 1
+        assert "知识库中未找到相关信息" in tool_messages[0].content
+
+    @patch("web.views.friend.message.chat.graph.CustomEmbeddings")
+    @patch("web.views.friend.message.chat.graph.ChatOpenAI")
+    @patch("django.db.backends.base.base.BaseDatabaseWrapper.cursor")
+    def test_search_knowledge_base_threshold_filters_partial(
+            self, mock_cursor_method, mock_llm_class, mock_embeddings_class):
+        """部分超阈值 → 只保留 distance < 0.5 的结果"""
+        from web.views.friend.message.chat.graph import ChatGraph
+
+        mock_cursor_instance = MagicMock()
+        mock_cursor_instance.__enter__.return_value = mock_cursor_instance
+        # distance=0.3 ✅, 0.8 ❌, 0.4 ✅ → 保留 2 条
+        mock_cursor_instance.fetchall.return_value = [
+            (1, "相关内容A", 0, 5, "doc.pdf", 0.3),
+            (2, "不相关内容", 1, 5, "doc.pdf", 0.8),
+            (3, "相关内容B", 2, 5, "doc.pdf", 0.4),
+        ]
+        mock_cursor_method.return_value = mock_cursor_instance
+
+        mock_embeddings = MagicMock()
+        mock_embeddings.embed_query.return_value = [0.1] * 1024
+        mock_embeddings_class.return_value = mock_embeddings
+
+        mock_llm = MagicMock()
+        mock_llm.invoke.side_effect = [
+            AIMessage(content="", tool_calls=[{
+                "name": "search_knowledge_base",
+                "args": {"query": "test", "max_results": 3},
+                "id": "call_1", "type": "tool_call",
+            }]),
+            AIMessage(content="完成", tool_calls=[]),
+        ]
+        mock_llm.bind_tools.return_value = mock_llm
+        mock_llm_class.return_value = mock_llm
+
+        app = ChatGraph.create_app()
+        result = app.invoke({"messages": [HumanMessage(content="Query")], "user_id": 42})
+
+        tool_messages = [m for m in result["messages"] if isinstance(m, ToolMessage)]
+        assert len(tool_messages) >= 1
+        content = tool_messages[0].content
+        assert "相关内容A" in content
+        assert "不相关内容" not in content
+        assert "相关内容B" in content
+        assert "[来源1:" in content and "[来源2:" in content
+
+    @patch("web.views.friend.message.chat.graph.CustomEmbeddings")
+    @patch("web.views.friend.message.chat.graph.ChatOpenAI")
+    @patch("django.db.backends.base.base.BaseDatabaseWrapper.cursor")
+    def test_search_knowledge_base_max_results_param(
+            self, mock_cursor_method, mock_llm_class, mock_embeddings_class):
+        """LLM 通过 max_results 参数控制检索条数"""
+        from web.views.friend.message.chat.graph import ChatGraph
+
+        mock_cursor_instance = MagicMock()
+        mock_cursor_instance.__enter__.return_value = mock_cursor_instance
+        mock_cursor_instance.fetchall.return_value = [
+            (1, "结果1", 0, 5, "doc.pdf", 0.1),
+            (2, "结果2", 1, 5, "doc.pdf", 0.2),
+        ]
+        mock_cursor_method.return_value = mock_cursor_instance
+
+        mock_embeddings = MagicMock()
+        mock_embeddings.embed_query.return_value = [0.1] * 1024
+        mock_embeddings_class.return_value = mock_embeddings
+
+        mock_llm = MagicMock()
+        # LLM 传入 max_results=1
+        mock_llm.invoke.side_effect = [
+            AIMessage(content="", tool_calls=[{
+                "name": "search_knowledge_base",
+                "args": {"query": "test", "max_results": 1},
+                "id": "call_1", "type": "tool_call",
+            }]),
+            AIMessage(content="完成", tool_calls=[]),
+        ]
+        mock_llm.bind_tools.return_value = mock_llm
+        mock_llm_class.return_value = mock_llm
+
+        app = ChatGraph.create_app()
+        result = app.invoke({"messages": [HumanMessage(content="Query")], "user_id": 42})
+
+        # 验证 max_results=1 被传递到 SQL 的 LIMIT 参数
+        sql = mock_cursor_instance.execute.call_args[0][0]
+        params = mock_cursor_instance.execute.call_args[0][1]
+        assert "LIMIT %s" in sql
+        assert params[-1] == 1  # max_results 作为最后一个参数
+
+        tool_messages = [m for m in result["messages"] if isinstance(m, ToolMessage)]
+        assert len(tool_messages) >= 1
+
 
 class TestChatSSEEndpoint:
     """Layer 2: SSE endpoint integration — mock ChatGraph.create_app() + websockets"""
