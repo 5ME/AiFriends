@@ -16,3 +16,7 @@ backend/logs/
 .pytest_cache/
 .claude/
 项目Review报告*
+
+# RAG 离线评估数据 / 报告（不入库，规避数据集 license）
+backend/rag_eval_data/
+backend/rag_eval_output/

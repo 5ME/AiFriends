@@ -1,0 +1,3 @@
+# RAG 离线评估（P1-B2）专用，不进生产 requirements.txt
+modelscope
+pandas
