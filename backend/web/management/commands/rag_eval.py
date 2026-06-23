@@ -41,12 +41,20 @@ class Command(BaseCommand):
             self.stderr.write(f'加载数据集失败，请先运行 rag_eval_load: {e}')
             return
 
-        # qrels：{query_id: set(corpus_id)}，统一 str；只保留 score>0 的相关项
+        # qrels：{query_id: set(corpus_id)}，统一 str；只保留 score>0 的相关项。
+        # 坏行（缺字段 / score 非数值）跳过而非中断整个评估。
         qrels = {}
         for r in qrels_raw:
-            qid = str(r['query-id'])
-            if int(r.get('score', 1)) > 0:
-                qrels.setdefault(qid, set()).add(str(r['corpus-id']))
+            qid = r.get('query-id')
+            cid = r.get('corpus-id')
+            if qid is None or cid is None:
+                continue
+            try:
+                score = int(float(r.get('score', 1)))   # 容忍 "1.0" 之类浮点字符串
+            except (TypeError, ValueError):
+                continue
+            if score > 0:
+                qrels.setdefault(str(qid), set()).add(str(cid))
 
         eval_owner = get_eval_owner()
         if limit is not None:
@@ -74,19 +82,19 @@ class Command(BaseCommand):
             query_results.append({'hits': hits, 'num_relevant': len(relevant)})
 
         metrics = compute_metrics(query_results, top_k=TOP_K)
-        self._report(metrics, query_results, excluded, failed)
+        self._report(metrics, query_results, excluded, failed, limit)
 
-    def _report(self, metrics, query_results, excluded, failed):
+    def _report(self, metrics, query_results, excluded, failed, limit):
         evaluated = len(query_results)
         # first-hit 分布：从 hits 反推每个 query 第一个命中的 rank（无需额外数据）
         # 揭示排序信号 —— 如 hit@3 高但 first-hit 多落在 rank=4-10，说明排序仍有提升空间
         dist = {'rank=1': 0, 'rank=2': 0, 'rank=3': 0, 'rank=4-10': 0, 'no_hit': 0}
         for qr in query_results:
-            r = next((i for i, h in enumerate(qr['hits'], start=1) if h), None)
-            if r is None:
+            rank = next((i for i, h in enumerate(qr['hits'], start=1) if h), None)
+            if rank is None:
                 dist['no_hit'] += 1
-            elif r <= 3:
-                dist[f'rank={r}'] += 1
+            elif rank <= 3:
+                dist[f'rank={rank}'] += 1
             else:
                 dist['rank=4-10'] += 1
 
@@ -107,7 +115,8 @@ class Command(BaseCommand):
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         report = {
-            'dataset': 'CovidRetrieval', 'top_k': TOP_K,
+            'dataset': 'CovidRetrieval', 'top_k': TOP_K, 'limit': limit,
+            'timestamp': ts,
             'evaluated': evaluated, 'excluded': excluded, 'failed': failed,
             'metrics': metrics,
             'first_hit_distribution': dist,
