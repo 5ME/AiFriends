@@ -23,6 +23,15 @@ B2 给检索质量装一把**可量化、可回归的尺子**：用标准中文�
 
 **理由**：本项目当前是 demo / 作品集，**无真实用户流量** → 在线评估现在没数据可分析，message_id 关联纯属为未来铺路（YAGNI）。离线评估现在就能产出价值（可跑、可对标 leaderboard、可回归基线）。
 
+### 与 roadmap 的差异（集中说明）
+
+roadmap（`2026-06-11-next-steps-roadmap.md` P1-B2）原始规格有两点与本设计不同，特此集中列出，避免认知落差：
+
+| roadmap 原始规格 | 本设计选择 | 理由 |
+|------------------|-----------|------|
+| 构建 30-50 条 QA，基于系统知识库内容**手工标注** | 用**公开标准数据集** C-MTEB/CovidRetrieval（自带 qrels） | 免人工标注、可对标 leaderboard，说服力更强（详见 §2.1）。代价：评的是检索机制而非真实知识库相关性 |
+| `RetrievalTrace` 增加 `message_id` / `request_id` 字段 | **本期不做**，拆为后续项 | 本项目无真实流量，在线评估暂无数据可分析，message_id 纯属为未来铺路（YAGNI，详见 §一范围界定） |
+
 ---
 
 ## 二、方案选择
@@ -109,8 +118,9 @@ ModelScope (C-MTEB/CovidRetrieval)
 def retrieve_chunks(
     query_text: str,
     top_k: int = 5,
-    user_id: int | None = None,      # owner 过滤 + embedding usage 追踪
+    user_id: int | None = None,      # owner 过滤 +（track_usage 时）embedding usage 归属
     include_system: bool = True,      # 是否同时召回系统知识库（owner=NULL）
+    track_usage: bool = True,         # 是否记录 embedding usage（评估传 False 避免污染生产用量）
 ) -> list[dict]:
     """纯检索：embedding + pgvector 余弦排序 → 结构化 top-k。
     不做阈值过滤（调用方决定），不做格式化、不写 trace。"""
@@ -119,6 +129,10 @@ def retrieve_chunks(
 **owner 过滤**（替换硬编码的 `owner IS NULL OR owner=%s`）：
 - 线上：`include_system=True, user_id=X` → `WHERE owner_id IS NULL OR owner_id = X`
 - 评估：`include_system=False, user_id=eval_user.pk` → `WHERE owner_id = eval_user_id`
+
+**top_k 边界**：内部只做 `top_k = max(1, top_k)` 兜底（防 LIMIT 0/负数）。**不做上限钳制** —— 上限属信任边界（LLM tool call 不可信输入），由 `search_knowledge_base` 在工具层钳到 `[1, RAG_DEFAULT_MAX_RESULTS]` 后再传可信值进来；评估方传可信的 `top_k=10`（**底层若硬钳到 5，rank 6-10 命中丢失、NDCG@10/MRR@10 算错**）。
+
+**usage 解耦**：`embed_query` 经 `embed_documents`，在 `user_id is not None` 时写 `APIUsage(api_type='embedding')`（`embeddings.py:48`）。`track_usage=False` 时内部用 `CustomEmbeddings(user_id=None)` 创建客户端（不记 usage），但 SQL owner 过滤仍用 `user_id`。线上默认 `True`（行为不变），评估传 `False` → 949 条 query 不写 949 条虚假 embedding usage。
 
 **返回值**（结构化 dict 列表）：
 
@@ -140,11 +154,13 @@ def retrieve_chunks(
 
 **职责**：下载 → 1 passage=1 chunk 导入 eval owner（幂等，`--reset` 强制重灌）
 
+**选项**：`--reset` 清空后重灌 · `--limit N` 只导入前 N 条 passage（首次调试用，避免全量 964 embedding）
+
 **步骤**：
 1. ModelScope 下载 C-MTEB/CovidRetrieval（corpus / queries / qrels）到 `backend/rag_eval_data/`
 2. 获取或创建 eval owner（`auth.User(username='__rag_eval__')` + 关联 `UserProfile`）
 3. 遍历 corpus 每个 passage：
-   - `metadata['eval_id'] == corpus_id` 已存在 → 跳过（幂等）；`--reset` 则先清空 eval owner 全部 chunk
+   - 幂等检查：查 `metadata__eval_id=str(corpus_id)` 是否已存在 → 跳过（**`eval_id` 统一存为 str**；PG JSONB `->>` 返回 text，corpus_id 若是 int 会 `"42" != 42` 导致幂等失效，故存取都转 str）；`--reset` 则先清空 eval owner 全部 chunk
    - **不切分**，1 passage = 1 `DocumentChunk`：`chunk_index=0`，`metadata={'eval_id': corpus_id, 'eval_dataset': 'CovidRetrieval'}`
    - `CustomEmbeddings(user_id=None)` 逐 batch（50）embedding → `bulk_create`
 4. 单条 embedding 失败 → skip + 计数，不中断（fail-per-item）
@@ -154,10 +170,12 @@ def retrieve_chunks(
 
 **文件**：`backend/web/management/commands/rag_eval.py`
 
+**选项**：`--limit N` 只评估前 N 条 query（首次调试用，全量 949 条约几分钟）
+
 **步骤**：
 1. 从 cache 加载 queries + qrels → 构建 `{query_id: set([corpus_id...])}` lookup
 2. 获取 eval owner
-3. 遍历 949 query：`retrieve_chunks(query, top_k=10, user_id=eval_user.pk, include_system=False)` → 对 top-10 每条检查 `metadata['eval_id'] ∈ qrels` → 记录 binary 命中向量
+3. 遍历 949 query：`retrieve_chunks(query, top_k=10, user_id=eval_user.pk, include_system=False, track_usage=False)` → 对 top-10 每条检查 `str(metadata['eval_id']) ∈ qrels` → 记录 binary 命中向量（`track_usage=False` 避免 949 条评估 embedding 污染生产 usage）
 4. 汇总指标（独立纯函数 `compute_metrics()`，便于单测）
 5. 输出：控制台表格 + `backend/rag_eval_output/{timestamp}.json`
 
@@ -239,6 +257,7 @@ python manage.py rag_eval_cleanup --all  # 连 eval UserProfile + User 一起删
 | `test_retrieve_chunks_returns_structured` | mock cursor → 返回 `list[dict]`，字段齐全 | test_chat_agent.py |
 | `test_retrieve_chunks_owner_filter` | `include_system=False` 时 SQL 只含 `owner_id=%s`，无 `IS NULL` | test_chat_agent.py |
 | `test_retrieve_chunks_no_threshold` | 大 distance 也返回（过滤是上层的事） | test_chat_agent.py |
+| `test_retrieve_chunks_track_usage_false` | `track_usage=False` 时不调 `record_api_usage`（评估不污染 usage） | test_chat_agent.py |
 | `test_compute_metrics_hit_at_k` | 命中向量 → hit@1/hit@3 算对 | test_rag_eval.py |
 | `test_compute_metrics_mrr` | 命中在 rank2 → MRR=0.5 | test_rag_eval.py |
 | `test_compute_metrics_ndcg` | DCG/IDCG 归一化算对 | test_rag_eval.py |
@@ -250,12 +269,12 @@ python manage.py rag_eval_cleanup --all  # 连 eval UserProfile + User 一起删
 
 ## 七、实施清单
 
-- [ ] `graph.py` 抽 `retrieve_chunks()`，`search_knowledge_base` 改调它（行为不变）
+- [ ] `graph.py` 抽 `retrieve_chunks()`（含 `top_k=max(1,top_k)` 兜底 + `track_usage` 参数），`search_knowledge_base` 改调它（保留自身 max_results 钳制，行为不变）
 - [ ] 跑现有 9 个 RAG 测试验证重构无回归
-- [ ] 新增 `rag_eval_load` command（ModelScope 下载 + 1:1 导入 + 幂等/reset）
-- [ ] 新增 `rag_eval` command + `compute_metrics()` 纯函数
+- [ ] 新增 `rag_eval_load` command（ModelScope 下载 + 1:1 导入 + 幂等(str eval_id)/reset/limit）
+- [ ] 新增 `rag_eval` command（`track_usage=False` + `--limit`）+ `compute_metrics()` 纯函数
 - [ ] 新增 `rag_eval_cleanup` command（可选）
 - [ ] `.gitignore` 加 `backend/rag_eval_data/` 和 `backend/rag_eval_output/`
-- [ ] 新增 `retrieve_chunks` 3 个测试 + `compute_metrics` 4 个测试
+- [ ] 新增 `retrieve_chunks` 4 个测试 + `compute_metrics` 4 个测试
 - [ ] 依赖说明：`modelscope` + `pandas`（dev 专用）
 - [ ] 跑全量测试验证（不破现有，新增通过）
