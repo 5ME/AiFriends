@@ -52,36 +52,48 @@ class Command(BaseCommand):
             .values_list('metadata__eval_id', flat=True)
         )
 
-        # 4. 逐条导入（1 passage=1 chunk，不切分）
+        # 4. 收集待导入（过滤缺 _id / 空文本 / 已存在），再分批 embedding 写入
         imported = skipped = failed = 0
         rows = list(corpus)
         if limit is not None:
             rows = rows[:limit]
-        embedder = CustomEmbeddings(user_id=None)   # 系统导入不记 usage
+
+        to_import = []  # [(eval_id, text), ...]
         for rec in rows:
-            # C-MTEB corpus schema：'_id'（passage id）、'text'（正文）、可选 'title'
-            eval_id = str(rec['_id'])
+            raw_id = rec.get('_id')
+            if raw_id is None:          # 防御缺字段记录，跳过而非中断
+                skipped += 1
+                continue
+            eval_id = str(raw_id)
             text = (rec.get('text') or '').strip()
-            if not text:
+            if not text or eval_id in existing:
                 skipped += 1
                 continue
-            if eval_id in existing:
-                skipped += 1
-                continue
+            to_import.append((eval_id, text))
+
+        # 分批 embedding（embed_documents 内部按 batch 请求）+ bulk_create，
+        # 复用 insert_documents 的批量模式，避免逐条 round trip
+        embedder = CustomEmbeddings(user_id=None)   # 系统导入不记 usage
+        BATCH = 50
+        for i in range(0, len(to_import), BATCH):
+            batch = to_import[i:i + BATCH]
+            texts = [t for _, t in batch]
             try:
-                vector = embedder.embed_query(text)
-                DocumentChunk.objects.create(
-                    content=text,
-                    embedding=vector,
-                    owner=eval_owner,
-                    chunk_index=0,           # 1 passage=1 chunk，固定 0
-                    token_count=len(text),
-                    metadata={'eval_id': eval_id, 'eval_dataset': EVAL_DATASET},
-                )
-                imported += 1
+                vectors = embedder.embed_documents(texts)
             except Exception:
-                logger.exception('导入失败, eval_id=%s', eval_id)
-                failed += 1
+                logger.exception('批 embedding 失败, batch_start=%d', i)
+                failed += len(batch)
+                continue
+            objs = [
+                DocumentChunk(
+                    content=t, embedding=v, owner=eval_owner,
+                    chunk_index=0, token_count=len(t),
+                    metadata={'eval_id': eid, 'eval_dataset': EVAL_DATASET},
+                )
+                for (eid, t), v in zip(batch, vectors)
+            ]
+            DocumentChunk.objects.bulk_create(objs, batch_size=50)
+            imported += len(objs)
 
         self.stdout.write(self.style.SUCCESS(
             f'[导入完成] 新增 {imported} / 跳过 {skipped} / 失败 {failed}'
