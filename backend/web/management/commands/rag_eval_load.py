@@ -1,4 +1,6 @@
-"""下载 C-MTEB/CovidRetrieval 并以 1 passage=1 chunk 导入 eval owner（离线评估语料）。"""
+"""下载 C-MTEB/medicalretrieval 并以 1 passage=1 chunk 导入 eval owner。
+
+仅导入 qrels 中引用的 passage（reduced corpus），避免全量 100K embedding。"""
 import logging
 import os
 
@@ -11,11 +13,11 @@ from web.utils.rag_eval import EVAL_DATASET, get_eval_owner
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = os.path.join(settings.BASE_DIR, 'rag_eval_data')
+DS_ID = 'mteb/medicalretrieval'
 
 
 class Command(BaseCommand):
-    help = '下载 C-MTEB/CovidRetrieval 并导入评估语料（1 passage=1 chunk）'
+    help = '下载 medicalretrieval 评估语料并导入（qrels-referenced reduced corpus）'
 
     def add_arguments(self, parser):
         parser.add_argument('--reset', action='store_true',
@@ -27,52 +29,62 @@ class Command(BaseCommand):
         reset = options['reset']
         limit = options['limit']
 
-        # 1. 下载 corpus（ModelScope，国内网络友好）
+        # 1. 加载 qrels → 提取 unique corpus-id（HuggingFace datasets，国际直连）
+        from datasets import load_dataset
         try:
-            from modelscope.msdatasets import MsDataset
-        except ImportError:
-            self.stderr.write('缺少 modelscope，请先 pip install modelscope pandas')
-            return
-        try:
-            corpus = MsDataset.load('C-MTEB/CovidRetrieval', subset_name='corpus',
-                                    cache_dir=DATA_DIR)
+            qrels = list(load_dataset(DS_ID, 'default', split='dev'))
         except Exception as e:
-            self.stderr.write(f'ModelScope 下载失败，请检查网络后重试: {e}')
+            self.stderr.write(f'加载 qrels 失败，请检查网络: {e}')
             return
 
-        # 2. eval owner + 可选 reset
+        relevant_ids = set()
+        for r in qrels:
+            try:
+                if int(float(r.get('score', 1))) > 0:
+                    relevant_ids.add(str(r['corpus-id']))
+            except (TypeError, ValueError):
+                continue
+
+        self.stdout.write(f'qrels 涉及 {len(relevant_ids)} 个 unique passage')
+
+        # 2. 加载 corpus（streaming 避免全量 100K 内存），仅保留 qrels 引用的 passage
+        try:
+            corpus = load_dataset(DS_ID, 'corpus', split='dev', streaming=True)
+        except Exception as e:
+            self.stderr.write(f'加载 corpus 失败: {e}')
+            return
+
+        # 3. eval owner + 可选 reset
         eval_owner = get_eval_owner()
         if reset:
             deleted, _ = DocumentChunk.objects.filter(owner=eval_owner).delete()
             self.stdout.write(f'[reset] 已清空 {deleted} 条旧 eval chunk')
 
-        # 3. 已导入的 eval_id 集合（幂等，统一 str）
+        # 4. 已导入的 eval_id 集合（幂等，统一 str）
         existing = set(
             DocumentChunk.objects.filter(owner=eval_owner)
             .values_list('metadata__eval_id', flat=True)
         )
 
-        # 4. 收集待导入（过滤缺 _id / 空文本 / 已存在），再分批 embedding 写入
+        # 5. 收集 qrels 涉及的、尚未导入的 passage
         imported = skipped = failed = 0
-        rows = list(corpus)
-        if limit is not None:
-            rows = rows[:limit]
-
         to_import = []  # [(eval_id, text), ...]
-        for rec in rows:
+        for rec in corpus:
             raw_id = rec.get('_id')
-            if raw_id is None:          # 防御缺字段记录，跳过而非中断
-                skipped += 1
+            if raw_id is None:
                 continue
             eval_id = str(raw_id)
+            if eval_id not in relevant_ids:
+                continue  # 跳过 qrels 未引用的 passage（reduced corpus 策略）
             text = (rec.get('text') or '').strip()
             if not text or eval_id in existing:
                 skipped += 1
                 continue
             to_import.append((eval_id, text))
+            if limit is not None and len(to_import) >= limit:
+                break
 
-        # 分批 embedding（embed_documents 内部按 batch 请求）+ bulk_create，
-        # 复用 insert_documents 的批量模式，避免逐条 round trip
+        # 6. 分批 embedding（embed_documents 内部按 batch 请求）+ bulk_create
         embedder = CustomEmbeddings(user_id=None)   # 系统导入不记 usage
         BATCH = 50
         for i in range(0, len(to_import), BATCH):

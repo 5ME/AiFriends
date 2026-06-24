@@ -7,7 +7,7 @@ from web.models.user import UserProfile
 
 # 评估专用账号 / 数据集标识（与真实用户、真实知识库隔离）
 EVAL_USERNAME = '__rag_eval__'
-EVAL_DATASET = 'CovidRetrieval'
+EVAL_DATASET = 'medicalretrieval'
 
 
 def get_eval_owner() -> UserProfile:

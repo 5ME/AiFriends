@@ -12,7 +12,7 @@ from web.views.friend.message.chat.graph import retrieve_chunks
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = os.path.join(settings.BASE_DIR, 'rag_eval_data')
+DS_ID = 'mteb/medicalretrieval'
 OUTPUT_DIR = os.path.join(settings.BASE_DIR, 'rag_eval_output')
 TOP_K = 10
 
@@ -27,18 +27,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         limit = options['limit']
 
+        from datasets import load_dataset
         try:
-            from modelscope.msdatasets import MsDataset
-        except ImportError:
-            self.stderr.write('缺少 modelscope，请先 pip install modelscope pandas')
-            return
-        try:
-            queries = list(MsDataset.load('C-MTEB/CovidRetrieval', subset_name='queries',
-                                          cache_dir=DATA_DIR))
-            qrels_raw = list(MsDataset.load('C-MTEB/CovidRetrieval-qrels',
-                                            cache_dir=DATA_DIR))
+            queries = list(load_dataset(DS_ID, 'queries', split='dev'))
+            qrels_raw = list(load_dataset(DS_ID, 'default', split='dev'))
         except Exception as e:
-            self.stderr.write(f'加载数据集失败，请先运行 rag_eval_load: {e}')
+            self.stderr.write(f'加载数据集失败（HF 网络），请检查网络后重试: {e}')
             return
 
         # qrels：{query_id: set(corpus_id)}，统一 str；只保留 score>0 的相关项。
@@ -99,7 +93,7 @@ class Command(BaseCommand):
                 dist['rank=4-10'] += 1
 
         # 控制台表格
-        self.stdout.write('===== RAG Evaluation (CovidRetrieval) =====')
+        self.stdout.write('===== RAG Evaluation (medicalretrieval, reduced corpus) =====')
         self.stdout.write(f'Evaluated: {evaluated}   Excluded(no-qrels): {excluded}   '
                           f'Failed: {failed}   Top-K: {TOP_K}')
         self.stdout.write(f"hit@1:   {metrics['hit@1']:.4f}")
@@ -115,7 +109,7 @@ class Command(BaseCommand):
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         report = {
-            'dataset': 'CovidRetrieval', 'top_k': TOP_K, 'limit': limit,
+            'dataset': DS_ID, 'top_k': TOP_K, 'limit': limit,
             'timestamp': ts,
             'evaluated': evaluated, 'excluded': excluded, 'failed': failed,
             'metrics': metrics,

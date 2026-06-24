@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from typing import TypedDict, Annotated, Sequence
@@ -67,6 +68,12 @@ def retrieve_chunks(
     results = []
     for row in rows:
         chunk_id, content, chunk_index, document_id, title, distance, metadata = row
+        # cursor 直接查 JSONField 返回的是 JSON 字符串，需解析为 dict
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except (json.JSONDecodeError, TypeError):
+                metadata = {}
         results.append({
             'chunk_id': chunk_id,
             'content': content,
