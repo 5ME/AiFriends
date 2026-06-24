@@ -91,8 +91,8 @@ class TestChatGraphRouting:
         # 中的 cursor 仍指向同一个 mock（保有 fetchall.return_value 等）
         mock_cursor_instance.__enter__.return_value = mock_cursor_instance
         mock_cursor_instance.fetchall.return_value = [
-            (1, "阿里云百炼平台介绍内容...", 2, 5, "平台使用指南.pdf", 0.12),
-            (2, "另一段检索内容...", 7, 5, "平台使用指南.pdf", 0.18),
+            (1, "阿里云百炼平台介绍内容...", 2, 5, "平台使用指南.pdf", 0.12, {}),
+            (2, "另一段检索内容...", 7, 5, "平台使用指南.pdf", 0.18, {}),
         ]
         mock_cursor_method.return_value = mock_cursor_instance
 
@@ -171,8 +171,8 @@ class TestChatGraphRouting:
         mock_cursor_instance.__enter__.return_value = mock_cursor_instance
         # distance=0.8, 0.9 → 均超过 RAG_SIMILARITY_THRESHOLD=0.5
         mock_cursor_instance.fetchall.return_value = [
-            (1, "不相关内容", 0, 5, "doc.pdf", 0.8),
-            (2, "另一条不相关内容", 1, 5, "doc.pdf", 0.9),
+            (1, "不相关内容", 0, 5, "doc.pdf", 0.8, {}),
+            (2, "另一条不相关内容", 1, 5, "doc.pdf", 0.9, {}),
         ]
         mock_cursor_method.return_value = mock_cursor_instance
 
@@ -211,9 +211,9 @@ class TestChatGraphRouting:
         mock_cursor_instance.__enter__.return_value = mock_cursor_instance
         # distance=0.3 ✅, 0.8 ❌, 0.4 ✅ → 保留 2 条
         mock_cursor_instance.fetchall.return_value = [
-            (1, "相关内容A", 0, 5, "doc.pdf", 0.3),
-            (2, "不相关内容", 1, 5, "doc.pdf", 0.8),
-            (3, "相关内容B", 2, 5, "doc.pdf", 0.4),
+            (1, "相关内容A", 0, 5, "doc.pdf", 0.3, {}),
+            (2, "不相关内容", 1, 5, "doc.pdf", 0.8, {}),
+            (3, "相关内容B", 2, 5, "doc.pdf", 0.4, {}),
         ]
         mock_cursor_method.return_value = mock_cursor_instance
 
@@ -255,8 +255,8 @@ class TestChatGraphRouting:
         mock_cursor_instance = MagicMock()
         mock_cursor_instance.__enter__.return_value = mock_cursor_instance
         mock_cursor_instance.fetchall.return_value = [
-            (1, "结果1", 0, 5, "doc.pdf", 0.1),
-            (2, "结果2", 1, 5, "doc.pdf", 0.2),
+            (1, "结果1", 0, 5, "doc.pdf", 0.1, {}),
+            (2, "结果2", 1, 5, "doc.pdf", 0.2, {}),
         ]
         mock_cursor_method.return_value = mock_cursor_instance
 
@@ -301,7 +301,7 @@ class TestChatGraphRouting:
         mock_cursor_instance = MagicMock()
         mock_cursor_instance.__enter__.return_value = mock_cursor_instance
         mock_cursor_instance.fetchall.return_value = [
-            (1, "结果1", 0, 5, "doc.pdf", 0.1),
+            (1, "结果1", 0, 5, "doc.pdf", 0.1, {}),
         ]
         mock_cursor_method.return_value = mock_cursor_instance
 
@@ -512,3 +512,116 @@ class TestKnowledgeBaseToolDescription:
         source = inspect.getsource(ChatGraph.create_app)
         assert '阿里云百炼' not in source, \
             'search_knowledge_base tool description 不应写死百炼平台'
+
+
+class TestRetrieveChunks:
+    """retrieve_chunks 共享检索核心 —— 直接测函数，不经 LangGraph"""
+
+    @patch("web.views.friend.message.chat.graph.CustomEmbeddings")
+    @patch("django.db.backends.base.base.BaseDatabaseWrapper.cursor")
+    def test_retrieve_chunks_returns_structured(self, mock_cursor_method, mock_emb_class):
+        """返回结构化 dict 列表，字段齐全（含 metadata）"""
+        from web.views.friend.message.chat.graph import retrieve_chunks
+
+        mock_cursor = MagicMock()
+        mock_cursor.__enter__.return_value = mock_cursor
+        mock_cursor.fetchall.return_value = [
+            (1, "内容A", 0, 7, "doc.pdf", 0.12, {"eval_id": "p1"}),
+        ]
+        mock_cursor_method.return_value = mock_cursor
+        mock_emb = MagicMock()
+        mock_emb.embed_query.return_value = [0.1] * 1024
+        mock_emb_class.return_value = mock_emb
+
+        results = retrieve_chunks("q", top_k=5, user_id=42)
+
+        assert len(results) == 1
+        r = results[0]
+        assert r["chunk_id"] == 1
+        assert r["content"] == "内容A"
+        assert r["chunk_index"] == 0
+        assert r["document_id"] == 7
+        assert r["title"] == "doc.pdf"
+        assert r["distance"] == 0.12
+        assert r["metadata"] == {"eval_id": "p1"}
+
+    @patch("web.views.friend.message.chat.graph.CustomEmbeddings")
+    @patch("django.db.backends.base.base.BaseDatabaseWrapper.cursor")
+    def test_retrieve_chunks_owner_filter(self, mock_cursor_method, mock_emb_class):
+        """include_system=False → SQL 只含 owner_id=%s，不含 IS NULL；True → 含 IS NULL"""
+        from web.views.friend.message.chat.graph import retrieve_chunks
+
+        mock_cursor = MagicMock()
+        mock_cursor.__enter__.return_value = mock_cursor
+        mock_cursor.fetchall.return_value = []
+        mock_cursor_method.return_value = mock_cursor
+        mock_emb = MagicMock()
+        mock_emb.embed_query.return_value = [0.1] * 1024
+        mock_emb_class.return_value = mock_emb
+
+        retrieve_chunks("q", top_k=10, user_id=99, include_system=False)
+        sql_eval = mock_cursor.execute.call_args[0][0]
+        assert "owner_id = %s" in sql_eval
+        assert "IS NULL" not in sql_eval
+
+        retrieve_chunks("q", top_k=10, user_id=99, include_system=True)
+        sql_online = mock_cursor.execute.call_args[0][0]
+        assert "IS NULL" in sql_online
+
+    @patch("web.views.friend.message.chat.graph.CustomEmbeddings")
+    @patch("django.db.backends.base.base.BaseDatabaseWrapper.cursor")
+    def test_retrieve_chunks_no_threshold(self, mock_cursor_method, mock_emb_class):
+        """不做阈值过滤 —— 大 distance 也原样返回（过滤是上层的事）"""
+        from web.views.friend.message.chat.graph import retrieve_chunks
+
+        mock_cursor = MagicMock()
+        mock_cursor.__enter__.return_value = mock_cursor
+        mock_cursor.fetchall.return_value = [
+            (1, "远内容", 0, 7, "d", 0.95, {}),
+        ]
+        mock_cursor_method.return_value = mock_cursor
+        mock_emb = MagicMock()
+        mock_emb.embed_query.return_value = [0.1] * 1024
+        mock_emb_class.return_value = mock_emb
+
+        results = retrieve_chunks("q", user_id=1)
+        assert len(results) == 1
+        assert results[0]["distance"] == 0.95
+
+    @patch("web.views.friend.message.chat.graph.CustomEmbeddings")
+    @patch("django.db.backends.base.base.BaseDatabaseWrapper.cursor")
+    def test_retrieve_chunks_track_usage_false(self, mock_cursor_method, mock_emb_class):
+        """track_usage=False → CustomEmbeddings 以 user_id=None 创建（不记 usage）"""
+        from web.views.friend.message.chat.graph import retrieve_chunks
+
+        mock_cursor = MagicMock()
+        mock_cursor.__enter__.return_value = mock_cursor
+        mock_cursor.fetchall.return_value = []
+        mock_cursor_method.return_value = mock_cursor
+        mock_emb = MagicMock()
+        mock_emb.embed_query.return_value = [0.1] * 1024
+        mock_emb_class.return_value = mock_emb
+
+        retrieve_chunks("q", top_k=5, user_id=42, track_usage=False)
+        mock_emb_class.assert_called_with(user_id=None)
+
+    @patch("web.views.friend.message.chat.graph.CustomEmbeddings")
+    @patch("django.db.backends.base.base.BaseDatabaseWrapper.cursor")
+    def test_retrieve_chunks_top_k_floor(self, mock_cursor_method, mock_emb_class):
+        """top_k <= 0 被钳到 1（防 LIMIT 0/负数）"""
+        from web.views.friend.message.chat.graph import retrieve_chunks
+
+        mock_cursor = MagicMock()
+        mock_cursor.__enter__.return_value = mock_cursor
+        mock_cursor.fetchall.return_value = []
+        mock_cursor_method.return_value = mock_cursor
+        mock_emb = MagicMock()
+        mock_emb.embed_query.return_value = [0.1] * 1024
+        mock_emb_class.return_value = mock_emb
+
+        retrieve_chunks("q", top_k=0, user_id=1)
+        params = mock_cursor.execute.call_args[0][1]
+        assert params[-1] == 1  # top_k 钳到 1，作为 SQL LIMIT 最后一个参数
+
+        retrieve_chunks("q", top_k=5, user_id=42, track_usage=True)
+        mock_emb_class.assert_called_with(user_id=42)

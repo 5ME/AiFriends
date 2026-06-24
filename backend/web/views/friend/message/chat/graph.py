@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from typing import TypedDict, Annotated, Sequence
@@ -16,6 +17,74 @@ from langgraph.prebuilt import InjectedState, ToolNode
 from web.documents.utils.custom_embeddings import CustomEmbeddings
 
 logger = logging.getLogger(__name__)
+
+
+def retrieve_chunks(
+    query_text: str,
+    top_k: int = 5,
+    user_id: int | None = None,      # owner 过滤 +（track_usage 时）embedding usage 归属
+    include_system: bool = True,      # 是否同时召回系统知识库（owner_id IS NULL）
+    track_usage: bool = True,         # 是否记录 embedding usage（评估传 False 避免污染生产用量）
+) -> list[dict]:
+    """RAG 检索核心：embedding + pgvector 余弦排序 → 结构化 top-k。
+
+    不做阈值过滤、不格式化、不写 trace —— 这些由调用方负责。
+    线上工具 search_knowledge_base 与离线评估 rag_eval 共用此函数，
+    保证评估的就是真实生产检索逻辑。
+    """
+    from web.models.document import DocumentChunk, UserDocument
+
+    # 兜底防 LIMIT 0/负数；上限钳制属信任边界，由调用方（如 search_knowledge_base）负责
+    top_k = max(1, top_k)
+    # track_usage=False 时以 user_id=None 创建 embeddings，避免评估流量写入生产 APIUsage
+    emb_user_id = user_id if track_usage else None
+    embeddings = CustomEmbeddings(user_id=emb_user_id)
+    emb = embeddings.embed_query(query_text)
+
+    chunk_table = DocumentChunk._meta.db_table
+    doc_table = UserDocument._meta.db_table
+
+    # include_system 决定是否召回系统知识库（owner_id IS NULL）；
+    # 评估传 include_system=False，只查 eval owner，避免真实系统库混入评估结果
+    if include_system:
+        where_clause = "dc.owner_id IS NULL OR dc.owner_id = %s"
+    else:
+        where_clause = "dc.owner_id = %s"
+
+    with connection.cursor() as cursor:
+        cursor.execute(f"""
+            SELECT dc.id, dc.content, dc.chunk_index, dc.document_id,
+                   ud.title AS document_title,
+                   dc.embedding <=> %s::vector AS distance,
+                   dc.metadata
+            FROM {chunk_table} dc
+            LEFT JOIN {doc_table} ud ON dc.document_id = ud.id
+            WHERE {where_clause}
+            ORDER BY dc.embedding <=> %s::vector
+            LIMIT %s
+        """, [emb, user_id, emb, top_k])
+        rows = cursor.fetchall()
+
+    results = []
+    for row in rows:
+        chunk_id, content, chunk_index, document_id, title, distance, metadata = row
+        # cursor 直接查 JSONField 返回的是 JSON 字符串，需解析为 dict
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except (json.JSONDecodeError, TypeError):
+                metadata = {}
+        results.append({
+            'chunk_id': chunk_id,
+            'content': content,
+            'chunk_index': chunk_index,
+            'document_id': document_id,
+            'title': title,
+            'distance': distance,
+            'metadata': metadata or {},
+        })
+    return results
+
 
 # LangGraph Chat Agent: LLM 决策 → tool 调用 → LLM 再决策的循环
 class ChatGraph:
@@ -63,47 +132,35 @@ class ChatGraph:
             default_max = getattr(settings, 'RAG_DEFAULT_MAX_RESULTS', 5)
             if max_results is None:
                 max_results = default_max
-            # 钳制 LLM 传入的值到 [1, default_max]，防止异常/恶意取值导致 SQL LIMIT 过大
-            # （max_results 是 LLM tool call 参数，属不可信输入；工具描述已限定 1-5）
+            # 钳制 LLM 传入的值到 [1, default_max]（不可信输入，信任边界在工具层）
             max_results = max(1, min(max_results, default_max))
 
-            from web.models.document import DocumentChunk, UserDocument
             from web.models.retrieval_trace import RetrievalTrace
 
             user_id = state.get("user_id")
             logger.info('RAG 知识库检索开始, query=%s, user_id=%s', query[:100], user_id)
 
-            embeddings = CustomEmbeddings(user_id=user_id)
-            emb = embeddings.embed_query(query)
-
-            chunk_table = DocumentChunk._meta.db_table
-            doc_table = UserDocument._meta.db_table
-
-            # 使用 cursor 执行 JOIN 查询，一次拿到 title + distance
-            with connection.cursor() as cursor:
-                cursor.execute(f"""
-                    SELECT dc.id, dc.content, dc.chunk_index, dc.document_id,
-                           ud.title AS document_title,
-                           dc.embedding <=> %s::vector AS distance
-                    FROM {chunk_table} dc
-                    LEFT JOIN {doc_table} ud ON dc.document_id = ud.id
-                    WHERE dc.owner_id IS NULL OR dc.owner_id = %s
-                    ORDER BY dc.embedding <=> %s::vector
-                    LIMIT %s
-                """, [emb, user_id, emb, max_results])
-                rows = cursor.fetchall()
+            # 调共享检索核心：线上召回 系统库 + 当前用户，并记录 embedding usage
+            rows = retrieve_chunks(
+                query, top_k=max_results, user_id=user_id,
+                include_system=True, track_usage=True,
+            )
 
             # 按余弦距离阈值过滤不相关结果
             threshold = getattr(settings, 'RAG_SIMILARITY_THRESHOLD', 0.5)
-            rows = [r for r in rows if r[5] < threshold]  # r[5] = distance
+            rows = [r for r in rows if r['distance'] < threshold]
 
             if not rows:
                 return "知识库中未找到相关信息。请尝试更换关键词后重新检索。"
 
             parts = ["从知识库中找到以下相关信息：\n"]
             for i, row in enumerate(rows):
-                _, content, chunk_index, document_id, title, distance = row
-                # 明确 if/elif/else 构建来源标签（避免三目运算符优先级歧义）
+                content = row['content']
+                chunk_index = row['chunk_index']
+                document_id = row['document_id']
+                title = row['title']
+                distance = row['distance']
+                # 明确 if/elif/else 构建来源标签
                 if title:
                     source_label = title
                 elif document_id:

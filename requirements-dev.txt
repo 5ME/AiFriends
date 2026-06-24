@@ -1,0 +1,3 @@
+# RAG 离线评估（P1-B2）专用，不进生产 requirements.txt
+# datasets 自带 pandas/filelock 等传递依赖，无需显式列出
+datasets
