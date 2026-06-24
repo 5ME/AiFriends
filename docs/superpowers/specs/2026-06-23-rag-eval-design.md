@@ -278,3 +278,39 @@ python manage.py rag_eval_cleanup --all  # 连 eval UserProfile + User 一起删
 - [ ] 新增 `retrieve_chunks` 4 个测试 + `compute_metrics` 4 个测试
 - [ ] 依赖说明：`modelscope` + `pandas`（dev 专用）
 - [ ] 跑全量测试验证（不破现有，新增通过）
+
+---
+
+## 八、变更记录（2026-06-24 端到端验证后）
+
+### 变更 1：数据下载源切换
+
+**原方案**：ModelScope (`modelscope.msdatasets.MsDataset.load`)  
+**新方案**：HuggingFace `datasets` (`from datasets import load_dataset`)
+
+**理由**：ModelScope 在 conda py312/Windows 上依赖链断裂（`addict`/`datasets` 等传递依赖未自动安装，且 `datasets 5.0` 与 modelscope 1.37.1 API 不兼容）。HF `datasets` 为标准库，API 稳定，用户已可直连国际网络，无需代理。
+
+### 变更 2：数据集从 CovidRetrieval → medicalretrieval
+
+**原选择**：C-MTEB/CovidRetrieval（~964 corpus，设计时预期的规模）  
+**现选择**：mteb/medicalretrieval（100K corpus，但采用 qrels-referenced reduced 策略）
+
+**理由**：端到端探查发现 C-MTEB 所有检索数据集的 corpus 均为 ~100K（MTEB v2 标准化为全量检索评估），全量 embedding 成本不可行。medicalretrieval schema 完全符合现有代码假设（`_id`/`text`、`query-id`/`corpus-id`/`score`），无需改字段名。
+
+### 变更 3：corpus 采用 qrels-referenced reduced 策略（非全量）
+
+**策略**：仅导入 qrels 中引用的 unique `corpus-id`（medicalretrieval 约 1000 条），非全量 100K。报告标注 `(medicalretrieval, reduced corpus)`。
+
+**影响**：hit@k/MRR 在 reduced 环境下偏高（干扰项少），NDCG@10 不能直接对标 MTEB leaderboard（leaderboard 使用全量 100K 环境）。但指标仍有意义——评估的是"在已知答案集合中检索"的能力，且整个 pipeline 的**命中判定、指标计算、first-hit 分布逻辑**与全量环境完全一致。后续有需要可扩展到全量。
+
+### 变更 4：metadata JSON 解析 fix
+
+cursor 直接查 PostgreSQL JSONField 返回的是 JSON 字符串（非 Python dict）。`retrieve_chunks` 新增 `json.loads(metadata)` 解析 + `isinstance(metadata, str)` 守卫。此 bug 在 mock 测试中不暴露（mock fetchall 直接返回 dict），仅端到端真实跑才触发。
+
+### 环境变更
+
+| 原来 | 现在 | 原因 |
+|------|------|------|
+| modelscope + pandas + addict | — | modelscope 依赖链，已删除 |
+| datasets + pandas + filelock | datasets | HF datasets 自带 pandas/filelock 传递依赖 |
+| requirements-dev.txt: modelscope, pandas | datasets | 同上 |
