@@ -12,7 +12,7 @@ function handleAvatarClick() {
 </script>
 
 <template>
-  <div class="absolute left-3 right-40 top-3 h-10 w-fit rounded-full bg-black/50 flex items-center gap-2 px-2 cursor-pointer"
+  <div class="h-10 w-fit rounded-full bg-black/50 flex items-center gap-2 px-2 cursor-pointer"
        @click="handleAvatarClick">
     <div class="avatar">
       <div class="w-8 rounded-full">

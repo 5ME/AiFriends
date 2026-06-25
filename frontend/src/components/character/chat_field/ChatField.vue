@@ -2,6 +2,7 @@
 import {computed, nextTick, ref, useTemplateRef} from "vue";
 import InputField from "@/components/character/chat_field/input_field/InputField.vue";
 import CharacterPhotoField from "@/components/character/chat_field/character_photo_field/CharacterPhotoField.vue";
+import VoiceToggle from "@/components/character/chat_field/VoiceToggle.vue";
 import ChatHistory from "@/components/character/chat_field/chat_history/ChatHistory.vue";
 
 const props = defineProps(['friend'])
@@ -70,10 +71,13 @@ defineExpose({showModal})
         </button>
       </form>
 
-      <!--角色头像-->
-      <CharacterPhotoField v-if="friend"
-                           :character="friend.character"
-      />
+      <!--顶部左侧：角色头像 + 语音开关-->
+      <div class="absolute left-3 top-3 flex items-center gap-2">
+        <CharacterPhotoField v-if="friend"
+                             :character="friend.character"
+        />
+        <VoiceToggle />
+      </div>
 
       <!--聊天记录-->
       <ChatHistory v-if="friend"
