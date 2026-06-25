@@ -323,39 +323,44 @@ class MessageChatView(APIView):
         wss_url = os.getenv('WSS_URL')
         api_key = os.getenv('API_KEY')
         headers = {'Authorization': f'Bearer {api_key}'}
-        async with websockets.connect(wss_url, additional_headers=headers) as ws:
-            await ws.send(json.dumps({
-                "header": {
-                    "action": "run-task",
-                    "task_id": task_id,  # 随机uuid
-                    "streaming": "duplex"
-                },
-                "payload": {
-                    "task_group": "audio",
-                    "task": "tts",
-                    "function": "SpeechSynthesizer",
-                    "model": "cosyvoice-v3-flash",
-                    "parameters": {
-                        "text_type": "PlainText",
-                        "voice": voice_id,  # 音色
-                        "format": "mp3",  # 音频格式
-                        "sample_rate": 22050,  # 采样率
-                        "volume": 50,  # 音量
-                        "rate": 1.0,  # 语速
-                        "pitch": 1  # 音调
+        try:
+            async with websockets.connect(wss_url, additional_headers=headers) as ws:
+                await ws.send(json.dumps({
+                    "header": {
+                        "action": "run-task",
+                        "task_id": task_id,  # 随机uuid
+                        "streaming": "duplex"
                     },
-                    "input": {  # input不能省去，不然会报错
+                    "payload": {
+                        "task_group": "audio",
+                        "task": "tts",
+                        "function": "SpeechSynthesizer",
+                        "model": "cosyvoice-v3-flash",
+                        "parameters": {
+                            "text_type": "PlainText",
+                            "voice": voice_id,  # 音色
+                            "format": "mp3",  # 音频格式
+                            "sample_rate": 22050,  # 采样率
+                            "volume": 50,  # 音量
+                            "rate": 1.0,  # 语速
+                            "pitch": 1  # 音调
+                        },
+                        "input": {  # input不能省去，不然会报错
+                        }
                     }
-                }
-            }))
-            logger.info('TTS WebSocket 已连接, task_id=%s, voice_id=%s', task_id, voice_id)
-            async for msg in ws:
-                if json.loads(msg)['header']['event'] == 'task-started':
-                    break
-            await asyncio.gather(
-                self.tts_sender(ws, task_id, app, inputs, mq, user_id),
-                self.tts_receiver(ws, mq)
-            )
+                }))
+                logger.info('TTS WebSocket 已连接, task_id=%s, voice_id=%s', task_id, voice_id)
+                async for msg in ws:
+                    if json.loads(msg)['header']['event'] == 'task-started':
+                        break
+                await asyncio.gather(
+                    self.tts_sender(ws, task_id, app, inputs, mq, user_id),
+                    self.tts_receiver(ws, mq, task_id)
+                )
+        except Exception:
+            # TTS WebSocket 连接失败或中途异常 → 降级为纯文本，不阻断 LLM 流
+            logger.warning('TTS 不可用，降级为纯文本, task_id=%s', task_id)
+            await self._stream_llm_only(app, inputs, mq, user_id)
 
     async def tts_sender(
             self,
@@ -370,6 +375,7 @@ class MessageChatView(APIView):
         total_chars = 0
         success = True
         error_message = ''
+        tts_dead = False  # TTS WebSocket 已断，后续只推文字不推语音
         try:
             async for msg, metadata in app.astream(inputs, stream_mode="messages"):
                 # 检测知识库检索结果 ToolMessage，提取引用来源
@@ -389,61 +395,82 @@ class MessageChatView(APIView):
                 elif isinstance(msg, BaseMessageChunk):
                     if msg.content:
                         total_chars += len(msg.content)
-                        await ws.send(json.dumps({
-                            "header": {
-                                "action": "continue-task",
-                                "task_id": task_id,  # 随机uuid
-                                "streaming": "duplex"
-                            },
-                            "payload": {
-                                "input": {
-                                    "text": msg.content,
-                                }
-                            }
-                        }))
+                        if not tts_dead:
+                            try:
+                                await ws.send(json.dumps({
+                                    "header": {
+                                        "action": "continue-task",
+                                        "task_id": task_id,
+                                        "streaming": "duplex"
+                                    },
+                                    "payload": {
+                                        "input": {
+                                            "text": msg.content,
+                                        }
+                                    }
+                                }))
+                            except Exception:
+                                # TTS 发送失败 → 标记死亡，后续只推文字
+                                logger.warning(
+                                    'TTS WebSocket 发送失败，降级为纯文本, task_id=%s', task_id
+                                )
+                                tts_dead = True
                         mq.put_nowait({'content': msg.content})
                     if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
                         mq.put_nowait({'usage': msg.usage_metadata})
-            await ws.send(json.dumps({
-                "header": {
-                    "action": "finish-task",
-                    "task_id": task_id,
-                    "streaming": "duplex"
-                },
-                "payload": {
-                    "input": {}  # input不能省去，否则会报错
-                }
-            }))
+            if not tts_dead:
+                try:
+                    await ws.send(json.dumps({
+                        "header": {
+                            "action": "finish-task",
+                            "task_id": task_id,
+                            "streaming": "duplex"
+                        },
+                        "payload": {
+                            "input": {}  # input不能省去，否则会报错
+                        }
+                    }))
+                except Exception:
+                    pass  # 已无影响，忽略 finish-task 的发送错误
         except Exception as e:
+            # LLM 流本身异常（非 TTS 错误）→ 记录失败，不 raise（work() 不设 has_error）
             success = False
             error_message = str(e)[:500]
-            raise
+            logger.exception('Chat Agent LLM 流异常, task_id=%s', task_id)
         finally:
             duration_ms = int((time.time() - start) * 1000)
+            # TTS 中途降级视为 partial success，仍记录 usage 但标记失败
+            final_success = success and not tts_dead
             self._tts_usage = {
                 'user_id': user_id,
                 'api_type': 'tts',
                 'model_name': 'cosyvoice-v3-flash',
                 'token_count': total_chars,
                 'duration_ms': duration_ms,
-                'success': success,
-                'error_message': error_message,
+                'success': final_success,
+                'error_message': error_message if not final_success else '',
             }
 
     async def tts_receiver(
             self,
             ws,
-            mq: queue.Queue
+            mq: queue.Queue,
+            task_id: str = '',
     ):
-        async for msg in ws:
-            if isinstance(msg, bytes):
-                audio = base64.b64encode(msg).decode('utf-8')
-                mq.put_nowait({'audio': audio})
-            else:
-                data = json.loads(msg)
-                event = data['header']['event']
-                if event in ['task-finished', 'task-failed']:
-                    break
+        try:
+            async for msg in ws:
+                if isinstance(msg, bytes):
+                    audio = base64.b64encode(msg).decode('utf-8')
+                    mq.put_nowait({'audio': audio})
+                else:
+                    data = json.loads(msg)
+                    event = data['header']['event']
+                    if event in ['task-finished', 'task-failed']:
+                        break
+        except Exception:
+            # TTS WebSocket 接收端断开 — 可能由 sender 端发送失败导致，
+            # 不影响 LLM 文字流，仅记录日志
+            logger.warning('TTS WebSocket 接收异常, task_id=%s', task_id)
 
     async def _stream_llm_only(
             self,
