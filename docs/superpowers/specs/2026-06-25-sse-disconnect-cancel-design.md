@@ -132,13 +132,41 @@ event_stream() 创建 stop_event = threading.Event()
 
 无需改动 `mq.put(None)` 调用方式 — 现有 `block=True` 在 disconnect 场景下不会阻塞（队列远未达到 maxsize）。
 
-### 5.3 `openWhenHidden`
+### 5.3 断连时 API usage 记录
+
+当前 LLM usage 的 `record_api_usage` 在 `event_stream` 的 while 循环**之后**执行，断连时不会走到。需要包入 `try/finally` 确保记录：
+
+```python
+def event_stream(...):
+    try:
+        while True:
+            # ... 消息循环，收集 full_output / full_usage ...
+        yield 'data: [DONE]\n\n'
+    finally:
+        # 无论正常结束还是断连，都记录 LLM usage
+        duration_ms = int((time.time() - start_time) * 1000)
+        record_api_usage(
+            user_id=user_id,
+            api_type='llm',
+            model_name='deepseek-v4-flash',
+            token_count=full_usage.get('total_tokens', 0),
+            duration_ms=duration_ms,
+            success=not has_error and not stop_event.is_set(),
+            error_message='客户端断开连接' if stop_event.is_set() else '',
+        )
+```
+
+**限制：** 如果断开得早（LLM 尚未完成生成），`full_usage` 仍为 `{}`（LangChain 在流结束时才发送 `usage_metadata`），token_count 记录为 0。DashScope 侧照常计费但本地统计少一条。这种请求占比极低，可接受。
+
+TTS usage 不受影响 — 已走 `work()` finally 的 `_tts_usage` 路径，不依赖 `event_stream` 循环。
+
+### 5.4 `openWhenHidden`
 
 当前 `@microsoft/fetch-event-source` 设置了 `openWhenHidden: true` —— 这意味着切换浏览器标签页不会断开 SSE。这是有意为之（用户可能切出去看别的再回来继续听语音）。
 
 保持此行为不变。本功能只在**关闭聊天窗口**时 abort，不在**切标签页**时 abort。
 
-### 5.4 与 C1 的兼容
+### 5.5 与 C1 的兼容
 
 C1 的 `tts_dead` 和 C2 的 `stop_event` 在 `tts_sender` 循环内并列检查：
 
@@ -160,3 +188,5 @@ async for msg in app.astream():
 | # | 时间 | 变更 | 原因 |
 |---|------|------|------|
 | 1 | 2026-06-25 | 初版 | P1-C2 设计启动 |
+| 2 | 2026-06-25 | 新增 §5.3 断连时 API usage 记录 | Review 发现断连时 LLM usage 不会记录，漏洞补齐 |
+| 3 | 2026-06-25 | §5.4 / §5.5 重编号 | §5.3 插入后顺延 |
