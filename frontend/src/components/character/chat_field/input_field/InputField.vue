@@ -5,6 +5,7 @@ import SendIcon from "@/components/character/icons/SendIcon.vue";
 import streamApi from "@/js/http/streamApi";
 import {onUnmounted, ref, useTemplateRef} from "vue";
 import Microphone from "@/components/character/chat_field/input_field/Microphone.vue";
+import {useVoiceToggle} from "@/composables/useVoiceToggle.js";
 
 const props = defineProps(['friendId'])
 const emits = defineEmits(['pushBackMessage', 'appendToLastMessage', 'error'])
@@ -21,7 +22,10 @@ let audioPlayer = new Audio(); // 全局播放器实例
 let audioQueue = [];           // 待写入 Buffer 的二进制队列
 let isUpdating = false;        // Buffer 是否正在写入
 
+const { voiceEnabled } = useVoiceToggle()
+
 const initAudioStream = () => {
+  if (!voiceEnabled.value) return  // 语音关闭时不建立 MediaSource
   audioPlayer.pause();
   audioQueue = [];
   isUpdating = false;
@@ -81,6 +85,7 @@ const stopAudio = () => {
 };
 
 const handleAudioChunk = (base64Data) => {  // 将语音片段添加到播放器队列中
+  if (!voiceEnabled.value) return       // 语音关闭时不消费音频数据
   try {
     const binaryString = atob(base64Data);
     const len = binaryString.length;
