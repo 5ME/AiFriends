@@ -415,6 +415,7 @@ class MessageChatView(APIView):
                                     'TTS WebSocket 发送失败，降级为纯文本, task_id=%s', task_id
                                 )
                                 tts_dead = True
+                                error_message = 'TTS WebSocket 发送失败，已降级为纯文本'
                         mq.put_nowait({'content': msg.content})
                     if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
                         mq.put_nowait({'usage': msg.usage_metadata})
@@ -437,6 +438,18 @@ class MessageChatView(APIView):
             success = False
             error_message = str(e)[:500]
             logger.exception('Chat Agent LLM 流异常, task_id=%s', task_id)
+            # 补发 finish-task 解锁 tts_receiver，避免 asyncio.gather 挂起等 TTS 服务端超时
+            try:
+                await ws.send(json.dumps({
+                    "header": {
+                        "action": "finish-task",
+                        "task_id": task_id,
+                        "streaming": "duplex"
+                    },
+                    "payload": {"input": {}}
+                }))
+            except Exception:
+                pass  # ws 也已断开时 receiver 自身会退出
         finally:
             duration_ms = int((time.time() - start) * 1000)
             # TTS 中途降级视为 partial success，仍记录 usage 但标记失败
