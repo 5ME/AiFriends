@@ -625,3 +625,129 @@ class TestRetrieveChunks:
 
         retrieve_chunks("q", top_k=5, user_id=42, track_usage=True)
         mock_emb_class.assert_called_with(user_id=42)
+
+
+class TestTtsSenderCancelEvent:
+    """P1-C2: tts_sender cancel_event 行为测试 — _output_buffer/MQ/TTS/finish-task"""
+
+    def test_output_buffer_always_collects(self, mocker):
+        """_output_buffer 始终收集完整输出，无论 cancel_event 状态"""
+        import asyncio
+        import threading
+        import queue
+        from web.views.friend.message.chat.chat import MessageChatView
+
+        view = MessageChatView()
+        cancel_event = threading.Event()
+        cancel_event.set()  # 断连
+        mq = queue.Queue()
+
+        async def mock_astream(inputs, stream_mode):
+            yield AIMessageChunk(content='hello '), {}
+            yield AIMessageChunk(content='world'), {}
+            yield AIMessageChunk(content='!'), {}
+
+        mock_app = mocker.MagicMock()
+        mock_app.astream = mock_astream
+        mock_ws = mocker.AsyncMock()
+        mock_ws.send = mocker.AsyncMock()
+
+        asyncio.run(view.tts_sender(
+            mock_ws, 'task-1', mock_app, {}, mq, user_id=1,
+            cancel_event=cancel_event,
+        ))
+
+        assert view._output_buffer == ['hello ', 'world', '!']
+        assert mq.empty()  # 断连时不推 mq
+
+    def test_normal_path_pushes_to_mq(self, mocker):
+        """正常路径推 mq + TTS"""
+        import asyncio
+        import threading
+        import queue
+        from web.views.friend.message.chat.chat import MessageChatView
+
+        view = MessageChatView()
+        cancel_event = threading.Event()  # 未 set
+        mq = queue.Queue()
+
+        async def mock_astream(inputs, stream_mode):
+            yield AIMessageChunk(content='hi'), {}
+
+        mock_app = mocker.MagicMock()
+        mock_app.astream = mock_astream
+        mock_ws = mocker.AsyncMock()
+        mock_ws.send = mocker.AsyncMock()
+
+        asyncio.run(view.tts_sender(
+            mock_ws, 'task-1', mock_app, {}, mq, user_id=1,
+            cancel_event=cancel_event,
+        ))
+
+        assert view._output_buffer == ['hi']
+        msg = mq.get_nowait()
+        assert msg == {'content': 'hi'}
+
+    def test_disconnect_skips_tts(self, mocker):
+        """断连时跳过 TTS continue-task，但 finish-task 仍发送（解锁 receiver）"""
+        import asyncio
+        import threading
+        import queue
+        from web.views.friend.message.chat.chat import MessageChatView
+
+        view = MessageChatView()
+        cancel_event = threading.Event()
+        cancel_event.set()  # 断连
+        mq = queue.Queue()
+
+        async def mock_astream(inputs, stream_mode):
+            yield AIMessageChunk(content='x'), {}
+
+        mock_app = mocker.MagicMock()
+        mock_app.astream = mock_astream
+        mock_ws = mocker.AsyncMock()
+        mock_ws.send = mocker.AsyncMock()
+
+        asyncio.run(view.tts_sender(
+            mock_ws, 'task-1', mock_app, {}, mq, user_id=1,
+            cancel_event=cancel_event,
+        ))
+
+        # continue-task (TTS content) 不应被发送
+        continue_calls = [c for c in mock_ws.send.call_args_list
+                          if '"continue-task"' in str(c.args[0])]
+        assert len(continue_calls) == 0
+        # finish-task 应该被发送（解锁 tts_receiver）
+        finish_calls = [c for c in mock_ws.send.call_args_list
+                        if '"finish-task"' in str(c.args[0])]
+        assert len(finish_calls) == 1
+
+    def test_finish_task_sent_when_cancel_event_set(self, mocker):
+        """cancel_event 已 set 时 finish-task 仍发送（解锁 tts_receiver）"""
+        import asyncio
+        import threading
+        import queue
+        from web.views.friend.message.chat.chat import MessageChatView
+
+        view = MessageChatView()
+        cancel_event = threading.Event()
+        cancel_event.set()  # 断连
+        mq = queue.Queue()
+
+        async def mock_astream(inputs, stream_mode):
+            yield AIMessageChunk(content='x'), {}
+
+        mock_app = mocker.MagicMock()
+        mock_app.astream = mock_astream
+        mock_ws = mocker.AsyncMock()
+        mock_ws.send = mocker.AsyncMock()
+
+        asyncio.run(view.tts_sender(
+            mock_ws, 'task-1', mock_app, {}, mq, user_id=1,
+            cancel_event=cancel_event,
+        ))
+
+        # finish-task 应该被发送一次（解锁 receiver）
+        finish_calls = [c for c in mock_ws.send.call_args_list
+                        if '"finish-task"' in str(c.args[0])]
+        assert len(finish_calls) == 1

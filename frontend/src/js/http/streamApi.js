@@ -30,6 +30,7 @@ export default async function streamApi(url, options = {}) {
       },
       body: JSON.stringify(options.body || {}),
 
+      signal: options.signal,  // AbortController → 客户端断连时取消 SSE
       openWhenHidden: true,  // 允许后台运行，防止浏览器因隐藏页面而强制关闭它
       async onopen(response) {
         // 1. 处理 401 Token 过期

@@ -200,12 +200,14 @@ class MessageChatView(APIView):
     ):
         start_time = time.time()
         mq = queue.Queue(maxsize=500)
+        cancel_event = threading.Event()  # 客户端断连信号：停 TTS 不停 LLM
         logger.info('Chat Agent 开始, friend_id=%s', friend.id)
         voice_id = friend.character.voice.voice_id if friend.character.voice else ''
         user_id = friend.user_profile_id
         thread = threading.Thread(
-            target=self.work, args=(app, inputs, mq, voice_id, user_id),
-            daemon=True,  # 非 daemon 线程会在 worker 退出时阻止进程关闭
+            target=self.work,
+            args=(app, inputs, mq, voice_id, user_id, cancel_event, friend, message, inputs),
+            daemon=True,
         )
         thread.start()
 
@@ -214,25 +216,33 @@ class MessageChatView(APIView):
         has_error = False
         error_message = ''
 
-        while True:
-            msg = mq.get()
-            # print('====>', msg)
-            if msg is None:
-                break
-            # 转发 RAG 引用来源到 SSE（在 content 之前到达，前端可提前展示来源）
-            if msg.get('citations', None):
-                yield f'data: {json.dumps({"citations": msg["citations"]}, ensure_ascii=False)}\n\n'
-            if msg.get('error', None):
-                has_error = True
-                error_message = msg['error']
-                yield f'data: {json.dumps({"error": error_message}, ensure_ascii=False)}\n\n'
-            if msg.get('content', None):
-                full_output.append(msg['content'])
-                yield f'data: {json.dumps({'content': msg['content']}, ensure_ascii=False)}\n\n'
-            if msg.get('audio', None):
-                yield f'data: {json.dumps({'audio': msg['audio']}, ensure_ascii=False)}\n\n'
-            if msg.get('usage', None):
-                full_usage = msg['usage']
+        try:  # generator finally — 客户端断连时框架 close() 触发，WSGI/ASGI 通用
+            while True:
+                try:
+                    msg = mq.get(timeout=1)  # timeout 轮询替代阻塞等待
+                except queue.Empty:
+                    continue
+
+                if msg is None:
+                    break
+                # 转发 RAG 引用来源到 SSE（在 content 之前到达，前端可提前展示来源）
+                if msg.get('citations', None):
+                    yield f'data: {json.dumps({"citations": msg["citations"]}, ensure_ascii=False)}\n\n'
+                if msg.get('error', None):
+                    has_error = True
+                    error_message = msg['error']
+                    yield f'data: {json.dumps({"error": error_message}, ensure_ascii=False)}\n\n'
+                if msg.get('content', None):
+                    full_output.append(msg['content'])
+                    yield f'data: {json.dumps({'content': msg['content']}, ensure_ascii=False)}\n\n'
+                if msg.get('audio', None):
+                    yield f'data: {json.dumps({'audio': msg['audio']}, ensure_ascii=False)}\n\n'
+                if msg.get('usage', None):
+                    full_usage = msg['usage']
+        finally:
+            # 正常结束或客户端断连均触发 cancel_event
+            # 断连时 generator 被 close() → GeneratorExit → finally → work() 走断连路径
+            cancel_event.set()
 
         yield 'data: [DONE]\n\n'
         input_tokens = full_usage.get('input_tokens', 0)
@@ -286,13 +296,19 @@ class MessageChatView(APIView):
             mq: queue.Queue,
             voice_id: str,
             user_id: int,
+            cancel_event: threading.Event = None,  # C2
+            friend: Friend = None,                  # C2: 断连时保存 Message
+            message: str = '',                      # C2
+            inputs_dict: dict = None,               # C2: Message.input 序列化
     ):
         # === TTS 配额检查（sync 上下文，避免 async 内调 ORM） ===
         tts_allowed, _, _ = check_quota(user_id, 'tts')
         if not tts_allowed:
             logger.warning('TTS 跳过：今日配额已用尽, user_id=%s', user_id)
         try:
-            asyncio.run(self.run_tts_task(app, inputs, mq, voice_id, user_id, tts_allowed))
+            asyncio.run(self.run_tts_task(
+                app, inputs, mq, voice_id, user_id, tts_allowed, cancel_event
+            ))
         except Exception:
             logger.exception('Chat Agent 执行异常')
             try:
@@ -300,6 +316,35 @@ class MessageChatView(APIView):
             except queue.Full:
                 logger.warning('队列满，错误消息丢弃')
         finally:
+            # C2: 断连路径 — generator finally 后 cancel_event 已 set，
+            # 从 _output_buffer（始终收集的完整输出）保存消息 + 记录 usage
+            if cancel_event and cancel_event.is_set():
+                output = ''.join(getattr(self, '_output_buffer', []))
+                if output and friend and message:
+                    usage = getattr(self, '_output_usage', {})
+                    Message.objects.create(
+                        friend=friend,
+                        user_message=message[:5000],
+                        input=[m.model_dump() for m in inputs_dict.get('messages', [])]
+                            if inputs_dict else [],
+                        output=output[:5000],
+                        input_tokens=usage.get('input_tokens', 0),
+                        output_tokens=usage.get('output_tokens', 0),
+                        total_tokens=usage.get('total_tokens', 0),
+                    )
+                    record_api_usage(
+                        user_id=user_id,
+                        api_type='llm',
+                        model_name='deepseek-v4-flash',
+                        token_count=usage.get('total_tokens', 0),
+                        duration_ms=0,
+                        success=not getattr(self, '_has_error', False),
+                        error_message='客户端断开连接',
+                    )
+                    logger.info(
+                        'Chat Agent 断连路径完成, friend_id=%s, output_len=%d',
+                        friend.id, len(output)
+                    )
             mq.put(None)  # 阻塞确保哨兵送达；消费者死掉时 daemon 线程随 worker 退出清理
         # TTS usage 在同步上下文中写入（避免 async 中调 ORM 的 SynchronousOnlyOperation）
         if hasattr(self, '_tts_usage'):
@@ -314,6 +359,7 @@ class MessageChatView(APIView):
             voice_id: str,
             user_id: int,
             tts_allowed: bool = True,
+            cancel_event: threading.Event = None,  # C2
     ):
         task_id = uuid.uuid4().hex
         if not tts_allowed:
@@ -354,7 +400,7 @@ class MessageChatView(APIView):
                     if json.loads(msg)['header']['event'] == 'task-started':
                         break
                 await asyncio.gather(
-                    self.tts_sender(ws, task_id, app, inputs, mq, user_id),
+                    self.tts_sender(ws, task_id, app, inputs, mq, user_id, cancel_event),
                     self.tts_receiver(ws, mq, task_id)
                 )
         except Exception:
@@ -370,12 +416,16 @@ class MessageChatView(APIView):
             inputs,
             mq: queue.Queue,
             user_id: int,
+            cancel_event: threading.Event = None,  # C2: 客户端断连 → 停 TTS/停 mq，不停 LLM
     ):
         start = time.time()
         total_chars = 0
         success = True
         error_message = ''
         tts_dead = False  # TTS WebSocket 已断，后续只推文字不推语音
+        self._output_buffer = []   # C2: 始终收集完整 LLM 输出，正常/断连两用
+        self._output_usage = {}    # C2: usage_metadata，断连时供 work() 使用
+        self._has_error = False    # C2: LLM 异常标志，供 work() 断连路径用
         try:
             async for msg, metadata in app.astream(inputs, stream_mode="messages"):
                 # 检测知识库检索结果 ToolMessage，提取引用来源
@@ -389,36 +439,43 @@ class MessageChatView(APIView):
                             "title": m.group(2),
                             "chunk_index": int(m.group(3)),
                         })
-                    if citations:
+                    if citations and (not cancel_event or not cancel_event.is_set()):
                         mq.put_nowait({'citations': citations})
 
                 elif isinstance(msg, BaseMessageChunk):
                     if msg.content:
                         total_chars += len(msg.content)
-                        if not tts_dead:
-                            try:
-                                await ws.send(json.dumps({
-                                    "header": {
-                                        "action": "continue-task",
-                                        "task_id": task_id,
-                                        "streaming": "duplex"
-                                    },
-                                    "payload": {
-                                        "input": {
-                                            "text": msg.content,
+                        self._output_buffer.append(msg.content)  # 始终收集完整输出
+                        if not cancel_event or not cancel_event.is_set():
+                            # 正常路径：推 mq + TTS
+                            if not tts_dead:
+                                try:
+                                    await ws.send(json.dumps({
+                                        "header": {
+                                            "action": "continue-task",
+                                            "task_id": task_id,
+                                            "streaming": "duplex"
+                                        },
+                                        "payload": {
+                                            "input": {
+                                                "text": msg.content,
+                                            }
                                         }
-                                    }
-                                }))
-                            except Exception:
-                                # TTS 发送失败 → 标记死亡，后续只推文字
-                                logger.warning(
-                                    'TTS WebSocket 发送失败，降级为纯文本, task_id=%s', task_id
-                                )
-                                tts_dead = True
-                                error_message = 'TTS WebSocket 发送失败，已降级为纯文本'
-                        mq.put_nowait({'content': msg.content})
+                                    }))
+                                except Exception:
+                                    # TTS 发送失败 → 标记死亡，后续只推文字
+                                    logger.warning(
+                                        'TTS WebSocket 发送失败，降级为纯文本, task_id=%s', task_id
+                                    )
+                                    tts_dead = True
+                                    error_message = 'TTS WebSocket 发送失败，已降级为纯文本'
+                            mq.put_nowait({'content': msg.content})
+                        # 断连路径（cancel_event.is_set()）：只写 _output_buffer，停 TTS/停 mq
                     if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
-                        mq.put_nowait({'usage': msg.usage_metadata})
+                        self._output_usage = msg.usage_metadata  # 始终记录
+                        if not cancel_event or not cancel_event.is_set():
+                            mq.put_nowait({'usage': msg.usage_metadata})
+            # finish-task：始终发送以解锁 tts_receiver（含断连路径）
             if not tts_dead:
                 try:
                     await ws.send(json.dumps({
@@ -435,6 +492,7 @@ class MessageChatView(APIView):
                     pass  # 已无影响，忽略 finish-task 的发送错误
         except Exception as e:
             # LLM 流本身异常（非 TTS 错误）→ 记录失败，不 raise（work() 不设 has_error）
+            self._has_error = True
             success = False
             error_message = str(e)[:500]
             logger.exception('Chat Agent LLM 流异常, task_id=%s', task_id)

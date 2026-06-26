@@ -16,6 +16,8 @@ let processId = 0
 
 const showMic = ref(false)
 
+let abortController = null  // SSE 客户端断连控制器
+
 let mediaSource = null;
 let sourceBuffer = null;
 let audioPlayer = new Audio(); // 全局播放器实例
@@ -102,6 +104,10 @@ const handleAudioChunk = (base64Data) => {  // 将语音片段添加到播放器
 };
 
 onUnmounted(() => {
+  if (abortController) {
+    abortController.abort()  // 通知后端客户端已断开，停止 TTS
+    abortController = null
+  }
   audioPlayer.pause();
   audioPlayer.src = '';
 });
@@ -142,8 +148,13 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
     id: crypto.randomUUID()
   })
 
+  if (abortController) {
+    abortController.abort()  // 中断上一个未完成的 SSE 流，避免服务端空跑
+  }
+  abortController = new AbortController()
   try {
     await streamApi('/api/friend/message/chat/', {
+      signal: abortController.signal,  // 组件卸载时 abort → 断连检测
       body: {
         friend_id: props.friendId,
         message: content
