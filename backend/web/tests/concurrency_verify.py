@@ -69,7 +69,7 @@ def get_test_friend(token: str) -> int:
         json={"character_id": CHARACTER_ID},
         headers={"Authorization": f"Bearer {token}"},
     )
-    return resp.json().get("id", 0)
+    return resp.json().get("friend", {}).get("id", 0)
 
 
 async def run_one_chat(token: str, friend_id: int, disconnect_early: bool = False) -> SSEResult:
@@ -133,9 +133,14 @@ async def scenario_1_basic_concurrency(token: str, friend_id: int) -> dict:
 
     print(f"  成功: {ok}/{REQUESTS_PER_ROUND}")
     print(f"  Error 事件: {errors}")
+    if ok < REQUESTS_PER_ROUND:
+        for i, r in enumerate(results):
+            if not r.success:
+                print(f"  [{i+1}] FAIL: {r.error_received or 'unknown'}")
     for i, r in enumerate(results):
         ttft = f"{r.first_token_ms}ms" if r.first_token_ms else "N/A"
-        print(f"  [{i+1}] 首 token: {ttft:>8s}  总耗时: {r.total_ms:>6}ms  content={r.content_received}")
+        total = f"{r.total_ms}ms" if r.total_ms else "N/A"
+        print(f"  [{i+1}] 首 token: {ttft:>8s}  总耗时: {total:>8s}  content={r.content_received}")
 
     assert ok == REQUESTS_PER_ROUND, f"Expected {REQUESTS_PER_ROUND} success, got {ok}"
     assert errors == 0, f"Unexpected error events: {errors}"
