@@ -1,0 +1,656 @@
+# P1-D1: Docker Compose 全栈一键部署 实施计划
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** `docker compose up -d` 一键启动全栈 5 容器（PG+Redis+Django+gunicorn+Celery+Nginx），覆盖云服务器生产部署。
+
+**Architecture:** 8 个文件变更（3 新建、5 修改）。Django + Celery 用同一 `python:3.12-slim` 镜像、不同 CMD。Nginx 反代 TCP `django:8000`。前端在宿主机 `npm run build` → `collectstatic` → volume mount 进 Nginx。
+
+**Tech Stack:** Docker Compose v3.8+, python:3.12-slim, nginx:1.27-alpine, pgvector/pgvector:pg17, redis:7-alpine
+
+---
+
+### Task 1: backend/Dockerfile + backend/.dockerignore
+
+**Files:**
+- Create: `backend/Dockerfile`
+- Create: `backend/.dockerignore`
+
+- [ ] **Step 1: Create backend/.dockerignore**
+
+```dockerignore
+# 环境/安全
+.env
+.git/
+
+# Python 编译缓存
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# 数据/运行时（volume mount 或在宿主机）
+logs/
+media/
+staticfiles/
+
+# 前端（不进入镜像，宿主机 build）
+frontend/
+
+# 文档/工具
+docs/
+.codegraph/
+```
+
+- [ ] **Step 2: Create backend/Dockerfile**
+
+```dockerfile
+# backend/Dockerfile
+FROM python:3.12-slim
+
+# gcc + libpq-dev: psycopg2 编译
+# curl: Django healthcheck（gunicorn 容器内用 curl 探测 /api/health/）
+RUN apt-get update && apt-get install -y \
+    gcc libpq-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Build context 是项目根，COPY 相对 context
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY backend/ .
+
+EXPOSE 8000
+CMD ["gunicorn", "--workers", "3", "--graceful-timeout", "30", "--bind", "0.0.0.0:8000", "backend.wsgi:application"]
+```
+
+- [ ] **Step 3: Verify Dockerfile syntax**
+
+Run: `docker build --dry-run -f backend/Dockerfile . 2>&1 | head -5`
+Expected: No syntax errors (will fail on actual build without docker, but `docker build --check` validates syntax if available; otherwise skip)
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add backend/Dockerfile backend/.dockerignore
+git commit -m "feat(d1): add Dockerfile + .dockerignore for Django/Celery
+
+- python:3.12-slim base, gcc+libpq-dev+curl
+- Django + Celery share same image, different command
+- No collectstatic in build (needs SECRET_KEY from .env at runtime)
+- No USER app (volume mount UID mismatch on host)"
+```
+
+---
+
+### Task 2: init.sql 精简
+
+**Files:**
+- Modify: `init.sql`
+
+- [ ] **Step 1: Replace init.sql content**
+
+Current content (6 lines — CREATE USER, CREATE DATABASE, GRANT, \c, GRANT schema, CREATE EXTENSION):
+
+Replace with:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+**Rationale:** PostgreSQL Docker 镜像的 `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` 环境变量自动处理用户和数据库创建。`init.sql` 只需装 pgvector 扩展。
+
+- [ ] **Step 2: Verify the SQL is syntactically correct**
+
+Run: `cat init.sql`
+Expected: Single line `CREATE EXTENSION IF NOT EXISTS vector;`
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add init.sql
+git commit -m "refactor(d1): simplify init.sql — only pgvector extension
+
+PG user/DB creation delegated to POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB
+Docker env vars. init.sql now only runs CREATE EXTENSION IF NOT EXISTS vector."
+```
+
+---
+
+### Task 3: nginx.conf
+
+**Files:**
+- Create: `nginx.conf` (project root)
+
+- [ ] **Step 1: Create nginx.conf**
+
+```nginx
+# nginx.conf — AI Friends Docker Compose 反向代理
+server {
+    listen 80;
+    server_name _;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name _;
+
+    ssl_certificate /etc/nginx/ssl/aifriends-selfsigned.crt;
+    ssl_certificate_key /etc/nginx/ssl/aifriends-selfsigned.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    access_log /var/log/nginx/aifriends-access.log;
+    error_log  /var/log/nginx/aifriends-error.log;
+
+    location /static/ {
+        alias /app/staticfiles/;
+        expires 30d;
+    }
+
+    location /static/frontend/vad/ {
+        alias /app/staticfiles/frontend/vad/;
+        expires off;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+
+    location /media/ {
+        alias /app/media/;
+        expires 30d;
+    }
+
+    location / {
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://django:8000;
+    }
+}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add nginx.conf
+git commit -m "feat(d1): add nginx.conf for Docker Compose reverse proxy
+
+- HTTP 80 → 301 HTTPS 443
+- /static/* → /app/staticfiles/ (collectstatic 产物)
+- /media/*  → /app/media/ (用户上传)
+- /*         → proxy_pass django:8000 (TCP, not unix socket)"
+```
+
+---
+
+### Task 4: Django settings.py — SECURE_PROXY_SSL_HEADER
+
+**Files:**
+- Modify: `backend/backend/settings.py`
+
+- [ ] **Step 1: Add SECURE_PROXY_SSL_HEADER**
+
+Insert after `SECRET_KEY` block (after line 39 or near other security settings), before `ALLOWED_HOSTS` or after `ALLOWED_HOSTS`:
+
+```python
+# 生产环境信任 Nginx 反代的 HTTPS（Docker 下 X-Forwarded-Proto 由 Nginx 设置）
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+```
+
+- [ ] **Step 2: Verify Django configuration**
+
+Run:
+```powershell
+cd backend
+$env:DJANGO_DEBUG = "false"
+$env:DJANGO_SECRET_KEY = "test-key-for-check-only"
+python manage.py check
+```
+
+Expected:
+```
+System check identified no issues (0 silenced).
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add backend/backend/settings.py
+git commit -m "feat(d1): add SECURE_PROXY_SSL_HEADER for Nginx HTTPS reverse proxy
+
+Only active when DEBUG=False. Trusts X-Forwarded-Proto header set by Nginx
+so Django generates https:// URLs behind the reverse proxy."
+```
+
+---
+
+### Task 5: .env.example — Docker 环境变量差异标注
+
+**Files:**
+- Modify: `backend/.env.example`
+
+- [ ] **Step 1: Update .env.example with Docker comments**
+
+Current content needs 3 host values annotated with Docker alternatives:
+
+```bash
+API_KEY=
+API_BASE=
+WSS_URL=
+VOICE_URL=
+
+# PostgreSQL 数据库
+# 本地开发: PG_HOST=127.0.0.1
+# Docker:    PG_HOST=postgres
+PG_HOST=
+PG_PORT=5432
+PG_NAME=
+PG_USER=
+PG_PASSWORD=
+
+# 以下 OSS 配置暂时还没有用到
+OSS_ACCESS_KEY_ID=
+OSS_ACCESS_KEY_SECRET=
+OSS_BUCKET=
+OSS_REGION=
+OSS_ENDPOINT=
+
+# Django 核心配置
+# 本地开发: DJANGO_DEBUG=True
+# Docker:    DJANGO_DEBUG=False
+DJANGO_SECRET_KEY=
+DJANGO_DEBUG=True
+DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
+
+# Celery broker（异步任务队列）
+# 本地开发: CELERY_BROKER_URL=redis://127.0.0.1:6379/0
+# Docker:    CELERY_BROKER_URL=redis://redis:6379/0
+CELERY_BROKER_URL=redis://127.0.0.1:6379/0
+
+# 生产部署配置
+DJANGO_MEDIA_URL=http://your-server/media/
+DJANGO_CORS_ORIGINS=http://localhost:5173,https://your-server
+
+# Redis URL for rate limiting (DB /1, separate from Celery broker /0)
+# 本地开发: REDIS_URL=redis://127.0.0.1:6379/1
+# Docker:    REDIS_URL=redis://redis:6379/1
+REDIS_URL=redis://127.0.0.1:6379/1
+```
+
+- [ ] **Step 2: Verify no syntax issues**
+
+Run: `cat backend/.env.example`
+Expected: File contains Docker annotations for PG_HOST, CELERY_BROKER_URL, REDIS_URL, DJANGO_DEBUG
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add backend/.env.example
+git commit -m "docs(d1): annotate .env.example with Docker Compose host differences
+
+Add comments showing local dev vs Docker values for:
+- PG_HOST (127.0.0.1 vs postgres)
+- CELERY_BROKER_URL (127.0.0.1 vs redis)
+- REDIS_URL (127.0.0.1 vs redis)
+- DJANGO_DEBUG (True vs False)"
+```
+
+---
+
+### Task 6: docker-compose.yml — 从 2 服务扩展到 5 服务
+
+**Files:**
+- Modify: `docker-compose.yml`
+
+- [ ] **Step 1: Replace docker-compose.yml with full 5-service version**
+
+```yaml
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: ai-friends-db
+    environment:
+      POSTGRES_USER: aifriends
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: aifriends
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aifriends"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-friends-redis
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --save 60 1 --loglevel warning
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  django:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ai-friends-web
+    command: gunicorn --workers 3 --graceful-timeout 30 --bind 0.0.0.0:8000 backend.wsgi:application
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/staticfiles:/app/staticfiles
+      - ./backend/media:/app/media
+      - ./backend/logs:/app/logs
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  celery:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ai-friends-celery
+    command: celery -A backend worker -l info -c 1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/media:/app/media
+      - ./backend/logs:/app/logs
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: ai-friends-nginx
+    ports:
+      - "443:443"
+      - "80:80"
+    depends_on:
+      django:
+        condition: service_healthy
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./backend/staticfiles:/app/staticfiles:ro
+      - ./backend/media:/app/media:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+```
+
+- [ ] **Step 2: Verify compose file syntax**
+
+Run:
+```bash
+docker compose config 2>&1
+```
+
+Expected: Rendered compose config, no errors. (If `docker compose` not available locally, check with a YAML linter or visual inspection.)
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add docker-compose.yml
+git commit -m "feat(d1): upgrade docker-compose.yml from 2 to 5 services
+
+Add django (gunicorn), celery worker, and nginx services.
+- All services use healthchecks with proper depends_on chains
+- PG/Redis ports bind 127.0.0.1; Nginx binds all interfaces
+- Celery shares Django Dockerfile, different command
+- Static/media/logs via host volume mounts
+- Nginx waits for django service_healthy"
+```
+
+---
+
+### Task 7: 服务器部署.md — 更新为 Docker Compose 流程
+
+**Files:**
+- Modify: `服务器部署.md`
+
+- [ ] **Step 1: Rewrite 服务器部署.md**
+
+Replace entire content with Docker Compose based deployment guide:
+
+```markdown
+## 服务器部署
+
+### 前置操作
+
+#### Docker 安装（首次）
+
+```bash
+# Ubuntu/Debian
+sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER  # 重新登录生效
+```
+
+#### SSL 证书生成（首次或到期更新）
+
+```bash
+mkdir -p ~/ai-friends/ssl
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout ~/ai-friends/ssl/aifriends-selfsigned.key \
+  -out ~/ai-friends/ssl/aifriends-selfsigned.crt
+```
+
+#### 环境变量配置（首次）
+
+```bash
+cd ~/ai-friends/backend
+cp .env.example .env
+# 编辑 .env，填入真实值：
+#   - API_KEY / API_BASE / WSS_URL / VOICE_URL（DashScope 密钥）
+#   - DJANGO_SECRET_KEY（随机字符串）
+#   - PG_PASSWORD（数据库密码）
+#   - PG_HOST=postgres, CELERY_BROKER_URL=redis://redis:6379/0, REDIS_URL=redis://redis:6379/1
+#   - DJANGO_DEBUG=False, DJANGO_ALLOWED_HOSTS=<服务器 IP>
+#   - DJANGO_CORS_ORIGINS=https://<服务器 IP>, DJANGO_MEDIA_URL=https://<服务器 IP>/media/
+```
+
+### 部署操作
+
+#### 首次部署
+
+```bash
+cd ~/ai-friends
+
+# 1. 前端构建
+cd frontend && npm install && npm run build
+
+# 2. 静态文件收集
+cd ../backend && python manage.py collectstatic --noinput
+
+# 3. 启动所有服务
+cd .. && docker compose up -d
+
+# 4. 查看状态
+docker compose ps
+```
+
+#### 更新部署
+
+```bash
+cd ~/ai-friends
+
+# 1. 拉取代码
+git pull
+
+# 2. 前端重新构建
+cd frontend && npm run build && cd ..
+
+# 3. 静态文件重新收集
+cd backend && python manage.py collectstatic --noinput && cd ..
+
+# 4. 重建并重启
+docker compose up -d --build
+```
+
+#### 常用运维命令
+
+```bash
+# 查看所有容器状态
+docker compose ps
+
+# 查看日志
+docker compose logs -f                          # 所有服务
+docker compose logs -f django                   # 只看 Django
+docker compose logs -f celery nginx              # 多个服务
+
+# 重启单个服务
+docker compose restart django
+
+# 停止所有服务
+docker compose down
+
+# 停止并删除数据卷（⚠️ 数据库数据会丢失）
+docker compose down -v
+```
+
+#### 容器拓扑
+
+```
+Nginx (:443)  →  Django/gunicorn (:8000)  →  PostgreSQL (:5432)
+                                           →  Redis (:6379)
+                Celery Worker              →  PostgreSQL (:5432)
+                                           →  Redis (:6379)
+```
+
+| 容器 | 镜像 | 端口（对外） |
+|------|------|-------------|
+| ai-friends-nginx | nginx:1.27-alpine | 443, 80 |
+| ai-friends-web | 本地 build | — |
+| ai-friends-celery | 本地 build | — |
+| ai-friends-db | pgvector/pgvector:pg17 | 127.0.0.1:55432 |
+| ai-friends-redis | redis:7-alpine | 127.0.0.1:6379 |
+
+#### ACL 授权（如果需要非 root 部署）
+
+```bash
+sudo apt install acl
+sudo setfacl -m u:$USER:x /home/$USER
+sudo setfacl -R -m u:$USER:rX /home/$USER/ai-friends
+```
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add 服务器部署.md
+git commit -m "docs(d1): rewrite deployment guide for Docker Compose
+
+Replace manual gunicorn+systemd flow with docker compose up -d.
+Add: Docker install, SSL setup, .env config, ops commands, container topology table."
+```
+
+---
+
+### Task 8: 端到端验证
+
+**Files:** (none — verification only)
+
+- [ ] **Step 1: Verify all backend tests still pass**
+
+Run:
+```powershell
+cd backend
+conda activate py312
+python -m pytest web/tests/ -v --timeout 60 2>&1 | tail -20
+```
+
+Expected: All existing tests pass (no regressions from settings.py change).
+
+- [ ] **Step 2: Verify docker compose config is valid**
+
+Run:
+```bash
+docker compose config 2>&1 | head -20
+```
+
+Expected: Rendered compose config, no errors.
+
+- [ ] **Step 3: Verify docker build succeeds**
+
+Run:
+```bash
+docker compose build django 2>&1
+```
+
+Expected: Image builds successfully. Note: requires Docker daemon running and valid `requirements.txt`.
+
+- [ ] **Step 4: Verify health endpoint logic**
+
+Run:
+```powershell
+cd backend
+$env:DJANGO_SETTINGS_MODULE = "backend.settings"
+$env:DJANGO_DEBUG = "false"
+$env:DJANGO_SECRET_KEY = "verify-test-key-123"
+python -c "import django; django.setup(); from django.conf import settings; print('SECURE_PROXY_SSL_HEADER:', getattr(settings, 'SECURE_PROXY_SSL_HEADER', 'NOT SET'))"
+```
+
+Expected:
+```
+SECURE_PROXY_SSL_HEADER: ('HTTP_X_FORWARDED_PROTO', 'https')
+```
+
+- [ ] **Step 5: Final checklist**
+
+Manual verification items (require Docker + cloud server):
+- [ ] `docker compose up -d` 所有 5 容器启动
+- [ ] `docker compose ps` 全部 healthy
+- [ ] `curl -k https://localhost/api/health/` 返回 `{"status": "ok"}`
+- [ ] 浏览器访问 `https://<server-ip>/` 正常加载前端 SPA
+- [ ] SSE 聊天功能正常（LLM 流式响应 + TTS 音频）
+
+---
+
+## 执行顺序
+
+```
+Task 1 (Dockerfile) ─┬─ Task 2 (init.sql) ─┬─ Task 6 (docker-compose.yml) → Task 7 (部署文档) → Task 8 (验证)
+                      ├─ Task 3 (nginx.conf) ┤
+                      ├─ Task 4 (settings.py) ┤
+                      └─ Task 5 (.env.example) ┘
+```
+
+Task 1-5 之间无依赖可并行。Task 6 依赖 Task 1（compose 引用 Dockerfile）+ Task 2/3（compose volume mount 引用 `./init.sql` 和 `./nginx.conf`，文件不存在时 Docker 会创建空目录导致运行时错误）。Task 7 最后更新文档。Task 8 收尾验证。
+
+## 风险
+
+| 风险 | 缓解 |
+|------|------|
+| Docker build 在本地 Windows 上无法测试 | CI 或云服务器上验证；本地至少验证 compose 语法和 Dockerfile 语法 |
+| `python:3.12-slim` 缺少某些运行时依赖 | 首次 build 后逐容器检查日志；需要时补 apt 包 |
+| Celery beat 与 worker 同容器可能冲突 | 当前 `celery worker` 不含 `-B`，beat 通过 compose 单独 service 或暂不启用 |
+| 云服务器上 `npm install` 内存不足 | 本地 build 后 scp 产物，或在服务器上 `npm ci --production` |
