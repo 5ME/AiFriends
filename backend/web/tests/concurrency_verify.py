@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
 BASE = "http://127.0.0.1:8000"
 TEST_USERNAME = "__c3_verify__"
-TEST_PASSWORD = str(uuid.uuid4())
+TEST_PASSWORD = "__c3_pass__"  # 固定密码，支持重复运行
 CHARACTER_ID = 1  # 需已有至少一个角色
 REQUESTS_PER_ROUND = 5
 ROUNDS = 3
@@ -50,14 +50,10 @@ class SSEResult:
 
 
 def ensure_test_user() -> str:
-    """创建测试用户并返回 JWT access token"""
+    """创建测试用户并返回 JWT access token（需在 sync 上下文调用）"""
     resp = httpx.post(f"{BASE}/api/user/account/register/", json={
         "username": TEST_USERNAME, "password": TEST_PASSWORD,
     })
-    if resp.status_code == 409:
-        resp = httpx.post(f"{BASE}/api/user/account/login/", json={
-            "username": TEST_USERNAME, "password": TEST_PASSWORD,
-        })
     data = resp.json()
     return data.get("access_token", data.get("access", ""))
 
@@ -206,12 +202,10 @@ async def scenario_3_repeat_rounds(token: str, friend_id: int) -> dict:
     return {"rounds": all_ok}
 
 
-async def main():
+async def main(token: str):
     print("P1-C3 SSE 流并发验证")
     print(f"Base URL: {BASE}")
     print(f"Concurrency: {REQUESTS_PER_ROUND} requests")
-
-    token = ensure_test_user()
     print(f"User: {TEST_USERNAME}")
 
     friend_id = get_test_friend(token)
@@ -234,4 +228,11 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # 同步上下文：清理旧用户 + 注册（避免 asyncio 内调 ORM）
+    from django.contrib.auth.models import User
+    User.objects.filter(username=TEST_USERNAME).delete()
+    token = ensure_test_user()
+    if not token:
+        print("ERROR: 无法获取 JWT token，请检查后端是否正常运行")
+        sys.exit(1)
+    asyncio.run(main(token))
