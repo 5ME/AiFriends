@@ -148,6 +148,9 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
     id: crypto.randomUUID()
   })
 
+  if (abortController) {
+    abortController.abort()  // 中断上一个未完成的 SSE 流，避免服务端空跑
+  }
   abortController = new AbortController()
   try {
     await streamApi('/api/friend/message/chat/', {
