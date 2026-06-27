@@ -135,7 +135,8 @@ services:
     container_name: ai-friends-db
     environment:
       POSTGRES_USER: aifriends
-      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      # :? 必填校验 — PG_PASSWORD 空/未设时 compose 在 up 最前面就报错（避免 PG init 失败或 PG/Django 密码不一致）
+      POSTGRES_PASSWORD: "${PG_PASSWORD:?PG_PASSWORD 未设置——请在项目根 .env 配置（见 .env.example）}"
       POSTGRES_DB: aifriends
     ports:
       - "127.0.0.1:55432:5432"
@@ -429,3 +430,4 @@ docker compose up -d --build   # 重建 Django/Celery 镜像
 | 5 | 2026-06-26 | STATICFILES_DIRS 改为按目录存在性判断（非 DEBUG） | 部署发现：DEBUG=False 时 collectstatic 收集不到前端产物 → SPA 白屏 |
 | 6 | 2026-06-26 | 部署流程补 migrate 步骤 + .env 改为项目根 + collectstatic/ssl 顺序明确 | Task 6 code review: 缺 migrate 空库无表、根 .env 缺失、ssl 缺失 nginx 崩溃 |
 | 7 | 2026-06-26 | celery 加 -B 嵌入式 Beat + MEDIA_URL 改读 DJANGO_MEDIA_URL + 修文件清单 | Capstone review: Beat 未运行定时任务永不触发；MEDIA_URL 变量名不匹配致旋钮失效 |
+| 8 | 2026-06-26 | POSTGRES_PASSWORD 改 `${PG_PASSWORD:?...}` 必填校验 | PR #31 review: 拒绝原 `:-default` fallback（会致 PG/Django 密码不一致 + 引入默认凭据），改 `:?` 在 up 前 fail-fast |

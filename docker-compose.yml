@@ -4,7 +4,8 @@ services:
     container_name: ai-friends-db
     environment:
       POSTGRES_USER: aifriends
-      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      # :? 必填校验 — PG_PASSWORD 空/未设时 compose 在 up 最前面就报错（避免 PG init 失败或 PG/Django 密码不一致）
+      POSTGRES_PASSWORD: "${PG_PASSWORD:?PG_PASSWORD 未设置——请在项目根 .env 配置（见 .env.example）}"
       POSTGRES_DB: aifriends
     ports:
       - "127.0.0.1:55432:5432"
