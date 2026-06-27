@@ -460,6 +460,8 @@ Add django (gunicorn), celery worker, and nginx services.
 
 Replace entire content with Docker Compose based deployment guide:
 
+> **注（实现后修订）**：部署交付模型已改为 **git clone 源码 + 本地 build 前端 + scp `staticfiles/`**（云服务器内存不足以跑 `npm install`）。下方 markdown 为初版（在服务器上 build 前端），最终版以 `服务器部署.md` 与 spec §九 为准。
+
 ```markdown
 ## 服务器部署（Docker Compose）
 

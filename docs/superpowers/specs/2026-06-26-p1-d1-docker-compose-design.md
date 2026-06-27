@@ -359,42 +359,39 @@ DJANGO_MEDIA_URL=https://<服务器 IP>/media/
 
 ## 九、部署流程
 
+部署跨两台机器：**本地构建机** build 前端 + collectstatic（云服务器内存有限，`npm install` 易 OOM），产物 scp 到服务器；**云服务器** `git clone` 源码 → 现场构建镜像 → 跑容器。
+
 ### 首次部署
 
 ```bash
-# 1. 克隆代码
-git clone ... && cd ai-friends
+# === 云服务器 ===
+git clone git@github.com:5ME/AiFriends.git ~/ai-friends && cd ~/ai-friends   # 源码：根文件 + backend/ + frontend/
+git checkout <branch>
+cp .env.example .env   # 填真实值；复用现有 PG 卷时 PG_PASSWORD 须 = 现有 aifriends 用户密码
+mkdir -p ssl && openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout ssl/aifriends-selfsigned.key -out ssl/aifriends-selfsigned.crt -subj '/CN=115.190.245.146'
+sudo systemctl stop nginx   # 停裸机服务（80/443 冲突）
 
-# 2. 环境变量（项目根 .env，注意不是 backend/.env）
-cp .env.example .env   # 按 §八 填入真实值（含 PG_PASSWORD、PG_HOST=postgres）
+# === 本地构建机 ===
+cd frontend && npm install && npm run build && cd ..        # → backend/static/frontend/
+cd backend && python manage.py collectstatic --noinput && cd ..   # → backend/staticfiles/
+scp -r backend/staticfiles gqyin@115.190.245.146:ai-friends/backend/   # 只传产物（gitignore，不随 clone）
 
-# 3. SSL 证书（必须在 up 之前，否则 nginx 找不到证书会崩溃重启）
-mkdir -p ssl
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout ssl/aifriends-selfsigned.key \
-  -out ssl/aifriends-selfsigned.crt
-
-# 4. 前端构建（产物 → backend/static/frontend/）
-cd frontend && npm install && npm run build && cd ..
-
-# 5. 静态文件收集（宿主机，不连库；→ backend/staticfiles/）
-cd backend && python manage.py collectstatic --noinput && cd ..
-
-# 6. 数据库迁移（容器内执行，宿主机无法解析 compose 服务名 postgres）
-docker compose run --rm django python manage.py migrate
-
-# 7. 启动所有服务
-docker compose up -d
+# === 云服务器 ===
+docker compose run --rm django python manage.py migrate     # 容器内迁移（宿主机解析不了服务名 postgres）
+docker compose up -d --build                                # 现场构建镜像 + 起 5 容器
 ```
 
 ### 更新部署
 
 ```bash
-git pull
-cd frontend && npm run build && cd ..
-cd backend && python manage.py collectstatic --noinput && cd ..
-docker compose run --rm django python manage.py migrate   # 应用新迁移
-docker compose up -d --build   # 重建 Django/Celery 镜像
+# 本地构建机：重建前端 + 传产物
+cd frontend && npm run build && cd .. && cd backend && python manage.py collectstatic --noinput && cd ..
+scp -r backend/staticfiles gqyin@115.190.245.146:ai-friends/backend/
+# 云服务器：拉代码 + 迁移 + 重建重启
+cd ~/ai-friends && git pull
+docker compose run --rm django python manage.py migrate
+docker compose up -d --build
 ```
 
 ## 十、文件清单
@@ -431,3 +428,4 @@ docker compose up -d --build   # 重建 Django/Celery 镜像
 | 6 | 2026-06-26 | 部署流程补 migrate 步骤 + .env 改为项目根 + collectstatic/ssl 顺序明确 | Task 6 code review: 缺 migrate 空库无表、根 .env 缺失、ssl 缺失 nginx 崩溃 |
 | 7 | 2026-06-26 | celery 加 -B 嵌入式 Beat + MEDIA_URL 改读 DJANGO_MEDIA_URL + 修文件清单 | Capstone review: Beat 未运行定时任务永不触发；MEDIA_URL 变量名不匹配致旋钮失效 |
 | 8 | 2026-06-26 | POSTGRES_PASSWORD 改 `${PG_PASSWORD:?...}` 必填校验 | PR #31 review: 拒绝原 `:-default` fallback（会致 PG/Django 密码不一致 + 引入默认凭据），改 `:?` 在 up 前 fail-fast |
+| 9 | 2026-06-26 | 部署交付模型改为 git clone 源码 + 本地 build 前端 + scp `staticfiles/`（非服务器上 build） | 实际工作流：云服务器 4GiB 内存跑 `npm install` 易 OOM，前端须本地构建 |
