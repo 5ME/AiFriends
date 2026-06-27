@@ -1,0 +1,21 @@
+# 环境/安全
+.env
+.git/
+
+# Python 编译缓存
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# 数据/运行时（volume mount 或在宿主机）
+logs/
+media/
+staticfiles/
+
+# 前端（不进入镜像，宿主机 build）
+frontend/
+
+# 文档/工具
+docs/
+.codegraph/
