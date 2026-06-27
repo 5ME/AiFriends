@@ -196,7 +196,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: ai-friends-celery
-    command: celery -A backend worker -l info -c 1
+    command: celery -A backend worker -B -l info -c 1
     depends_on:
       postgres:
         condition: service_healthy
@@ -403,10 +403,11 @@ docker compose up -d --build   # 重建 Django/Celery 镜像
 | `backend/Dockerfile` | **新建** | Django + Celery 共用镜像 |
 | `docker-compose.yml` | **修改** | 从 2 服务扩到 5 服务 |
 | `nginx.conf` | **新建** | Nginx 反代配置（项目根目录） |
-| `backend/.dockerignore` | **新建** | 排除不用进镜像的文件 |
+| `.dockerignore`（项目根） | **新建** | 排除不用进镜像的文件 |
 | `init.sql` | **修改** | 精简为只建 vector 扩展 |
 | `backend/backend/settings.py` | **修改** | 加 SECURE_PROXY_SSL_HEADER（2 行） |
 | `backend/.env.example` | **修改** | 标注 Docker 环境的 host 差异 |
+| `.env.example`（项目根） | **新建** | Docker 部署环境变量模板（compose 读项目根 .env） |
 | `服务器部署.md` | **修改** | 更新为 Docker Compose 流程 |
 
 ## 十一、不做的
@@ -427,3 +428,4 @@ docker compose up -d --build   # 重建 Django/Celery 镜像
 | 4 | 2026-06-26 | django healthcheck 改 socket 存活探测（解耦 Celery）+ 新增根 .env.example | Task 6 code review: /api/health/ 含 Celery 检查会拖垮启动顺序；根 .env 缺失导致 compose 硬失败 |
 | 5 | 2026-06-26 | STATICFILES_DIRS 改为按目录存在性判断（非 DEBUG） | 部署发现：DEBUG=False 时 collectstatic 收集不到前端产物 → SPA 白屏 |
 | 6 | 2026-06-26 | 部署流程补 migrate 步骤 + .env 改为项目根 + collectstatic/ssl 顺序明确 | Task 6 code review: 缺 migrate 空库无表、根 .env 缺失、ssl 缺失 nginx 崩溃 |
+| 7 | 2026-06-26 | celery 加 -B 嵌入式 Beat + MEDIA_URL 改读 DJANGO_MEDIA_URL + 修文件清单 | Capstone review: Beat 未运行定时任务永不触发；MEDIA_URL 变量名不匹配致旋钮失效 |

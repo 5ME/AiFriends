@@ -391,7 +391,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: ai-friends-celery
-    command: celery -A backend worker -l info -c 1
+    command: celery -A backend worker -B -l info -c 1
     depends_on:
       postgres:
         condition: service_healthy

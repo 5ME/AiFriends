@@ -65,7 +65,8 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: ai-friends-celery
-    command: celery -A backend worker -l info -c 1
+    # -B: 嵌入式 Beat 调度器（单 worker 单容器下安全），驱动 CELERY_BEAT_SCHEDULE 的每日 usage 清理
+    command: celery -A backend worker -B -l info -c 1
     depends_on:
       postgres:
         condition: service_healthy

@@ -164,7 +164,7 @@ _FRONTEND_STATIC_DIR = BASE_DIR / 'static'
 if _FRONTEND_STATIC_DIR.exists():
     STATICFILES_DIRS = [_FRONTEND_STATIC_DIR]
 
-MEDIA_URL = os.environ.get('MEDIA_URL') or (
+MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL') or (
     'http://127.0.0.1:8000/media/' if DEBUG else 'https://115.190.245.146/media/'
 )
 MEDIA_ROOT = BASE_DIR / 'media'
