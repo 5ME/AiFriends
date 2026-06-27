@@ -460,11 +460,21 @@ Add django (gunicorn), celery worker, and nginx services.
 Replace entire content with Docker Compose based deployment guide:
 
 ```markdown
-## 服务器部署
+## 服务器部署（Docker Compose）
 
-### 前置操作
+`docker compose up -d` 一键启动全栈：PostgreSQL 17 + Redis 7 + Django/gunicorn + Celery Worker + Nginx。
 
-#### Docker 安装（首次）
+### 宿主机前置依赖
+
+| 依赖 | 用途 |
+|------|------|
+| Docker + Docker Compose v2 | 运行全栈容器 |
+| Node.js + npm | 前端构建（`npm run build`） |
+| Python 3.12 + 项目依赖 | 静态文件收集（`collectstatic`，不联网/不连库） |
+
+> 前端构建和 collectstatic 在宿主机执行（产物通过 volume 挂载进容器）；数据库迁移在容器内执行（宿主机无法解析 compose 服务名 `postgres`）。
+
+#### 安装 Docker（首次）
 
 ```bash
 # Ubuntu/Debian
@@ -473,112 +483,97 @@ sudo systemctl enable --now docker
 sudo usermod -aG docker $USER  # 重新登录生效
 ```
 
-#### SSL 证书生成（首次或到期更新）
-
-```bash
-mkdir -p ~/ai-friends/ssl
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout ~/ai-friends/ssl/aifriends-selfsigned.key \
-  -out ~/ai-friends/ssl/aifriends-selfsigned.crt
-```
-
-#### 环境变量配置（首次）
-
-```bash
-cd ~/ai-friends/backend
-cp .env.example .env
-# 编辑 .env，填入真实值：
-#   - API_KEY / API_BASE / WSS_URL / VOICE_URL（DashScope 密钥）
-#   - DJANGO_SECRET_KEY（随机字符串）
-#   - PG_PASSWORD（数据库密码）
-#   - PG_HOST=postgres, CELERY_BROKER_URL=redis://redis:6379/0, REDIS_URL=redis://redis:6379/1
-#   - DJANGO_DEBUG=False, DJANGO_ALLOWED_HOSTS=<服务器 IP>
-#   - DJANGO_CORS_ORIGINS=https://<服务器 IP>, DJANGO_MEDIA_URL=https://<服务器 IP>/media/
-```
-
-### 部署操作
-
-#### 首次部署
+### 首次部署
 
 ```bash
 cd ~/ai-friends
 
-# 1. 前端构建
-cd frontend && npm install && npm run build
+# 1. 环境变量（项目根目录 .env，注意不是 backend/.env）
+cp .env.example .env
+# 编辑 .env，至少填入：
+#   - API_KEY / API_BASE / WSS_URL / VOICE_URL（DashScope 密钥）
+#   - DJANGO_SECRET_KEY（随机长字符串）
+#   - PG_PASSWORD（数据库密码，同时用作 POSTGRES_PASSWORD，不能为空）
+#   - DJANGO_ALLOWED_HOSTS / DJANGO_CORS_ORIGINS / DJANGO_MEDIA_URL（服务器 IP）
+# 已预填的 Docker 专用值无需改：PG_HOST=postgres、CELERY_BROKER_URL/REDIS_URL 用 redis 服务名、DJANGO_DEBUG=False
 
-# 2. 静态文件收集
-cd ../backend && python manage.py collectstatic --noinput
+# 2. SSL 自签证书（必须在 up 之前，否则 nginx 找不到证书会崩溃重启）
+mkdir -p ssl
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout ssl/aifriends-selfsigned.key \
+  -out ssl/aifriends-selfsigned.crt
 
-# 3. 启动所有服务
-cd .. && docker compose up -d
+# 3. 前端构建（产物 → backend/static/frontend/）
+cd frontend && npm install && npm run build && cd ..
 
-# 4. 查看状态
+# 4. 收集静态文件（→ backend/staticfiles/，Nginx 直接 serve）
+cd backend && python manage.py collectstatic --noinput && cd ..
+
+# 5. 数据库迁移（容器内执行，自动拉起 postgres+redis 后运行 migrate 再退出）
+docker compose run --rm django python manage.py migrate
+
+# 6.（可选）创建管理员账号
+docker compose run --rm django python manage.py createsuperuser
+
+# 7. 启动全栈
+docker compose up -d
+
+# 8. 查看状态（全部应为 running / healthy）
 docker compose ps
 ```
 
-#### 更新部署
+### 更新部署
 
 ```bash
 cd ~/ai-friends
-
-# 1. 拉取代码
 git pull
 
-# 2. 前端重新构建
+# 前端 + 静态文件重建
 cd frontend && npm run build && cd ..
-
-# 3. 静态文件重新收集
 cd backend && python manage.py collectstatic --noinput && cd ..
 
-# 4. 重建并重启
+# 应用新迁移
+docker compose run --rm django python manage.py migrate
+
+# 重建镜像并重启
 docker compose up -d --build
 ```
 
-#### 常用运维命令
+### 常用运维命令
 
 ```bash
-# 查看所有容器状态
-docker compose ps
-
-# 查看日志
-docker compose logs -f                          # 所有服务
-docker compose logs -f django                   # 只看 Django
-docker compose logs -f celery nginx              # 多个服务
-
-# 重启单个服务
-docker compose restart django
-
-# 停止所有服务
-docker compose down
-
-# 停止并删除数据卷（⚠️ 数据库数据会丢失）
-docker compose down -v
+docker compose ps                       # 容器状态
+docker compose logs -f                  # 所有日志
+docker compose logs -f django           # 单个服务日志
+docker compose restart django           # 重启单个服务
+docker compose down                     # 停止所有容器
+docker compose down -v                  # 停止并删除数据卷（⚠️ 数据库数据会丢失）
 ```
 
-#### 容器拓扑
+### 容器拓扑
 
 ```
-Nginx (:443)  →  Django/gunicorn (:8000)  →  PostgreSQL (:5432)
-                                           →  Redis (:6379)
-                Celery Worker              →  PostgreSQL (:5432)
-                                           →  Redis (:6379)
+Nginx (:443/:80)  →  Django/gunicorn (:8000)  →  PostgreSQL
+                                              →  Redis
+                  Celery Worker               →  PostgreSQL
+                                              →  Redis
 ```
 
-| 容器 | 镜像 | 端口（对外） |
-|------|------|-------------|
+| 容器 | 镜像 | 对外端口 |
+|------|------|---------|
 | ai-friends-nginx | nginx:1.27-alpine | 443, 80 |
-| ai-friends-web | 本地 build | — |
-| ai-friends-celery | 本地 build | — |
-| ai-friends-db | pgvector/pgvector:pg17 | 127.0.0.1:55432 |
-| ai-friends-redis | redis:7-alpine | 127.0.0.1:6379 |
+| ai-friends-web | 本地构建（gunicorn） | — |
+| ai-friends-celery | 本地构建（worker） | — |
+| ai-friends-db | pgvector/pgvector:pg17 | 127.0.0.1:55432（仅本机） |
+| ai-friends-redis | redis:7-alpine | 127.0.0.1:6379（仅本机） |
 
-#### ACL 授权（如果需要非 root 部署）
+### 注意事项
 
-```bash
-sudo apt install acl
-sudo setfacl -m u:$USER:x /home/$USER
-sudo setfacl -R -m u:$USER:rX /home/$USER/ai-friends
-```
+- **端口冲突**：若服务器已运行 nginx/apache 占用 80/443，需先停掉或修改 compose 端口映射
+- **启动顺序**：postgres/redis healthy → django/celery → nginx，由 compose 的 `depends_on` 自动编排
+- **数据持久化**：`postgres-data` / `redis-data` 为 named volume；`media` / `logs` / `staticfiles` 为 bind mount
+- **PG/Redis 端口**：仅绑定 `127.0.0.1`（外网由安全组阻断，宿主机可 `psql -h 127.0.0.1 -p 55432` 调试）
+- **自签证书**：浏览器会提示不安全，属预期（IP 部署无域名证书）
 ```
 
 - [ ] **Step 2: Commit**

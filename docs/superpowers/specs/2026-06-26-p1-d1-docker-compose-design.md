@@ -364,22 +364,25 @@ DJANGO_MEDIA_URL=https://<服务器 IP>/media/
 # 1. 克隆代码
 git clone ... && cd ai-friends
 
-# 2. 前端构建
-cd frontend && npm install && npm run build
+# 2. 环境变量（项目根 .env，注意不是 backend/.env）
+cp .env.example .env   # 按 §八 填入真实值（含 PG_PASSWORD、PG_HOST=postgres）
 
-# 3. 静态文件收集
-cd ../backend
-cp .env.example .env   # 按 §八 填入真实值
-python manage.py collectstatic --noinput
-
-# 4. SSL 证书准备（已有或新生成）
+# 3. SSL 证书（必须在 up 之前，否则 nginx 找不到证书会崩溃重启）
 mkdir -p ssl
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
   -keyout ssl/aifriends-selfsigned.key \
   -out ssl/aifriends-selfsigned.crt
 
-# 5. 启动所有服务
-cd ..
+# 4. 前端构建（产物 → backend/static/frontend/）
+cd frontend && npm install && npm run build && cd ..
+
+# 5. 静态文件收集（宿主机，不连库；→ backend/staticfiles/）
+cd backend && python manage.py collectstatic --noinput && cd ..
+
+# 6. 数据库迁移（容器内执行，宿主机无法解析 compose 服务名 postgres）
+docker compose run --rm django python manage.py migrate
+
+# 7. 启动所有服务
 docker compose up -d
 ```
 
@@ -389,6 +392,7 @@ docker compose up -d
 git pull
 cd frontend && npm run build && cd ..
 cd backend && python manage.py collectstatic --noinput && cd ..
+docker compose run --rm django python manage.py migrate   # 应用新迁移
 docker compose up -d --build   # 重建 Django/Celery 镜像
 ```
 
@@ -422,3 +426,4 @@ docker compose up -d --build   # 重建 Django/Celery 镜像
 | 3 | 2026-06-26 | nginx.conf 加 client_max_body_size 10m + SSE proxy 设置（buffering off / http 1.1 / read_timeout 300s） | Task 3 code review: 默认 1MB 拦上传、默认 60s 截断 SSE 流 |
 | 4 | 2026-06-26 | django healthcheck 改 socket 存活探测（解耦 Celery）+ 新增根 .env.example | Task 6 code review: /api/health/ 含 Celery 检查会拖垮启动顺序；根 .env 缺失导致 compose 硬失败 |
 | 5 | 2026-06-26 | STATICFILES_DIRS 改为按目录存在性判断（非 DEBUG） | 部署发现：DEBUG=False 时 collectstatic 收集不到前端产物 → SPA 白屏 |
+| 6 | 2026-06-26 | 部署流程补 migrate 步骤 + .env 改为项目根 + collectstatic/ssl 顺序明确 | Task 6 code review: 缺 migrate 空库无表、根 .env 缺失、ssl 缺失 nginx 崩溃 |
