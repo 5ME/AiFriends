@@ -232,7 +232,7 @@ volumes:
 基于现有 `服务器部署.md` 中 Nginx 配置，适配 Docker：
 
 ```nginx
-# nginx.conf
+# nginx.conf — AI Friends Docker Compose 反向代理
 server {
     listen 80;
     server_name _;
@@ -250,6 +250,9 @@ server {
 
     access_log /var/log/nginx/aifriends-access.log;
     error_log  /var/log/nginx/aifriends-error.log;
+
+    # 文档/图片上传 10MB（nginx 默认 1MB 会拦截知识库上传和 ASR 音频 → 413）
+    client_max_body_size 10m;
 
     location /static/ {
         alias /app/staticfiles/;
@@ -273,6 +276,14 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_pass http://django:8000;
+
+        # SSE 聊天流 + ASR：关闭缓冲 + HTTP/1.1 + 延长读超时，
+        # 保证实时 token/音频推送不被 nginx 缓冲或 60s 超时截断
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
     }
 }
 ```
@@ -394,3 +405,4 @@ docker compose up -d --build   # 重建 Django/Celery 镜像
 |---|------|------|------|
 | 1 | 2026-06-26 | 初版 | Brainstorming → 设计确认 |
 | 2 | 2026-06-26 | 7 处修复 | Review: 移除 Dockerfile collectstatic、修复端口表 Nginx bind、Celery 依赖改为 PG+Redis、移除 USER app、扩展 .dockerignore、加 Django healthcheck、graceful-timeout 30s |
+| 3 | 2026-06-26 | nginx.conf 加 client_max_body_size 10m + SSE proxy 设置（buffering off / http 1.1 / read_timeout 300s） | Task 3 code review: 默认 1MB 拦上传、默认 60s 截断 SSE 流 |
