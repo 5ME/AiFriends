@@ -40,6 +40,10 @@ if not SECRET_KEY:
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '127.0.0.1').split(',')
 
+# 生产环境信任 Nginx 反代的 HTTPS（Docker 下 X-Forwarded-Proto 由 Nginx 设置）
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 
 # Application definition
 
