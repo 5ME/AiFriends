@@ -1,9 +1,12 @@
 # backend/Dockerfile
 FROM python:3.12-slim
 
-# gcc + libpq-dev: psycopg2 编译
-# curl: Django healthcheck（gunicorn 容器内用 curl 探测 /api/health/）
-RUN apt-get update && apt-get install -y \
+# 不缓冲 stdout/stderr（容器日志实时可见）+ 不写 .pyc
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# 构建工具（源码安装的依赖兜底）+ curl（Django healthcheck 探测 /api/health/）
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev curl \
     && rm -rf /var/lib/apt/lists/*
 

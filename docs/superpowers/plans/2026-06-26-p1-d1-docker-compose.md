@@ -13,33 +13,34 @@
 ### Task 1: backend/Dockerfile + backend/.dockerignore
 
 **Files:**
+- Create: `.dockerignore` (project root)
 - Create: `backend/Dockerfile`
-- Create: `backend/.dockerignore`
 
-- [ ] **Step 1: Create backend/.dockerignore**
+- [ ] **Step 1: Create .dockerignore (project root)**
 
 ```dockerignore
-# 环境/安全
-.env
+# 版本控制 / 文档 / 工具（加速 build context 传输）
 .git/
-
-# Python 编译缓存
-__pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
-
-# 数据/运行时（volume mount 或在宿主机）
-logs/
-media/
-staticfiles/
-
-# 前端（不进入镜像，宿主机 build）
-frontend/
-
-# 文档/工具
 docs/
 .codegraph/
+frontend/
+
+# 后端 — 环境/安全（绝不能进镜像）
+backend/.env
+
+# 后端 — 运行时数据 / 缓存（runtime volume mount 或宿主机生成）
+backend/db.sqlite3
+backend/logs/
+backend/media/
+backend/static/
+backend/staticfiles/
+backend/rag_eval_output/
+backend/.pytest_cache/
+
+# Python 编译缓存（任意层级）
+**/__pycache__/
+**/*.pyc
+**/*.pyo
 ```
 
 - [ ] **Step 2: Create backend/Dockerfile**
@@ -48,9 +49,12 @@ docs/
 # backend/Dockerfile
 FROM python:3.12-slim
 
-# gcc + libpq-dev: psycopg2 编译
-# curl: Django healthcheck（gunicorn 容器内用 curl 探测 /api/health/）
-RUN apt-get update && apt-get install -y \
+# 不缓冲 stdout/stderr（容器日志实时可见）+ 不写 .pyc
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# 构建工具（源码安装的依赖兜底）+ curl（Django healthcheck 探测 /api/health/）
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -74,7 +78,7 @@ Expected: No syntax errors (will fail on actual build without docker, but `docke
 - [ ] **Step 4: Commit**
 
 ```bash
-git add backend/Dockerfile backend/.dockerignore
+git add .dockerignore backend/Dockerfile
 git commit -m "feat(d1): add Dockerfile + .dockerignore for Django/Celery
 
 - python:3.12-slim base, gcc+libpq-dev+curl

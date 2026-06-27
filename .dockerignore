@@ -1,0 +1,22 @@
+# 版本控制 / 文档 / 工具（加速 build context 传输）
+.git/
+docs/
+.codegraph/
+frontend/
+
+# 后端 — 环境/安全（绝不能进镜像）
+backend/.env
+
+# 后端 — 运行时数据 / 缓存（runtime volume mount 或宿主机生成）
+backend/db.sqlite3
+backend/logs/
+backend/media/
+backend/static/
+backend/staticfiles/
+backend/rag_eval_output/
+backend/.pytest_cache/
+
+# Python 编译缓存（任意层级）
+**/__pycache__/
+**/*.pyc
+**/*.pyo
