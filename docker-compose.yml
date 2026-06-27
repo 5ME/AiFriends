@@ -3,22 +3,92 @@ services:
     image: pgvector/pgvector:pg17
     container_name: ai-friends-db
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_USER: aifriends
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: aifriends
     ports:
-      - "55432:5432"
+      - "127.0.0.1:55432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aifriends"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: ai-friends-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     command: redis-server --save 60 1 --loglevel warning
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  django:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ai-friends-web
+    command: gunicorn --workers 3 --graceful-timeout 30 --bind 0.0.0.0:8000 backend.wsgi:application
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/staticfiles:/app/staticfiles
+      - ./backend/media:/app/media
+      - ./backend/logs:/app/logs
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  celery:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ai-friends-celery
+    command: celery -A backend worker -l info -c 1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/media:/app/media
+      - ./backend/logs:/app/logs
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: ai-friends-nginx
+    ports:
+      - "443:443"
+      - "80:80"
+    depends_on:
+      django:
+        condition: service_healthy
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./backend/staticfiles:/app/staticfiles:ro
+      - ./backend/media:/app/media:ro
+      - ./ssl:/etc/nginx/ssl:ro
     restart: unless-stopped
 
 volumes:
