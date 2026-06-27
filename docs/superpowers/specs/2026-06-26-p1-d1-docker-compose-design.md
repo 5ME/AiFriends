@@ -305,6 +305,15 @@ if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 ```
 
+**STATICFILES_DIRS 按目录存在性判断（非 DEBUG）：** 前端构建产物在 `static/frontend/`，`collectstatic` 从 `STATICFILES_DIRS` 收集到 `STATIC_ROOT`（再由 Nginx serve）。生产部署 `collectstatic` 在 `DEBUG=False` 下运行，若用 `if DEBUG` 守卫则 `STATICFILES_DIRS` 为空 → 前端 JS/CSS 收集不到 → SPA 白屏。因此改为 `if (BASE_DIR / 'static').exists()` 守卫：生产能收集到前端产物，全新检出（`static/` 被 gitignore、尚未 build）时目录不存在则不设，避免 `manage.py check` 的 `staticfiles.W004` 警告。
+
+```python
+_FRONTEND_STATIC_DIR = BASE_DIR / 'static'
+if _FRONTEND_STATIC_DIR.exists():
+    STATICFILES_DIRS = [_FRONTEND_STATIC_DIR]
+```
+
+
 不改的部分（已从 env 读取，天然适配 Docker）：
 - `DATABASES` — `PG_HOST=postgres` 即可
 - `CELERY_BROKER_URL` — `CELERY_BROKER_URL=redis://redis:6379/0` 即可
@@ -412,3 +421,4 @@ docker compose up -d --build   # 重建 Django/Celery 镜像
 | 2 | 2026-06-26 | 7 处修复 | Review: 移除 Dockerfile collectstatic、修复端口表 Nginx bind、Celery 依赖改为 PG+Redis、移除 USER app、扩展 .dockerignore、加 Django healthcheck、graceful-timeout 30s |
 | 3 | 2026-06-26 | nginx.conf 加 client_max_body_size 10m + SSE proxy 设置（buffering off / http 1.1 / read_timeout 300s） | Task 3 code review: 默认 1MB 拦上传、默认 60s 截断 SSE 流 |
 | 4 | 2026-06-26 | django healthcheck 改 socket 存活探测（解耦 Celery）+ 新增根 .env.example | Task 6 code review: /api/health/ 含 Celery 检查会拖垮启动顺序；根 .env 缺失导致 compose 硬失败 |
+| 5 | 2026-06-26 | STATICFILES_DIRS 改为按目录存在性判断（非 DEBUG） | 部署发现：DEBUG=False 时 collectstatic 收集不到前端产物 → SPA 白屏 |
