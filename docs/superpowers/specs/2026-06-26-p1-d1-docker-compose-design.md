@@ -183,10 +183,13 @@ services:
       - .env
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      # 存活探测：仅检查 gunicorn 是否接受连接，不依赖 DB/Celery（避免 Celery 冷启动拖垮启动顺序）
+      # 深度 /api/health/（含 Celery）留给外部监控；liveness/readiness 正式拆分见 D2
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 3).close()"]
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 30s
 
   celery:
     build:
@@ -342,6 +345,8 @@ DJANGO_CORS_ORIGINS=https://<服务器 IP>
 DJANGO_MEDIA_URL=https://<服务器 IP>/media/
 ```
 
+> **Docker 部署用的是项目根 `.env`**（从新增的根 `.env.example` 拷贝），与本地开发的 `backend/.env` 是两份独立文件。compose 的 `${PG_PASSWORD}` 插值和各服务的 `env_file` 都只读项目根 `.env`；根 `.env` 用 compose 服务名（`postgres`/`redis`）作 host，而 `backend/.env` 用 `127.0.0.1`，在容器内不可达。
+
 ## 九、部署流程
 
 ### 首次部署
@@ -406,3 +411,4 @@ docker compose up -d --build   # 重建 Django/Celery 镜像
 | 1 | 2026-06-26 | 初版 | Brainstorming → 设计确认 |
 | 2 | 2026-06-26 | 7 处修复 | Review: 移除 Dockerfile collectstatic、修复端口表 Nginx bind、Celery 依赖改为 PG+Redis、移除 USER app、扩展 .dockerignore、加 Django healthcheck、graceful-timeout 30s |
 | 3 | 2026-06-26 | nginx.conf 加 client_max_body_size 10m + SSE proxy 设置（buffering off / http 1.1 / read_timeout 300s） | Task 3 code review: 默认 1MB 拦上传、默认 60s 截断 SSE 流 |
+| 4 | 2026-06-26 | django healthcheck 改 socket 存活探测（解耦 Celery）+ 新增根 .env.example | Task 6 code review: /api/health/ 含 Celery 检查会拖垮启动顺序；根 .env 缺失导致 compose 硬失败 |

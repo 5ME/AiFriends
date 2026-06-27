@@ -52,10 +52,13 @@ services:
       - .env
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      # 存活探测：仅检查 gunicorn 是否接受连接，不依赖 DB/Celery（避免 Celery 冷启动拖垮启动顺序）
+      # 深度 /api/health/（含 Celery）留给外部监控；liveness/readiness 正式拆分见 D2
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 3).close()"]
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 30s
 
   celery:
     build:

@@ -4,7 +4,8 @@ docs/
 .codegraph/
 frontend/
 
-# 后端 — 环境/安全（绝不能进镜像）
+# 环境/安全（绝不能进镜像；/.env 是 Docker 部署用的根 .env，不能匹配 .env.example）
+/.env
 backend/.env
 
 # 后端 — 运行时数据 / 缓存（runtime volume mount 或宿主机生成）
