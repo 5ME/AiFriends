@@ -17,7 +17,7 @@ from web.views.friend.message.asr.asr import ASRView
 from web.views.friend.message.chat.chat import MessageChatView
 from web.views.friend.message.get_history import GetHistoryView
 from web.views.friend.remove import FriendRemoveView
-from web.views.health import HealthView
+from web.views.health import HealthView, LivenessView, ReadinessView
 from web.views.usage_summary import UsageSummaryView
 from web.views.homepage.index import HomepageIndexView
 from web.views.index import index
@@ -30,6 +30,8 @@ from web.views.user.profile.update import UpdateProfileView
 
 urlpatterns = [
     path('api/health/', HealthView.as_view()),
+    path('api/health/live/', LivenessView.as_view()),
+    path('api/health/ready/', ReadinessView.as_view()),
     path('api/admin/usage/summary/', UsageSummaryView.as_view()),
 
     path('api/user/account/login/', LoginView.as_view()),
