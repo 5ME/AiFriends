@@ -98,30 +98,32 @@ CMD ["gunicorn", "--workers", "3", "--graceful-timeout", "30", "--bind", "0.0.0.
 - 不依赖 conda，直接用 pip
 - `graceful-timeout 30`（默认值）：SSE 聊天流可能持续几十秒，3s 过于激进
 
-### .dockerignore
+### .dockerignore（项目根）
 
 ```
-# 环境/安全
-.env
+# 版本控制 / 文档 / 工具（加速 build context 传输）
 .git/
-
-# Python 编译缓存
-__pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
-
-# 数据/运行时（volume mount 或在宿主机）
-logs/
-media/
-staticfiles/
-
-# 前端（不进入镜像，宿主机 build）
-frontend/
-
-# 文档/工具
 docs/
 .codegraph/
+frontend/
+
+# 环境/安全（绝不能进镜像；/.env 是 Docker 部署用的根 .env，不能匹配 .env.example）
+/.env
+backend/.env
+
+# 后端 — 运行时数据 / 缓存（runtime volume mount 或宿主机生成）
+backend/db.sqlite3
+backend/logs/
+backend/media/
+backend/static/
+backend/staticfiles/
+backend/rag_eval_output/
+backend/.pytest_cache/
+
+# Python 编译缓存（任意层级）
+**/__pycache__/
+**/*.pyc
+**/*.pyo
 ```
 
 ## 四、docker-compose.yml
@@ -394,6 +396,8 @@ docker compose run --rm django python manage.py migrate
 docker compose up -d --build
 ```
 
+> 前端 API base 是 Vite 构建期常量：cloud 模式默认 = `https://115.190.245.146`（=本服务器，同源生效）；换 IP/域名须 `VITE_CLOUD_BASE=https://新地址 npm run build` 重新构建（改 .env/nginx 对已 build 的 JS 无效）。
+
 ## 十、文件清单
 
 | 文件 | 操作 | 说明 |
@@ -429,3 +433,4 @@ docker compose up -d --build
 | 7 | 2026-06-26 | celery 加 -B 嵌入式 Beat + MEDIA_URL 改读 DJANGO_MEDIA_URL + 修文件清单 | Capstone review: Beat 未运行定时任务永不触发；MEDIA_URL 变量名不匹配致旋钮失效 |
 | 8 | 2026-06-26 | POSTGRES_PASSWORD 改 `${PG_PASSWORD:?...}` 必填校验 | PR #31 review: 拒绝原 `:-default` fallback（会致 PG/Django 密码不一致 + 引入默认凭据），改 `:?` 在 up 前 fail-fast |
 | 9 | 2026-06-26 | 部署交付模型改为 git clone 源码 + 本地 build 前端 + scp `staticfiles/`（非服务器上 build） | 实际工作流：云服务器 4GiB 内存跑 `npm install` 易 OOM，前端须本地构建 |
+| 10 | 2026-06-28 | index.py 生产读 `STATIC_ROOT`（修首页 404）+ 根 .env.example `PG_PASSWORD` 置空（`:?` fail-fast 生效）+ 前端 API base 构建期常量说明 + 同步过时文档 | PR #31 全库 review: 容器无 `static/` 致 `/` 返回 404；非空默认密码绕过 `:?` 校验；spec/plan 多处过时 |

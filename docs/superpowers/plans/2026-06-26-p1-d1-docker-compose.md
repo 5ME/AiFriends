@@ -4,7 +4,7 @@
 
 **Goal:** `docker compose up -d` 一键启动全栈 5 容器（PG+Redis+Django+gunicorn+Celery+Nginx），覆盖云服务器生产部署。
 
-**Architecture:** 8 个文件变更（3 新建、5 修改）。Django + Celery 用同一 `python:3.12-slim` 镜像、不同 CMD。Nginx 反代 TCP `django:8000`。前端在宿主机 `npm run build` → `collectstatic` → volume mount 进 Nginx。
+**Architecture:** 9 个文件变更（4 新建：Dockerfile / nginx.conf / .dockerignore / 根 .env.example；5 修改）。Django + Celery 用同一 `python:3.12-slim` 镜像、不同 command。Nginx 反代 TCP `django:8000`。前端本地 `npm run build` → `collectstatic` → scp `staticfiles/` 挂载进 Nginx。
 
 **Tech Stack:** Docker Compose v3.8+, python:3.12-slim, nginx:1.27-alpine, pgvector/pgvector:pg17, redis:7-alpine
 
@@ -668,5 +668,5 @@ Task 1-5 之间无依赖可并行。Task 6 依赖 Task 1（compose 引用 Docker
 |------|------|
 | Docker build 在本地 Windows 上无法测试 | CI 或云服务器上验证；本地至少验证 compose 语法和 Dockerfile 语法 |
 | `python:3.12-slim` 缺少某些运行时依赖 | 首次 build 后逐容器检查日志；需要时补 apt 包 |
-| Celery beat 与 worker 同容器可能冲突 | 当前 `celery worker` 不含 `-B`，beat 通过 compose 单独 service 或暂不启用 |
+| Celery beat 与 worker 同容器 | 已用 `-B` 嵌入式 Beat（单 worker 单容器安全），驱动每日 usage 清理 |
 | 云服务器上 `npm install` 内存不足 | 本地 build 后 scp 产物，或在服务器上 `npm ci --production` |
