@@ -3,7 +3,7 @@
 FROM node:20-alpine AS frontend
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --registry=https://registry.npmmirror.com
+RUN npm ci --registry=https://registry.npmmirror.com --fetch-timeout=600000 --fetch-retries=5
 COPY frontend/ ./
 # VAD 语音识别资源（ort-wasm + silero onnx）在 node_modules 里、被 gitignore，
 # 需从 node_modules 复制到 public/vad/，否则全新 build 缺语音识别
