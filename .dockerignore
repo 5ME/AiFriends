@@ -3,6 +3,10 @@
 docs/
 .codegraph/
 
+# 本地测试残留的坏权限缓存目录（空目录，会阻断 docker build 的 context 加载）
+.pytest-cache/
+.pytest-tmp/
+
 # 前端 — node_modules 由 npm ci 重建；VAD 资源由 Dockerfile 从 node_modules 复制
 frontend/node_modules/
 frontend/public/vad/
