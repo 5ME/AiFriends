@@ -3,22 +3,97 @@ services:
     image: pgvector/pgvector:pg17
     container_name: ai-friends-db
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_USER: aifriends
+      # :? 必填校验 — PG_PASSWORD 空/未设时 compose 在 up 最前面就报错（避免 PG init 失败或 PG/Django 密码不一致）
+      POSTGRES_PASSWORD: "${PG_PASSWORD:?PG_PASSWORD 未设置——请在项目根 .env 配置（见 .env.example）}"
+      POSTGRES_DB: aifriends
     ports:
-      - "55432:5432"
+      - "127.0.0.1:55432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aifriends"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: ai-friends-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     command: redis-server --save 60 1 --loglevel warning
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  django:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ai-friends-web
+    command: gunicorn --workers 3 --graceful-timeout 30 --bind 0.0.0.0:8000 backend.wsgi:application
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/staticfiles:/app/staticfiles
+      - ./backend/media:/app/media
+      - ./backend/logs:/app/logs
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      # 存活探测：仅检查 gunicorn 是否接受连接，不依赖 DB/Celery（避免 Celery 冷启动拖垮启动顺序）
+      # 深度 /api/health/（含 Celery）留给外部监控；liveness/readiness 正式拆分见 D2
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 3).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  celery:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ai-friends-celery
+    # -B: 嵌入式 Beat 调度器（单 worker 单容器下安全），驱动 CELERY_BEAT_SCHEDULE 的每日 usage 清理
+    command: celery -A backend worker -B -l info -c 1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/media:/app/media
+      - ./backend/logs:/app/logs
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: ai-friends-nginx
+    ports:
+      - "443:443"
+      - "80:80"
+    depends_on:
+      django:
+        condition: service_healthy
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./backend/staticfiles:/app/staticfiles:ro
+      - ./backend/media:/app/media:ro
+      - ./ssl:/etc/nginx/ssl:ro
     restart: unless-stopped
 
 volumes:

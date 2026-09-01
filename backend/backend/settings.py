@@ -40,6 +40,10 @@ if not SECRET_KEY:
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '127.0.0.1').split(',')
 
+# 生产环境信任 Nginx 反代的 HTTPS（Docker 下 X-Forwarded-Proto 由 Nginx 设置）
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 
 # Application definition
 
@@ -153,10 +157,14 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'  # collectstatic 输出目录
 
-if DEBUG:
-    STATICFILES_DIRS = [BASE_DIR / 'static']  # 前端构建产物位置
+# 前端构建产物目录（npm run build → static/frontend/）。
+# 用存在性判断而非 DEBUG：collectstatic 在生产（DEBUG=False）也需要它来收集前端资源；
+# 全新检出（尚未 build）时目录不存在则不设，避免 staticfiles.W004。
+_FRONTEND_STATIC_DIR = BASE_DIR / 'static'
+if _FRONTEND_STATIC_DIR.exists():
+    STATICFILES_DIRS = [_FRONTEND_STATIC_DIR]
 
-MEDIA_URL = os.environ.get('MEDIA_URL') or (
+MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL') or (
     'http://127.0.0.1:8000/media/' if DEBUG else 'https://115.190.245.146/media/'
 )
 MEDIA_ROOT = BASE_DIR / 'media'

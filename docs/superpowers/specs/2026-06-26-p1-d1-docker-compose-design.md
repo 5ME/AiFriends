@@ -98,30 +98,32 @@ CMD ["gunicorn", "--workers", "3", "--graceful-timeout", "30", "--bind", "0.0.0.
 - 不依赖 conda，直接用 pip
 - `graceful-timeout 30`（默认值）：SSE 聊天流可能持续几十秒，3s 过于激进
 
-### .dockerignore
+### .dockerignore（项目根）
 
 ```
-# 环境/安全
-.env
+# 版本控制 / 文档 / 工具（加速 build context 传输）
 .git/
-
-# Python 编译缓存
-__pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
-
-# 数据/运行时（volume mount 或在宿主机）
-logs/
-media/
-staticfiles/
-
-# 前端（不进入镜像，宿主机 build）
-frontend/
-
-# 文档/工具
 docs/
 .codegraph/
+frontend/
+
+# 环境/安全（绝不能进镜像；/.env 是 Docker 部署用的根 .env，不能匹配 .env.example）
+/.env
+backend/.env
+
+# 后端 — 运行时数据 / 缓存（runtime volume mount 或宿主机生成）
+backend/db.sqlite3
+backend/logs/
+backend/media/
+backend/static/
+backend/staticfiles/
+backend/rag_eval_output/
+backend/.pytest_cache/
+
+# Python 编译缓存（任意层级）
+**/__pycache__/
+**/*.pyc
+**/*.pyo
 ```
 
 ## 四、docker-compose.yml
@@ -135,7 +137,8 @@ services:
     container_name: ai-friends-db
     environment:
       POSTGRES_USER: aifriends
-      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      # :? 必填校验 — PG_PASSWORD 空/未设时 compose 在 up 最前面就报错（避免 PG init 失败或 PG/Django 密码不一致）
+      POSTGRES_PASSWORD: "${PG_PASSWORD:?PG_PASSWORD 未设置——请在项目根 .env 配置（见 .env.example）}"
       POSTGRES_DB: aifriends
     ports:
       - "127.0.0.1:55432:5432"
@@ -183,17 +186,20 @@ services:
       - .env
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
+      # 存活探测：仅检查 gunicorn 是否接受连接，不依赖 DB/Celery（避免 Celery 冷启动拖垮启动顺序）
+      # 深度 /api/health/（含 Celery）留给外部监控；liveness/readiness 正式拆分见 D2
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 3).close()"]
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 30s
 
   celery:
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: ai-friends-celery
-    command: celery -A backend worker -l info -c 1
+    command: celery -A backend worker -B -l info -c 1
     depends_on:
       postgres:
         condition: service_healthy
@@ -232,7 +238,7 @@ volumes:
 基于现有 `服务器部署.md` 中 Nginx 配置，适配 Docker：
 
 ```nginx
-# nginx.conf
+# nginx.conf — AI Friends Docker Compose 反向代理
 server {
     listen 80;
     server_name _;
@@ -250,6 +256,9 @@ server {
 
     access_log /var/log/nginx/aifriends-access.log;
     error_log  /var/log/nginx/aifriends-error.log;
+
+    # 文档/图片上传 10MB（nginx 默认 1MB 会拦截知识库上传和 ASR 音频 → 413）
+    client_max_body_size 10m;
 
     location /static/ {
         alias /app/staticfiles/;
@@ -273,6 +282,14 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_pass http://django:8000;
+
+        # SSE 聊天流 + ASR：关闭缓冲 + HTTP/1.1 + 延长读超时，
+        # 保证实时 token/音频推送不被 nginx 缓冲或 60s 超时截断
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
     }
 }
 ```
@@ -290,6 +307,15 @@ server {
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 ```
+
+**STATICFILES_DIRS 按目录存在性判断（非 DEBUG）：** 前端构建产物在 `static/frontend/`，`collectstatic` 从 `STATICFILES_DIRS` 收集到 `STATIC_ROOT`（再由 Nginx serve）。生产部署 `collectstatic` 在 `DEBUG=False` 下运行，若用 `if DEBUG` 守卫则 `STATICFILES_DIRS` 为空 → 前端 JS/CSS 收集不到 → SPA 白屏。因此改为 `if (BASE_DIR / 'static').exists()` 守卫：生产能收集到前端产物，全新检出（`static/` 被 gitignore、尚未 build）时目录不存在则不设，避免 `manage.py check` 的 `staticfiles.W004` 警告。
+
+```python
+_FRONTEND_STATIC_DIR = BASE_DIR / 'static'
+if _FRONTEND_STATIC_DIR.exists():
+    STATICFILES_DIRS = [_FRONTEND_STATIC_DIR]
+```
+
 
 不改的部分（已从 env 读取，天然适配 Docker）：
 - `DATABASES` — `PG_HOST=postgres` 即可
@@ -331,41 +357,46 @@ DJANGO_CORS_ORIGINS=https://<服务器 IP>
 DJANGO_MEDIA_URL=https://<服务器 IP>/media/
 ```
 
+> **Docker 部署用的是项目根 `.env`**（从新增的根 `.env.example` 拷贝），与本地开发的 `backend/.env` 是两份独立文件。compose 的 `${PG_PASSWORD}` 插值和各服务的 `env_file` 都只读项目根 `.env`；根 `.env` 用 compose 服务名（`postgres`/`redis`）作 host，而 `backend/.env` 用 `127.0.0.1`，在容器内不可达。
+
 ## 九、部署流程
+
+部署跨两台机器：**本地构建机** build 前端 + collectstatic（云服务器内存有限，`npm install` 易 OOM），产物 scp 到服务器；**云服务器** `git clone` 源码 → 现场构建镜像 → 跑容器。
 
 ### 首次部署
 
 ```bash
-# 1. 克隆代码
-git clone ... && cd ai-friends
+# === 云服务器 ===
+git clone git@github.com:5ME/AiFriends.git ~/ai-friends && cd ~/ai-friends   # 源码：根文件 + backend/ + frontend/
+git checkout <branch>
+cp .env.example .env   # 填真实值；复用现有 PG 卷时 PG_PASSWORD 须 = 现有 aifriends 用户密码
+mkdir -p ssl && openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout ssl/aifriends-selfsigned.key -out ssl/aifriends-selfsigned.crt -subj '/CN=115.190.245.146'
+sudo systemctl stop nginx   # 停裸机服务（80/443 冲突）
 
-# 2. 前端构建
-cd frontend && npm install && npm run build
+# === 本地构建机 ===
+cd frontend && npm install && npm run build && cd ..        # → backend/static/frontend/
+cd backend && python manage.py collectstatic --noinput && cd ..   # → backend/staticfiles/
+scp -r backend/staticfiles gqyin@115.190.245.146:ai-friends/backend/   # 只传产物（gitignore，不随 clone）
 
-# 3. 静态文件收集
-cd ../backend
-cp .env.example .env   # 按 §八 填入真实值
-python manage.py collectstatic --noinput
-
-# 4. SSL 证书准备（已有或新生成）
-mkdir -p ssl
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout ssl/aifriends-selfsigned.key \
-  -out ssl/aifriends-selfsigned.crt
-
-# 5. 启动所有服务
-cd ..
-docker compose up -d
+# === 云服务器 ===
+docker compose run --rm django python manage.py migrate     # 容器内迁移（宿主机解析不了服务名 postgres）
+docker compose up -d --build                                # 现场构建镜像 + 起 5 容器
 ```
 
 ### 更新部署
 
 ```bash
-git pull
-cd frontend && npm run build && cd ..
-cd backend && python manage.py collectstatic --noinput && cd ..
-docker compose up -d --build   # 重建 Django/Celery 镜像
+# 本地构建机：重建前端 + 传产物
+cd frontend && npm run build && cd .. && cd backend && python manage.py collectstatic --noinput && cd ..
+scp -r backend/staticfiles gqyin@115.190.245.146:ai-friends/backend/
+# 云服务器：拉代码 + 迁移 + 重建重启
+cd ~/ai-friends && git pull
+docker compose run --rm django python manage.py migrate
+docker compose up -d --build
 ```
+
+> 前端 API base 是 Vite 构建期常量：cloud 模式默认 = `https://115.190.245.146`（=本服务器，同源生效）；换 IP/域名须 `VITE_CLOUD_BASE=https://新地址 npm run build` 重新构建（改 .env/nginx 对已 build 的 JS 无效）。
 
 ## 十、文件清单
 
@@ -374,10 +405,11 @@ docker compose up -d --build   # 重建 Django/Celery 镜像
 | `backend/Dockerfile` | **新建** | Django + Celery 共用镜像 |
 | `docker-compose.yml` | **修改** | 从 2 服务扩到 5 服务 |
 | `nginx.conf` | **新建** | Nginx 反代配置（项目根目录） |
-| `backend/.dockerignore` | **新建** | 排除不用进镜像的文件 |
+| `.dockerignore`（项目根） | **新建** | 排除不用进镜像的文件 |
 | `init.sql` | **修改** | 精简为只建 vector 扩展 |
 | `backend/backend/settings.py` | **修改** | 加 SECURE_PROXY_SSL_HEADER（2 行） |
 | `backend/.env.example` | **修改** | 标注 Docker 环境的 host 差异 |
+| `.env.example`（项目根） | **新建** | Docker 部署环境变量模板（compose 读项目根 .env） |
 | `服务器部署.md` | **修改** | 更新为 Docker Compose 流程 |
 
 ## 十一、不做的
@@ -394,3 +426,11 @@ docker compose up -d --build   # 重建 Django/Celery 镜像
 |---|------|------|------|
 | 1 | 2026-06-26 | 初版 | Brainstorming → 设计确认 |
 | 2 | 2026-06-26 | 7 处修复 | Review: 移除 Dockerfile collectstatic、修复端口表 Nginx bind、Celery 依赖改为 PG+Redis、移除 USER app、扩展 .dockerignore、加 Django healthcheck、graceful-timeout 30s |
+| 3 | 2026-06-26 | nginx.conf 加 client_max_body_size 10m + SSE proxy 设置（buffering off / http 1.1 / read_timeout 300s） | Task 3 code review: 默认 1MB 拦上传、默认 60s 截断 SSE 流 |
+| 4 | 2026-06-26 | django healthcheck 改 socket 存活探测（解耦 Celery）+ 新增根 .env.example | Task 6 code review: /api/health/ 含 Celery 检查会拖垮启动顺序；根 .env 缺失导致 compose 硬失败 |
+| 5 | 2026-06-26 | STATICFILES_DIRS 改为按目录存在性判断（非 DEBUG） | 部署发现：DEBUG=False 时 collectstatic 收集不到前端产物 → SPA 白屏 |
+| 6 | 2026-06-26 | 部署流程补 migrate 步骤 + .env 改为项目根 + collectstatic/ssl 顺序明确 | Task 6 code review: 缺 migrate 空库无表、根 .env 缺失、ssl 缺失 nginx 崩溃 |
+| 7 | 2026-06-26 | celery 加 -B 嵌入式 Beat + MEDIA_URL 改读 DJANGO_MEDIA_URL + 修文件清单 | Capstone review: Beat 未运行定时任务永不触发；MEDIA_URL 变量名不匹配致旋钮失效 |
+| 8 | 2026-06-26 | POSTGRES_PASSWORD 改 `${PG_PASSWORD:?...}` 必填校验 | PR #31 review: 拒绝原 `:-default` fallback（会致 PG/Django 密码不一致 + 引入默认凭据），改 `:?` 在 up 前 fail-fast |
+| 9 | 2026-06-26 | 部署交付模型改为 git clone 源码 + 本地 build 前端 + scp `staticfiles/`（非服务器上 build） | 实际工作流：云服务器 4GiB 内存跑 `npm install` 易 OOM，前端须本地构建 |
+| 10 | 2026-06-28 | index.py 生产读 `STATIC_ROOT`（修首页 404）+ 根 .env.example `PG_PASSWORD` 置空（`:?` fail-fast 生效）+ 前端 API base 构建期常量说明 + 同步过时文档 | PR #31 全库 review: 容器无 `static/` 致 `/` 返回 404；非空默认密码绕过 `:?` 校验；spec/plan 多处过时 |
