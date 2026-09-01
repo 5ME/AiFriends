@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
+RUN pip install --timeout 300 --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
     --extra-index-url https://mirrors.aliyun.com/pypi/simple/ \
     -r requirements.txt
 COPY backend/ .
