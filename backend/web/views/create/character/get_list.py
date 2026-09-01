@@ -42,7 +42,7 @@ class GetListCharacterView(APIView):
                         # 但前端路由 /user/space/:user_id/ 用的是 User.id
                         'user_id': character.author.user_id,
                         'username': character.author.user.username,
-                        'photo': character.author.photo.url
+                        'photo': character.author.photo_url
                     }
                 })
             return Response({
@@ -51,7 +51,7 @@ class GetListCharacterView(APIView):
                     'user_id': user.id,
                     'username': user.username,
                     'profile': user_profile.profile,
-                    'photo': user_profile.photo.url,
+                    'photo': user_profile.photo_url,
                 },
                 'characters': characters,
             })

@@ -20,7 +20,7 @@ class GetUserInfoView(APIView):
                 'message': 'success',
                 'user_id': user.id,
                 'username': user.username,
-                'photo': user_profile.photo.url,
+                'photo': user_profile.photo_url,
                 'profile': user_profile.profile,
             }, status=status.HTTP_200_OK)
         except Exception as e:
