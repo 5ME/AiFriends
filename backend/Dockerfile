@@ -29,7 +29,7 @@ RUN pip install --timeout 300 --no-cache-dir -i https://pypi.tuna.tsinghua.edu.c
     --extra-index-url https://mirrors.aliyun.com/pypi/simple/ \
     -r requirements.txt
 COPY backend/ .
-COPY --from=frontend /app/backend/static/frontend /app/backend/static/frontend
+COPY --from=frontend /app/backend/static/frontend /app/static/frontend
 RUN DJANGO_SECRET_KEY=build-time-only python manage.py collectstatic --noinput
 EXPOSE 8000
 CMD ["gunicorn", "--workers", "3", "--graceful-timeout", "30", "--bind", "0.0.0.0:8000", "backend.wsgi:application"]
