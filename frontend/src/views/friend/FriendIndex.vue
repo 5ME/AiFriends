@@ -24,7 +24,7 @@ async function loadMore() {
   isLoading.value = true
   let newFriends = []
   try {
-    const response = await api.get('api/friend/get_list/', {
+    const response = await api.get('/api/friend/get_list/', {
       params: {
         items_count: friends.value.length
       }

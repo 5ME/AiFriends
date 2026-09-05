@@ -17,7 +17,7 @@ function closeMenu() {
 
 async function handleLogout() {
   try {
-    const response = await api.post('api/user/account/logout/')
+    const response = await api.post('/api/user/account/logout/')
     const data = response.data
     if (data.message === 'success') {
       user.logout()

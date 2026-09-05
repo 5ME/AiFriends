@@ -31,7 +31,7 @@ async function handleRemoveCharacter() {
 
 async function confirmRemoveCharacter() {
   try {
-    const response = await api.post('api/create/character/remove/', {
+    const response = await api.post('/api/create/character/remove/', {
       character_id: props.character.id
     })
     if (response.status === 200) {
