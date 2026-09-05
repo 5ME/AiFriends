@@ -39,7 +39,7 @@ class HomepageIndexView(APIView):
                         # 但前端路由 /user/space/:user_id/ 用的是 User.id
                         'user_id': character.author.user_id,
                         'username': character.author.user.username,
-                        'photo': character.author.photo.url
+                        'photo': character.author.photo_url
                     }
                 })
             return Response({'message': 'success', 'characters': characters})

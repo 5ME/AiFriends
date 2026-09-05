@@ -22,7 +22,7 @@ const curVoiceId = ref(null)
 
 async function getCharacterData() {
   try {
-    const response = await api.get('api/create/character/get_single/', {
+    const response = await api.get('/api/create/character/get_single/', {
       params: {character_id: route.params.character_id}
     })
     // 200 = 获取成功
@@ -88,7 +88,7 @@ async function handleUpdate() {
     }
 
     try {
-      const response = await api.post('api/create/character/update/', formData)
+      const response = await api.post('/api/create/character/update/', formData)
       // 200 = 更新成功
       await router.push({
         name: 'user-space-index',

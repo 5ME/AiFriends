@@ -51,7 +51,7 @@ class UpdateProfileView(APIView):
                 'user_id': user.id,
                 'username': user.username,
                 'profile': user_profile.profile,
-                'photo': user_profile.photo.url,
+                'photo': user_profile.photo_url,
             })
         except Exception as e:
             logger.exception('更新用户资料异常: %s', e)

@@ -70,7 +70,7 @@ async function handleCreate() {
     formData.append('background_image', base64ToFile(backgroundImage, 'background_image.png'))
 
     try {
-      const response = await api.post('api/create/character/create/', formData)
+      const response = await api.post('/api/create/character/create/', formData)
       // 200 = 创建成功
       await router.push({
         name: 'user-space-index',

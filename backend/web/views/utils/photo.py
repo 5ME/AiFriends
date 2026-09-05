@@ -2,7 +2,7 @@ import os
 
 from django.conf import settings
 
-DEFAULT_PHOTO = 'user/photos/default.png'
+from web.models.user import DEFAULT_PHOTO
 
 
 def remove_old_photo(photo) -> None:

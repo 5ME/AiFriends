@@ -36,7 +36,7 @@ class FriendGetListView(APIView):
                         'author': {
                             'user_id': friend.character.author.user_id,
                             'username': friend.character.author.user.username,
-                            'photo': friend.character.author.photo.url,
+                            'photo': friend.character.author.photo_url,
                         }
                     }
                 })
