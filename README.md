@@ -80,25 +80,24 @@ celery -A backend worker --loglevel=info --pool=solo
 |------|------|---------|
 | `npm run dev` | django（默认） | `http://127.0.0.1:8000` |
 | `VITE_PLATFORM=vue npm run dev` | vue（纯前端） | `http://127.0.0.1:8000` |
-| `npm run build` | cloud（生产） | `https://115.190.245.146` |
+| `VITE_PLATFORM=docker npm run build` | docker（生产，同源） | `''` |
 | `$env:VITE_PLATFORM='django'; npm run build` | django（本地打包） | `http://127.0.0.1:8000` |
 
 ---
 
 ## 部署
 
-### 手动部署（云服务器）
+部署走「本地 build 镜像 → push 阿里云 ACR → 服务器 pull」的 registry 流程，完整步骤见 `服务器部署.md`。
 
 ```bash
-cd frontend && npm run build        # 自动使用 cloud 模式
-cd backend
-python manage.py collectstatic
-gunicorn --workers 3 --bind unix:gunicorn.sock backend.wsgi:application
-celery -A backend worker --loglevel=info --pool=solo
-# Nginx 反向代理配置详见 服务器部署.md
+# 本地构建机：多阶段 build（前端打进镜像）+ push 到 ACR
+ACR_IMAGE=<镜像名> ./deploy/build.sh
+
+# 服务器：拉镜像 + 启动 5 容器（不 build、不 scp）
+docker compose pull && docker compose up -d
 ```
 
-> 生产部署前请确保 `.env` 中 `DJANGO_SECRET_KEY` 已设置且 `DJANGO_DEBUG=false`。
+> 生产部署前请确保 `.env` 中 `DJANGO_SECRET_KEY` 已设置、`DJANGO_DEBUG=false`、`ACR_IMAGE` 已配置。
 
 ---
 

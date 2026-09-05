@@ -57,11 +57,10 @@ celery -A backend worker --loglevel=info --pool=solo
 
 ### Production Deployment
 
-1. `cd frontend && npm run build`（自动使用 cloud 模式）
-2. `cd backend && python manage.py collectstatic`
-3. Start gunicorn: `gunicorn --workers 3 --bind unix:gunicorn.sock backend.wsgi:application`
-4. Start Celery Worker: `celery -A backend worker --loglevel=info --pool=solo`
-5. Nginx reverse-proxies to the gunicorn socket (see `服务器部署.md` for full Nginx config)
+部署走「本地 build 镜像 → push 阿里云 ACR → 服务器 pull」的 registry 流程，完整步骤见 `服务器部署.md`：
+
+1. 本地构建机：`ACR_IMAGE=<镜像名> ./deploy/build.sh`（多阶段 build：前端打进镜像 + collectstatic → push 到 ACR）
+2. 服务器：`docker compose pull && docker compose up -d`（5 容器，不 build、不 scp）
 
 **前端 platform 自动切换：**
 
@@ -69,7 +68,7 @@ celery -A backend worker --loglevel=info --pool=solo
 |------|------|----------------|
 | 开发热更新 | `npm run dev` | `http://127.0.0.1:8000` |
 | 本地打包测试 | `$env:VITE_PLATFORM='django'; npm run build` | `http://127.0.0.1:8000` |
-| 生产部署 | `npm run build` | `VITE_CLOUD_BASE` 或 `https://115.190.245.146` |
+| 生产部署 | 镜像内自动 `VITE_PLATFORM=docker` build | 同源 `''` |
 
 ## Architecture
 
@@ -106,6 +105,8 @@ The frontend is built into `backend/static/frontend/`. Django serves the SPA via
 | `docker` | `''`（同源）| `VITE_PLATFORM=docker npm run build` |
 
 不再需要手动改 `platform` 变量。`npm run dev` 和 `npm run build` 会自动选择合适的模式。
+
+> 生产部署用 `docker` 模式（同源）：多阶段 Dockerfile 里固定 `VITE_PLATFORM=docker`，前端产物随镜像分发，不再用 `cloud` 模式。
 
 ### JWT auth flow
 

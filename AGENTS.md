@@ -45,11 +45,10 @@ celery -A backend worker --loglevel=info --pool=solo  # Celery Worker
 
 ### Production Deployment
 
-1. `cd frontend && npm run build`（auto-selects cloud mode）
-2. `cd backend && python manage.py collectstatic`
-3. Start gunicorn: `gunicorn --workers 3 --bind unix:gunicorn.sock backend.wsgi:application`
-4. Start Celery Worker: `celery -A backend worker --loglevel=info --pool=solo`
-5. Nginx reverse-proxies to the gunicorn socket (see `服务器部署.md` for full Nginx config)
+Deployment uses the registry flow (local image build → push to Alibaba Cloud ACR → server pull), see `服务器部署.md`:
+
+1. Local: `ACR_IMAGE=<image> ./deploy/build.sh` (multi-stage build: frontend baked into image + collectstatic → push to ACR)
+2. Server: `docker compose pull && docker compose up -d` (5 containers, no build, no scp)
 
 ## Architecture
 
