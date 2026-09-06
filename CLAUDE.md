@@ -26,6 +26,7 @@ python -m pytest web/tests/ -v         # Run all backend tests (209 tests)
 # PostgreSQL & Redis: Docker Compose 一键启动（见下方 Infrastructure）
 # .env 模板: cp .env.example .env
 python manage.py clean_dirty_characters --all  # Clean test residue data
+python manage.py seed_builtins           # 初始化内置音色 + SystemPrompt（幂等）
 # 部署到云服务器时 DEBUG = False
 python manage.py collectstatic          # Collect static files for production
 ```
@@ -60,7 +61,7 @@ celery -A backend worker --loglevel=info --pool=solo
 部署走「本地 build 镜像 → push 阿里云 ACR → 服务器 pull」的 registry 流程，完整步骤见 `服务器部署.md`：
 
 1. 本地构建机：`ACR_IMAGE=<镜像名> ./deploy/build.sh`（多阶段 build：前端打进镜像 + collectstatic → push 到 ACR）
-2. 服务器：`docker compose pull && docker compose up -d`（5 容器，不 build、不 scp）
+2. 服务器：`./deploy/server-deploy.sh`（pull → migrate → seed_builtins → up -d，幂等；首次部署与后续发版通用）
 
 **前端 platform 自动切换：**
 
@@ -194,6 +195,8 @@ Use `character.photo_url` and `character.background_image_url` properties instea
 
 System built-in voices (longanyang/longanhuan) have `is_builtin=True`. The cleanup command skips them. Never delete a voice with `is_builtin=True`.
 
+内置音色：`longanyang` 龙安洋（阳光大男孩）/ `longanhuan` 龙安欢（欢脱元气女），由 `python manage.py seed_builtins` 初始化（幂等：缺失则创建、字段过期则与代码对齐）。
+
 ### Character detail → chat flow
 
 On the homepage, clicking a character card opens `CharacterDetail.vue` (a modal) rather than jumping straight to chat. The component:
@@ -222,6 +225,8 @@ Two separate LangGraph state graphs:
 | **Layer 3** (框架) | DB `SystemPrompt` (title=REPLY) | 系统级框架约束，管理员可配置 |
 
 三层独立注入，互不耦合。Memory Agent 使用 `SystemPrompt` (title=MEMORY) 按 `order_number` 排序拼接。
+
+`python manage.py seed_builtins` 在缺失时创建默认的 reply/memory 提示词（已存在则不覆盖，管理员在 /admin/ 的修改永久生效），并随每次部署（`deploy/server-deploy.sh`）自动执行。
 
 ### Celery async tasks
 

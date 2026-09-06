@@ -32,6 +32,7 @@ AI 虚拟角色聊天平台 — 用户可创建 AI 角色并与之进行文字 +
 - Request ID 全链路追踪 + 请求耗时日志
 - 前端全局 Toast 通知系统（success/error/warning/info）
 - Django Admin 后台管理（文档、角色、好友等）
+- 内置音色 + SystemPrompt 一键初始化（`seed_builtins` 幂等命令，随部署自动执行）
 - pytest 自动化测试覆盖核心链路（209 个测试）
 - GitHub Actions CI（push/PR 自动运行测试）
 
@@ -52,6 +53,7 @@ cd backend
 cp .env.example .env          # 首次：配置 API_KEY 等环境变量
 pip install -r ../requirements.txt
 python manage.py migrate
+python manage.py seed_builtins     # 初始化内置音色 + SystemPrompt（幂等）
 python manage.py runserver    # http://127.0.0.1:8000
 ```
 
@@ -93,8 +95,8 @@ celery -A backend worker --loglevel=info --pool=solo
 # 本地构建机：多阶段 build（前端打进镜像）+ push 到 ACR
 ACR_IMAGE=<镜像名> ./deploy/build.sh
 
-# 服务器：拉镜像 + 启动 5 容器（不 build、不 scp）
-docker compose pull && docker compose up -d
+# 服务器：一条脚本（pull → migrate → 初始化内置数据 → up -d，幂等）
+./deploy/server-deploy.sh
 ```
 
 > 生产部署前请确保 `.env` 中 `DJANGO_SECRET_KEY` 已设置、`DJANGO_DEBUG=false`、`ACR_IMAGE` 已配置。

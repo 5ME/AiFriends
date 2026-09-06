@@ -22,6 +22,7 @@ pip install -r ../requirements.txt
 python manage.py runserver              # Dev server on :8000
 python -m pytest web/tests/ -v         # 209 tests
 python manage.py clean_dirty_characters --all  # Clean test residue
+python manage.py seed_builtins           # Seed built-in voices + SystemPrompt (idempotent)
 python manage.py collectstatic          # Collect static files for production
 ```
 
@@ -48,7 +49,7 @@ celery -A backend worker --loglevel=info --pool=solo  # Celery Worker
 Deployment uses the registry flow (local image build → push to Alibaba Cloud ACR → server pull), see `服务器部署.md`:
 
 1. Local: `ACR_IMAGE=<image> ./deploy/build.sh` (multi-stage build: frontend baked into image + collectstatic → push to ACR)
-2. Server: `docker compose pull && docker compose up -d` (5 containers, no build, no scp)
+2. Server: `./deploy/server-deploy.sh` (pull → migrate → seed_builtins → up -d; idempotent, same script for first deploy and updates)
 
 ## Architecture
 
@@ -153,6 +154,8 @@ Two separate LangGraph state graphs:
 | 3 (framework) | DB `SystemPrompt` (title=REPLY) | System-level framework constraints |
 
 Three layers are independent — tool rules cannot be overridden by character personality.
+
+`python manage.py seed_builtins` seeds the built-in voices (longanyang/longanhuan) and default REPLY/MEMORY SystemPrompts (created only if missing — admin edits are never overwritten). It runs automatically on every deploy via `deploy/server-deploy.sh`.
 
 ### Celery async tasks
 
