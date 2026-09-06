@@ -14,7 +14,7 @@ AI 虚拟角色聊天平台 — 用户可创建 AI 角色并与之进行文字 +
 | 向量存储 | pgvector (1024 维 DashScope text-embedding-v4) |
 | 异步任务 | Celery + Redis 7 (Broker + Rate Limit) |
 | 部署 | Docker Compose（5 容器）+ 阿里云 ACR registry 拉取 |
-| CI | GitHub Actions (209 测试自动运行) |
+| CI | GitHub Actions (221 测试自动运行) |
 
 ## 功能
 
@@ -33,7 +33,7 @@ AI 虚拟角色聊天平台 — 用户可创建 AI 角色并与之进行文字 +
 - 前端全局 Toast 通知系统（success/error/warning/info）
 - Django Admin 后台管理（文档、角色、好友等）
 - 内置音色 + SystemPrompt 一键初始化（`seed_builtins` 幂等命令，随部署自动执行）
-- pytest 自动化测试覆盖核心链路（209 个测试）
+- pytest 自动化测试覆盖核心链路（221 个测试）
 - GitHub Actions CI（push/PR 自动运行测试）
 
 ## 本地开发
@@ -107,7 +107,7 @@ ACR_IMAGE=<镜像名> ./deploy/build.sh
 
 ```bash
 cd backend
-python -m pytest web/tests/ -v   # 209 个测试（默认跳过 3 个需 API_KEY 的慢测试）
+python -m pytest web/tests/ -v   # 221 个测试（默认跳过 3 个需 API_KEY 的慢测试）
 ```
 
 ---
@@ -246,7 +246,7 @@ AiFriends/
 │   └── package.json                      # Node 依赖 + 脚本
 │
 ├── docker-compose.yml                    # PostgreSQL 17 + pgvector + Redis 7
-├── .github/workflows/test.yml            # GitHub Actions CI (209 tests)
+├── .github/workflows/test.yml            # GitHub Actions CI (221 tests)
 ├── requirements.txt                      # Python 依赖
 ├── AGENTS.md                             # Codex agent 指令
 └── CLAUDE.md                             # Claude Code 项目指南
