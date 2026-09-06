@@ -20,3 +20,6 @@ backend/logs/
 # RAG 离线评估数据 / 报告（不入库，规避数据集 license）
 backend/rag_eval_data/
 backend/rag_eval_output/
+
+# 本地 Claude Code 会话导出（包含 .env 密钥等敏感信息，严禁入库）
+claude-code-work-session.txt
