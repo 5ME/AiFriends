@@ -22,7 +22,7 @@ cd backend
 pip install -r ../requirements.txt      # requirements.txt 在项目根目录
 # DEBUG / SECRET_KEY 等通过 .env 环境变量控制，无需手动改 settings.py
 python manage.py runserver              # Dev server on :8000
-python -m pytest web/tests/ -v         # Run all backend tests (147 tests)
+python -m pytest web/tests/ -v         # Run all backend tests (209 tests)
 # PostgreSQL & Redis: Docker Compose 一键启动（见下方 Infrastructure）
 # .env 模板: cp .env.example .env
 python manage.py clean_dirty_characters --all  # Clean test residue data
@@ -74,7 +74,7 @@ celery -A backend worker --loglevel=info --pool=solo
 
 ### Testing (pytest)
 
-- Tests in `web/tests/`, run with `python -m pytest web/tests/ -v` (147 tests)
+- Tests in `web/tests/`, run with `python -m pytest web/tests/ -v` (209 tests)
 - `pytest.ini` 配置默认 `-m "not slow"` 跳过需真实 API_KEY 的慢测试（`test_tool_calling.py` 中 3 个）
 - `conftest.py` provides global fixtures: `api_client`, `user`, `auth_client`, `character`, `friend`, `_disable_rate_limit_for_tests` (autouse), `media_root` (session, autouse), `pgvector_extension` (session, autouse), `mock_asr_ws`, etc.
 - `media_root` fixture (autouse, session-scoped) redirects test uploads to a temp directory — test files never touch real `media/`
@@ -84,14 +84,14 @@ celery -A backend worker --loglevel=info --pool=solo
 
 ### GitHub Actions CI
 
-`.github/workflows/test.yml` — 147 tests auto-run on push/PR to master:
+`.github/workflows/test.yml` — 209 tests auto-run on push/PR to master:
 - `ubuntu-latest` + Python 3.12 + `pgvector/pgvector:pg17` service container
 - Creates `aifriends_test` database, runs `pytest web/tests/ -v`
 - No Redis/Celery service — rate limit & health check tests rely on mock/patch in CI
 
 ### How the stacks connect
 
-The frontend is built into `backend/static/frontend/`. Django serves the SPA via a catch-all route: `web/views/index.py` renders `templates/index.html`, which loads the Vite-built assets. All API routes live under `/api/` in `backend/web/urls.py`.
+The frontend is built into `backend/static/frontend/`. Django serves the SPA via a catch-all route: `web/views/index.py` reads the built `frontend/index.html` (from `STATIC_ROOT` in prod, `static/` in dev), which loads the Vite-built assets. All API routes live under `/api/` in `backend/web/urls.py`.
 
 ### Environment / platform modes
 
@@ -388,5 +388,4 @@ Audio is played through browser Media Source Extensions.
 - **SSE 背压控制缺失:** `queue.Queue()` 无 `maxsize`，内存可能无界增长
 - **无 API 版本化:** 32+ 端点直接挂在 `/api/` 下
 - **前端未消费 RAG citations:** 后端已发送 `citations` SSE 事件，前端 `InputField.vue` 静默忽略
-- **`init.sql` 是空目录:** `docker-compose.yml` 将其映射为文件，首次启动会报错
 - **CI 无 Redis 服务:** 限流和健康检查的 Redis 路径在 CI 中依赖 mock

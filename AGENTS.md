@@ -20,7 +20,7 @@ AI Friends — a full-stack web app where users create AI characters ("friends")
 cd backend
 pip install -r ../requirements.txt
 python manage.py runserver              # Dev server on :8000
-python -m pytest web/tests/ -v         # 147 tests
+python -m pytest web/tests/ -v         # 209 tests
 python manage.py clean_dirty_characters --all  # Clean test residue
 python manage.py collectstatic          # Collect static files for production
 ```
@@ -54,7 +54,7 @@ Deployment uses the registry flow (local image build → push to Alibaba Cloud A
 
 ### How the stacks connect
 
-The frontend is built into `backend/static/frontend/`. Django serves the SPA via a catch-all route: `web/views/index.py` renders `templates/index.html`, which loads the Vite-built assets. All API routes live under `/api/` in `backend/web/urls.py`.
+The frontend is built into `backend/static/frontend/`. Django serves the SPA via a catch-all route: `web/views/index.py` reads the built `frontend/index.html` (from `STATIC_ROOT` in prod, `static/` in dev), which loads the Vite-built assets. All API routes live under `/api/` in `backend/web/urls.py`.
 
 ### Environment / platform modes
 
@@ -66,6 +66,8 @@ The frontend is built into `backend/static/frontend/`. Django serves the SPA via
 | `vue` | `http://127.0.0.1:8000` | `VITE_PLATFORM=vue npm run dev` |
 | `cloud` | `VITE_CLOUD_BASE` or `https://115.190.245.146` | `npm run build` (default) |
 | `docker` | `''` (same-origin) | `VITE_PLATFORM=docker npm run build` |
+
+> Production uses `docker` mode (same-origin): the multi-stage Dockerfile pins `VITE_PLATFORM=docker`, and the frontend ships inside the image. `cloud` mode is deprecated.
 
 ### SECRET_KEY enforcement
 
@@ -288,7 +290,7 @@ The frontend uses `@microsoft/fetch-event-source` (`js/http/streamApi.js`) to PO
 
 ### Testing
 
-- 147 tests in `web/tests/`, run with `python -m pytest web/tests/ -v`
+- 209 tests in `web/tests/`, run with `python -m pytest web/tests/ -v`
 - `pytest.ini` defaults to `-m "not slow"` (skips 3 `test_tool_calling.py` tests needing real API_KEY)
 - GitHub Actions CI (`.github/workflows/test.yml`) runs on push/PR to master with pgvector service container
 - Key fixtures: `_disable_rate_limit_for_tests` (autouse), `media_root` (session, autouse), `pgvector_extension` (session, autouse), `mock_asr_ws`
