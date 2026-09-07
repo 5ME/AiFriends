@@ -288,8 +288,7 @@ defineExpose({focus, closeMic, handleSend})
             :class="message.trim() ? 'bg-[var(--accent)]' : 'bg-neutral-700 opacity-50'"
             :disabled="!message.trim()"
             aria-label="发送消息"
-            data-tip="发送"
-            @click="handleSend">
+            data-tip="发送">
       <SendIcon/>
     </button>
   </form>
