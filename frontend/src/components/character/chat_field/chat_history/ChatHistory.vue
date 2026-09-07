@@ -3,8 +3,8 @@ import Message from "@/components/character/chat_field/chat_history/message/Mess
 import api from "@/js/http/api";
 import {nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef} from "vue";
 
-const props = defineProps(['friendId', 'character', 'history'])
-const emits = defineEmits(['pushFrontMessage'])
+const props = defineProps(['friendId', 'character', 'history', 'thinking'])
+const emits = defineEmits(['pushFrontMessage', 'quickSend'])
 
 const scrollRef = useTemplateRef('scroll-ref')
 const sentinelRef = useTemplateRef('sentinel-ref')
@@ -14,7 +14,19 @@ async function scrollToBottom() {
   scrollRef.value.scrollTop = scrollRef.value.scrollHeight
 }
 
+// rAF 节流滚动（D-L6）：每帧最多一次
+let scrollPending = false
+function scheduleScroll() {
+  if (scrollPending) return
+  scrollPending = true
+  requestAnimationFrame(() => {
+    scrollPending = false
+    scrollToBottom()
+  })
+}
+
 const loadError = ref('')
+const initialLoading = ref(true)
 let isLoading = false
 let hasMessages = true
 let lastMessageId = 0
@@ -44,11 +56,13 @@ async function loadMore() {
     })
     const data = response.data
     newMessages = data.messages
+    loadError.value = ''
   } catch (e) {
     console.log(e)
     loadError.value = '加载失败，请稍后重试'
   } finally {
     isLoading = false
+    initialLoading.value = false
     if (newMessages.length === 0) {
       hasMessages = false
     } else {
@@ -59,12 +73,16 @@ async function loadMore() {
         emits('pushFrontMessage', {
           role: 'ai',
           content: m.output,
-          id: crypto.randomUUID()
+          id: crypto.randomUUID(),
+          // Q3 拍板后端批次后，历史消息将携带 created_at/citations（Phase 2 消费）
+          time: m.created_at,
+          citations: m.citations,
         })
         emits('pushFrontMessage', {
           role: 'user',
           content: m.user_message,
-          id: crypto.randomUUID()
+          id: crypto.randomUUID(),
+          time: m.created_at,
         })
         lastMessageId = m.id
       }
@@ -72,7 +90,7 @@ async function loadMore() {
       await nextTick()
 
       const newHeight = scrollRef.value.scrollHeight
-      // 防止视窗内容自动上滑
+      // 防止视窗内容自动上滑（现有算法保留，F3）
       scrollRef.value.scrollTop = oldTop + newHeight - oldHeight
 
       if (checkSentinelVisible()) {
@@ -80,6 +98,19 @@ async function loadMore() {
       }
     }
   }
+}
+
+// 错误重试：重置失败标记后重放 loadMore
+function retry() {
+  loadError.value = ''
+  hasMessages = true
+  loadMore()
+}
+
+// Phase 1 分组：仅按 role 变化切组（时间差 >5min 与日期分隔为 Phase 2）
+function showHeaderFor(index) {
+  if (index === 0) return true
+  return props.history[index].role !== props.history[index - 1].role
 }
 
 let observer = null
@@ -103,35 +134,50 @@ onBeforeUnmount(() => {
 })
 
 defineExpose({
-  scrollToBottom
+  scrollToBottom,
+  scheduleScroll,
 })
 </script>
 
 <template>
-  <div ref="scroll-ref" class="absolute top-18 left-0 w-90 h-112 overflow-y-scroll no-scrollbar">
-    <p v-if="loadError" class="text-center text-sm text-red-500 py-4">{{ loadError }}</p>
-    <!--哨兵-->
+  <div ref="scroll-ref" class="flex-1 min-h-0 overflow-y-auto no-scrollbar px-4 py-3">
+    <!-- 首次加载骨架（2 组左右交替 shimmer 气泡） -->
+    <template v-if="initialLoading && history.length === 0">
+      <div v-for="pair in 2" :key="pair">
+        <div class="flex justify-start my-2">
+          <div class="w-3/5 h-10 rounded-2xl skeleton-shimmer"></div>
+        </div>
+        <div class="flex justify-end my-2">
+          <div class="w-2/5 h-10 rounded-2xl skeleton-shimmer"></div>
+        </div>
+      </div>
+    </template>
+
+    <!-- 加载失败（错误态 + 重试） -->
+    <div v-if="loadError" class="flex flex-col items-center justify-center gap-3 py-8">
+      <p class="text-center text-sm text-red-300">{{ loadError }}</p>
+      <button type="button" class="btn btn-sm btn-neutral" @click="retry">点击重试</button>
+    </div>
+
+    <!-- 哨兵 -->
     <div ref="sentinel-ref" class="h-2"></div>
-    <!--聊天消息-->
-    <Message v-for="message in history"
+
+    <!-- 聊天消息 -->
+    <Message v-for="(message, index) in history"
              :key="message.id"
              :message="message"
              :character="character"
+             :show-header="showHeaderFor(index)"
     />
+
+    <!-- 思考中指示（首 token 前） -->
+    <div v-if="thinking" class="flex justify-start my-2">
+      <div class="msg-bubble msg-bubble-ai flex items-center gap-1">
+        <span class="loading loading-dots loading-sm"></span>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* 隐藏 Chrome, Safari 和 Opera 的滚动条 */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-/* 隐藏 IE, Edge 和 Firefox 的滚动条 */
-.no-scrollbar {
-  -ms-overflow-style: none;
-  /* IE and Edge */
-  scrollbar-width: none;
-  /* Firefox */
-}
 </style>

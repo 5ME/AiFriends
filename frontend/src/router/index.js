@@ -10,6 +10,7 @@ import ProfileIndex from "@/views/user/profile/ProfileIndex.vue";
 import {useUserStore} from "@/stores/user.js";
 import UpdateCharacter from "@/views/create/character/UpdateCharacter.vue";
 import KnowledgeBase from '@/views/KnowledgeBase.vue'
+import ChatIndex from '@/views/chat/ChatIndex.vue'
 
 const router = createRouter({
   history: createWebHistory('/'),
@@ -91,6 +92,19 @@ const router = createRouter({
       name: 'KnowledgeBase',
       component: KnowledgeBase,
       meta: { needLogin: true },
+    },
+    // 聊天页（Q1/Q7 已拍板：两条路由；URL 参数 = character_id；meta 控制 NavBar 搜索/footer 隐藏）
+    {
+      name: 'chat-hub',
+      path: '/chat/',
+      component: ChatIndex,
+      meta: { needLogin: true, hideSearch: true, hideFooter: true },
+    },
+    {
+      name: 'chat-index',
+      path: '/chat/:character_id/',
+      component: ChatIndex,
+      meta: { needLogin: true, hideSearch: true, hideFooter: true },
     },
     {
       name: 'not-found-index',

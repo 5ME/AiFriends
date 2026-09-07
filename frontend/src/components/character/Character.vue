@@ -4,7 +4,6 @@ import UpdateIcon from "@/components/character/icons/UpdateIcon.vue";
 import RemoveIcon from "@/components/character/icons/RemoveIcon.vue";
 import {useUserStore} from "@/stores/user";
 import api from "@/js/http/api";
-import ChatField from "@/components/character/chat_field/ChatField.vue";
 import CharacterDetail from "@/components/character/CharacterDetail.vue";
 import {useRouter} from "vue-router";
 
@@ -42,11 +41,9 @@ async function confirmRemoveCharacter() {
   }
 }
 
-const chatFieldRef = useTemplateRef('chat-field-ref')
 const characterDetailRef = useTemplateRef('character-detail-ref')
 const confirmModalRef = useTemplateRef('confirm-modal-ref')
 const deleteConfirmModalRef = useTemplateRef('delete-confirm-modal-ref')
-const friend = ref(null)
 const friendError = ref('')
 
 function handleCardClick() {
@@ -66,8 +63,8 @@ async function openChatField() {
         character_id: props.character.id
       })
       // 200 = 操作成功
-      friend.value = response.data.friend
-      chatFieldRef.value.showModal()
+      // 200 = 操作成功 → 跳转聊天页（Q1：URL 参数 = character_id）
+      await router.push({name: 'chat-index', params: {character_id: props.character.id}})
     } catch (e) {
       friendError.value = e.response?.data?.message || '操作失败'
     }
@@ -160,8 +157,6 @@ async function confirmRemoveFriend() {
     <!--角色详情框-->
     <CharacterDetail ref="character-detail-ref" :character="character"/>
 
-    <!--聊天框-->
-    <ChatField ref="chat-field-ref" :friend="friend"/>
 
     <!--解除好友确认框-->
     <Teleport to="body">

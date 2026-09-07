@@ -3,7 +3,6 @@ import {ref, useTemplateRef} from "vue";
 import {useUserStore} from "@/stores/user";
 import {useRouter} from "vue-router";
 import api from "@/js/http/api";
-import ChatField from "@/components/character/chat_field/ChatField.vue";
 
 const props = defineProps({
   character: Object,
@@ -14,10 +13,8 @@ const router = useRouter()
 const user = useUserStore()
 
 const modalRef = useTemplateRef('modal-ref')
-const chatFieldRef = useTemplateRef('chat-field-ref')
 const isFriend = ref(false)
 const friendId = ref(null)
-const friend = ref(null)
 const isLoading = ref(true)
 const errorMessage = ref('')
 
@@ -50,9 +47,9 @@ async function handleAction() {
       character_id: props.character.id
     })
     // 200 = 操作成功
-    friend.value = response.data.friend
+    // 200 = 操作成功 → 关弹窗、跳转聊天页（Q1）
     modalRef.value.close()
-    chatFieldRef.value.showModal()
+    await router.push({name: 'chat-index', params: {character_id: props.character.id}})
   } catch (e) {
     console.log(e)
     errorMessage.value = e.response?.data?.message || '操作失败'
@@ -118,8 +115,6 @@ defineExpose({showModal})
       <p v-if="errorMessage" class="text-sm text-red-500 mt-2">{{ errorMessage }}</p>
     </div>
 
-    <!-- 聊天框（仅 card 模式） -->
-    <ChatField v-if="mode === 'card'" ref="chat-field-ref" :friend="friend" />
   </dialog>
   </Teleport>
 </template>

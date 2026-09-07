@@ -8,7 +8,7 @@ import Microphone from "@/components/character/chat_field/input_field/Microphone
 import {useVoiceToggle} from "@/composables/useVoiceToggle.js";
 
 const props = defineProps(['friendId'])
-const emits = defineEmits(['pushBackMessage', 'appendToLastMessage', 'error'])
+const emits = defineEmits(['pushBackMessage', 'appendToLastMessage', 'error', 'streamState'])
 
 const inputRef = useTemplateRef('input-ref')
 const message = ref('')
@@ -25,6 +25,18 @@ let audioQueue = [];           // 待写入 Buffer 的二进制队列
 let isUpdating = false;        // Buffer 是否正在写入
 
 const { voiceEnabled } = useVoiceToggle()
+
+// 流式状态（thinking：发送后首 content 前；streaming：content 到达后）
+const thinking = ref(false)
+const streaming = ref(false)
+
+function setStreamState(thk, strm) {
+  if (thinking.value !== thk || streaming.value !== strm) {
+    thinking.value = thk
+    streaming.value = strm
+    emits('streamState', { thinking: thk, streaming: strm })
+  }
+}
 
 const initAudioStream = () => {
   if (!voiceEnabled.value) return  // 语音关闭时不建立 MediaSource
@@ -152,6 +164,7 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
     abortController.abort()  // 中断上一个未完成的 SSE 流，避免服务端空跑
   }
   abortController = new AbortController()
+  setStreamState(true, false)  // thinking：等待首个 token
   try {
     await streamApi('/api/friend/message/chat/', {
       signal: abortController.signal,  // 组件卸载时 abort → 断连检测
@@ -164,6 +177,10 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
           // 实现输出打断
           return
         }
+        if (isDone) {
+          setStreamState(false, false)
+          return
+        }
         // citations 在 content 之前到达（后端保证时序），先挂载到消息上
         if (data.citations) {
           emits('appendToLastMessage', {citations: data.citations})
@@ -171,8 +188,12 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
         if (data.error) {
           emits('appendToLastMessage', data.error)
           stopAudio()
+          setStreamState(false, false)
         }
         if (data.content) {
+          if (streaming.value === false) {
+            setStreamState(false, true)  // 首 token：thinking → streaming
+          }
           emits('appendToLastMessage', data.content)
         }
         if (data.audio) {
@@ -183,12 +204,16 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
         console.log(err)
         // 错误消息统一由 catch 块展示，此处只做清理
         stopAudio()
+        setStreamState(false, false)
       },
     })
   } catch (e) {
     console.log(e)
-    emits('appendToLastMessage', e.message || '发送失败')
+    if (processId === curId) {
+      emits('appendToLastMessage', e.message || '发送失败')
+    }
     stopAudio()
+    setStreamState(false, false)
   }
 }
 
@@ -201,32 +226,52 @@ function closeMic() {
 function handleStop() {
   ++processId
   stopAudio()
+  setStreamState(false, false)
 }
 
-defineExpose({focus, closeMic})
+defineExpose({focus, closeMic, handleSend})
 </script>
 
 <template>
-  <form v-show="!showMic" @submit.prevent="handleSend" class="absolute bottom-4 left-2 h-12 w-86 flex items-center">
-    <input class="input bg-black/30 backdrop-blur text-base text-white w-full h-full rounded-md pr-20"
-           type="text" placeholder="文本输入"
-           ref="input-ref" v-model="message"/>
-    <div class="absolute right-2 w-8 h-8 flex justify-center items-center cursor-pointer"
-         @click="handleSend">
-      <SendIcon/>
-    </div>
-    <div @click="showMic=true" class="absolute right-10 w-8 h-8 flex justify-center items-center cursor-pointer">
+  <form v-show="!showMic" @submit.prevent="handleSend"
+        class="shrink-0 px-2 pb-3 pt-1 flex items-center gap-2">
+    <!-- 麦克风入口（Phase 3 重构为输入栏内状态切换） -->
+    <button type="button"
+            class="btn btn-circle btn-ghost btn-sm text-white shrink-0"
+            aria-label="语音输入"
+            data-tip="语音输入"
+            @click="showMic = true">
       <MicIcon/>
-    </div>
+    </button>
+
+    <!-- 输入框 -->
+    <input class="input flex-1 min-w-0 bg-black/35 backdrop-blur text-base text-white rounded-xl"
+           type="text" placeholder="文本输入"
+           aria-label="消息输入"
+           ref="input-ref" v-model="message"/>
+
+    <!-- 发送（Phase 3：流式期间变 ■ 停止；空内容禁用） -->
+    <button type="submit"
+            class="btn btn-circle btn-sm shrink-0 text-white"
+            :class="message.trim() ? 'bg-primary border-primary' : 'bg-neutral-700 border-neutral-700 opacity-50'"
+            :disabled="!message.trim()"
+            aria-label="发送消息"
+            data-tip="发送"
+            @click="handleSend">
+      <SendIcon/>
+    </button>
   </form>
-  <!--麦克风组件（KeepAlive 保持存活，避免重复加载 WASM）-->
-  <KeepAlive>
-    <Microphone v-if="showMic"
-                @close="showMic=false"
-                @send="handleSend"
-                @stop="handleStop"
-    />
-  </KeepAlive>
+
+  <!--麦克风组件（KeepAlive 保持存活，避免重复加载 WASM；Phase 3 重构为受控组件）-->
+  <div v-if="showMic" class="shrink-0 px-2 pb-3">
+    <KeepAlive>
+      <Microphone
+          @close="showMic=false"
+          @send="handleSend"
+          @stop="handleStop"
+      />
+    </KeepAlive>
+  </div>
 </template>
 
 <style scoped>
