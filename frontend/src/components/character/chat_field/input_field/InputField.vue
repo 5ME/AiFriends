@@ -8,7 +8,7 @@ import Microphone from "@/components/character/chat_field/input_field/Microphone
 import {useVoiceToggle} from "@/composables/useVoiceToggle.js";
 
 const props = defineProps(['friendId'])
-const emits = defineEmits(['pushBackMessage', 'appendToLastMessage', 'error', 'streamState'])
+const emits = defineEmits(['pushBackMessage', 'appendToLastMessage', 'streamState'])
 
 const inputRef = useTemplateRef('input-ref')
 const message = ref('')
@@ -226,6 +226,7 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
       },
       onerror(err) {
         console.log(err)
+        if (processId !== curId) return   // 被新发送打断的旧流错误：不得清理新流状态（PR review 硬性 #2）
         // 错误消息统一由 catch 块展示，此处只做清理
         stopAudio()
         setStreamState(false, false)
@@ -233,9 +234,8 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
     })
   } catch (e) {
     console.log(e)
-    if (processId === curId) {
-      emits('appendToLastMessage', e.message || '发送失败')
-    }
+    if (processId !== curId) return   // 被新发送打断的旧流错误：不得清理新流状态（PR review 硬性 #2）
+    emits('appendToLastMessage', e.message || '发送失败')
     stopAudio()
     setStreamState(false, false)
   }

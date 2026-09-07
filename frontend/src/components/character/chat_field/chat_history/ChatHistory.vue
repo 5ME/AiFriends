@@ -14,17 +14,6 @@ async function scrollToBottom() {
   scrollRef.value.scrollTop = scrollRef.value.scrollHeight
 }
 
-// rAF 节流滚动（D-L6）：每帧最多一次
-let scrollPending = false
-function scheduleScroll() {
-  if (scrollPending) return
-  scrollPending = true
-  requestAnimationFrame(() => {
-    scrollPending = false
-    scrollToBottom()
-  })
-}
-
 const loadError = ref('')
 const initialLoading = ref(true)
 let isLoading = false
@@ -135,7 +124,6 @@ onBeforeUnmount(() => {
 
 defineExpose({
   scrollToBottom,
-  scheduleScroll,
 })
 </script>
 

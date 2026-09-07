@@ -5,7 +5,7 @@ import ChatHistory from '@/components/character/chat_field/chat_history/ChatHist
 import InputField from '@/components/character/chat_field/input_field/InputField.vue'
 
 const props = defineProps(['friend'])
-const emits = defineEmits(['closed'])
+const emits = defineEmits(['closed', 'openDrawer'])
 
 // history 数组所有权在 ChatWindow（D-L1）：每个会话一个实例，:key 重建即隔离
 const history = ref([])
@@ -60,9 +60,6 @@ function scheduleScroll() {
   })
 }
 
-function handleQuickSend(text) {
-  sendMessage(text)
-}
 </script>
 
 <template>
@@ -82,14 +79,14 @@ function handleQuickSend(text) {
 
     <!-- 内容列（flex column，杜绝 absolute 堆叠） -->
     <div class="relative z-10 flex flex-col h-full">
-      <WindowHeader :character="friend.character" @close="emits('closed')" />
+      <WindowHeader :character="friend.character" @close="emits('closed')" @openDrawer="emits('openDrawer')" />
       <ChatHistory ref="chat-history-ref"
                    :friendId="friend.id"
                    :character="friend.character"
                    :history="history"
                    :thinking="thinking"
                    @pushFrontMessage="pushFrontMessage"
-                   @quickSend="handleQuickSend" />
+                   @quickSend="sendMessage" />
       <InputField ref="input-field-ref"
                   :friendId="friend.id"
                   @pushBackMessage="pushBackMessage"

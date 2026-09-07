@@ -24,6 +24,7 @@
   .chat-window {
     width: 100vw;
     height: calc(100vh - 64px);
+    height: calc(100dvh - 64px); /* dvh 回退：不支持的浏览器忽略本行，用上一行 vh */
     border-radius: 0;
     box-shadow: none;
   }

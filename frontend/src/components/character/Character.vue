@@ -50,11 +50,11 @@ function handleCardClick() {
   if (props.showDetail) {
     characterDetailRef.value.showModal()
   } else {
-    openChatField()
+    openChatPage()
   }
 }
 
-async function openChatField() {
+async function openChatPage() {
   if (!user.isLogin()) {
     await router.push({name: 'user-account-login-index'})
   } else {

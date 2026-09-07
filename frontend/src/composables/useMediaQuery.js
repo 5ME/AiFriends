@@ -5,7 +5,8 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
  * 用法：const isMobile = useMediaQuery('(max-width: 1023px)')
  */
 export function useMediaQuery(query) {
-  const matches = ref(false)
+  // 初始同步求值（PR review：避免移动端首帧闪桌面布局）
+  const matches = ref(typeof window !== 'undefined' ? window.matchMedia(query).matches : false)
   let mql = null
 
   const update = () => {

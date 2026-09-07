@@ -32,7 +32,7 @@ async function loadMore() {
     hasMore.value = friends.length === 20
   } catch (e) {
     console.log(e)
-    error.value = '加载失败'
+    error.value = e.response?.data?.message || '加载失败'
   } finally {
     loading.value = false
   }

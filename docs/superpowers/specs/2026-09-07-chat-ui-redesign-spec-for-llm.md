@@ -111,7 +111,7 @@
 ### 5.1 路由
 
 ```
-path: /chat/                       name: 'chat-index'       meta: { needLogin: true, hideSearch: true, hideFooter: true }   （会话中心，Q7-b）
+path: /chat/                       name: 'chat-hub'         meta: { needLogin: true, hideSearch: true, hideFooter: true }   （会话中心，Q7-b；实现命名 chat-hub——vue-router 不允许两条记录同名）
 path: /chat/:character_id/        name: 'chat-index'       meta: { needLogin: true, hideSearch: true, hideFooter: true }   （Q1：URL 参数=角色 id）
 ```
 
