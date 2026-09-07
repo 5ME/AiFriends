@@ -6,7 +6,7 @@ import CreateIcon from "@/components/navbar/icons/CreateIcon.vue";
 import SearchIcon from "@/components/navbar/icons/SearchIcon.vue";
 import {useUserStore} from "@/stores/user.js";
 import UserMenu from "@/components/navbar/UserMenu.vue";
-import {ref, watch} from "vue";
+import {computed, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import logoUrl from "@/assets/logo.png";
 import KnowledgeBaseIcon from "@/components/navbar/icons/KnowledgeBaseIcon.vue";
@@ -14,6 +14,10 @@ import ChatIcon from "@/components/navbar/icons/ChatIcon.vue";
 
 const router = useRouter()
 const route = useRoute()
+
+// 聊天入口有两个路由记录（/chat/ 与 /chat/:character_id/），RouterLink 的
+// active-class 只对同一条记录生效 → 手动按 path 前缀计算选中态（问题 5）
+const isChatActive = computed(() => route.path.startsWith('/chat'))
 
 const user = useUserStore()
 const searchText = ref('')
@@ -110,7 +114,9 @@ function handleSearch() {
           </li>
           <!-- List item -->
           <li>
-            <RouterLink :to="{ name: 'chat-hub' }" active-class="menu-focus"
+            <RouterLink :to="{ name: 'chat-hub' }"
+                        :class="{ 'menu-focus': isChatActive }"
+                        :aria-current="isChatActive ? 'page' : undefined"
                         class="is-drawer-close:tooltip is-drawer-close:tooltip-right py-3" data-tip="聊天">
               <ChatIcon/>
               <span class="is-drawer-close:hidden text-base whitespace-nowrap">聊天</span>

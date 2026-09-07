@@ -5,11 +5,9 @@ const emits = defineEmits(['select'])
 
 <template>
   <button type="button"
-          class="w-full h-16 flex items-center gap-3 rounded-xl px-2 text-left transition-colors
+          class="w-full h-16 flex items-center gap-3 rounded-xl px-2 pl-1 text-left transition-colors cursor-pointer
                  hover:bg-base-300"
-          :class="active
-            ? 'bg-primary/10 border-l-4 border-primary pl-1'
-            : 'border-l-4 border-transparent pl-1'"
+          :class="active ? 'session-active' : 'session-inactive'"
           :aria-current="active ? 'true' : undefined"
           @click="emits('select', session.character.id)">
     <div class="avatar shrink-0">

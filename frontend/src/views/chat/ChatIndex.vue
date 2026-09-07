@@ -110,8 +110,9 @@ function handleBackToFriend() {
       </Transition>
     </Teleport>
 
-    <!-- 舞台（聊天区） -->
-    <main class="flex-1 relative overflow-hidden">
+    <!-- 舞台（聊天区）：flex 居中 = 角色之窗上下左右居中（spec §4.3），
+         舞台背景层为 absolute，不受 flex 影响；移动端窗口全屏，居中无副作用 -->
+    <main class="flex-1 relative overflow-hidden flex items-center justify-center">
       <!-- 会话中心空态（/chat/ 无参，Q7-b 静态） -->
       <div v-if="isHub" class="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-base-200">
         <p class="text-neutral-500 text-lg">从左侧选择一个好友开始聊天</p>

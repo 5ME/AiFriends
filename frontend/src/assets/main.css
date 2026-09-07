@@ -3,6 +3,14 @@
 
 /* ===== 聊天改版（Phase 1）全局类 ===== */
 
+/* 角色强调色（spec D10/S6.1 中期方案）：选中态/发送键使用。
+   Phase 4 useBackgroundAdaptive 落地后由角色背景主色覆盖。
+   注意：届时需把 --accent 从 ChatWindow 子树提升到全局（或按角色注入 SessionList），
+   使会话栏选中态与窗口内 accent 保持一致。 */
+:root {
+  --accent: #10b981;
+}
+
 /* 角色之窗：3:5 竖版容器，纯 CSS 尺寸公式（LD §8.1，无需 JS resize） */
 .chat-window {
   width: min(420px, calc((100vh - 64px - 48px) * 0.6));
@@ -26,13 +34,24 @@
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.6) 100%);
 }
 
-/* 舞台背景延展（桌面端；Phase 4 换 --overlay-k） */
+/* 舞台背景延展（桌面端；Phase 4 换 --overlay-k）。
+   备注：blur/压暗已调轻（LD §8.2 的 blur(40px)+0.5 会让舞台丧失场景感、
+   窗口看起来像搁在灰布上的手机 mockup；24px+0.35 保留"角色世界"氛围） */
 .stage-blur {
-  filter: blur(40px) saturate(1.2);
+  filter: blur(24px) saturate(1.35);
   transform: scale(1.1);
 }
 .stage-dim {
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* 会话选中态（spec D10）：accent 40% 打底 + 4px 左侧竖条 */
+.session-active {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  border-left: 4px solid var(--accent);
+}
+.session-inactive {
+  border-left: 4px solid transparent;
 }
 
 /* 消息气泡（spec §6.1；用户气泡 Phase 4 换 --user-bubble-bg 变量） */

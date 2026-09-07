@@ -3,7 +3,7 @@
 import MicIcon from "@/components/character/icons/MicIcon.vue";
 import SendIcon from "@/components/character/icons/SendIcon.vue";
 import streamApi from "@/js/http/streamApi";
-import {onUnmounted, ref, useTemplateRef} from "vue";
+import {nextTick, onUnmounted, ref, useTemplateRef, watch} from "vue";
 import Microphone from "@/components/character/chat_field/input_field/Microphone.vue";
 import {useVoiceToggle} from "@/composables/useVoiceToggle.js";
 
@@ -128,6 +128,30 @@ function focus() {
   inputRef.value.focus()
 }
 
+// ===== textarea 自动增高（LD §3.8：1 → 4 行，超过内部滚动） =====
+const MAX_INPUT_HEIGHT = 116  // 4 行 × 24px(leading-6) + 上下 padding 20px
+
+function autoGrow() {
+  const el = inputRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  const h = Math.max(48, Math.min(el.scrollHeight, MAX_INPUT_HEIGHT))
+  el.style.height = h + 'px'
+  el.style.overflowY = el.scrollHeight > MAX_INPUT_HEIGHT ? 'auto' : 'hidden'
+}
+
+// 输入变化（含发送后清空）→ 下一帧重算高度
+watch(message, () => nextTick(autoGrow))
+
+// Enter 发送 / Shift+Enter 换行 / IME 组合中 Enter 不发送（E8 硬性）
+function handleKeydown(e) {
+  if (e.key !== 'Enter') return
+  if (e.isComposing || e.keyCode === 229) return
+  if (e.shiftKey) return
+  e.preventDefault()
+  handleSend()
+}
+
 async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
   let content = ""
 
@@ -234,10 +258,12 @@ defineExpose({focus, closeMic, handleSend})
 
 <template>
   <form v-show="!showMic" @submit.prevent="handleSend"
-        class="shrink-0 px-2 pb-3 pt-1 flex items-center gap-2">
-    <!-- 麦克风入口（Phase 3 重构为输入栏内状态切换） -->
+        class="shrink-0 px-2 pb-3 pt-1 flex gap-2 items-end">
+    <!-- 麦克风入口（48px 圆形，与输入框同高 → 单行恒居中、多行恒贴底且零位移；Phase 3 重构为输入栏内状态切换） -->
     <button type="button"
-            class="btn btn-circle btn-ghost btn-sm text-white shrink-0"
+            class="w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-white cursor-pointer
+                   hover:bg-black/20 transition-colors focus-visible:ring-2 ring-white/40
+                   tooltip tooltip-top"
             aria-label="语音输入"
             data-tip="语音输入"
             @click="showMic = true">
@@ -245,15 +271,21 @@ defineExpose({focus, closeMic, handleSend})
     </button>
 
     <!-- 输入框 -->
-    <input class="input flex-1 min-w-0 bg-black/35 backdrop-blur text-base text-white rounded-xl"
-           type="text" placeholder="文本输入"
-           aria-label="消息输入"
-           ref="input-ref" v-model="message"/>
+    <!-- 输入框（textarea 自动增高：1 → 4 行，超过内部滚动；Enter 发送 / Shift+Enter 换行 / IME 组合中不发送 -->
+    <textarea class="flex-1 min-w-0 resize-none bg-black/35 backdrop-blur text-base text-white rounded-xl
+                      px-3 py-2.5 leading-6 outline-none"
+              placeholder="文本输入"
+              aria-label="消息输入"
+              ref="input-ref" v-model="message"
+              rows="1"
+              style="height: 48px; overflow: hidden;"
+              @keydown="handleKeydown"></textarea>
 
-    <!-- 发送（Phase 3：流式期间变 ■ 停止；空内容禁用） -->
+    <!-- 发送（48px 圆形；流式期间变 ■ 停止；空内容禁用） -->
     <button type="submit"
-            class="btn btn-circle btn-sm shrink-0 text-white"
-            :class="message.trim() ? 'bg-primary border-primary' : 'bg-neutral-700 border-neutral-700 opacity-50'"
+            class="w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-white cursor-pointer
+                   transition-opacity focus-visible:ring-2 ring-white/40 tooltip tooltip-top"
+            :class="message.trim() ? 'bg-[var(--accent)]' : 'bg-neutral-700 opacity-50'"
             :disabled="!message.trim()"
             aria-label="发送消息"
             data-tip="发送"
@@ -263,7 +295,7 @@ defineExpose({focus, closeMic, handleSend})
   </form>
 
   <!--麦克风组件（KeepAlive 保持存活，避免重复加载 WASM；Phase 3 重构为受控组件）-->
-  <div v-if="showMic" class="shrink-0 px-2 pb-3">
+  <div v-if="showMic" class="shrink-0 px-2 pb-3 pt-1">
     <KeepAlive>
       <Microphone
           @close="showMic=false"
