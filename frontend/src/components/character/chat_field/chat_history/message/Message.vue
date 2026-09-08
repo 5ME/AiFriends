@@ -23,9 +23,10 @@ const name = computed(() =>
   props.message.role === 'ai' ? props.character?.name : user.username
 )
 
-// markdown：流式期间纯文本；message.rendered === true 后一次性 marked+DOMPurify 渲染（D-L5）
+// markdown：始终渲染（2026-09-08 修订：原 D-L5「流式结束才渲染」导致裸文本+代码块标记长时间裸露，
+// 改为边收边渲染；marked+DOMPurify 对增量文本开销可忽略）
 const renderedHtml = computed(() =>
-  props.message.rendered === true ? renderMarkdown(props.message.content || '') : null
+  props.message.content ? renderMarkdown(props.message.content) : ''
 )
 
 // 代码块右上角「复制」按钮（v-html 内容不携带 scope 属性，样式经 :deep 前缀挂载）
@@ -56,10 +57,9 @@ function attachCopyButtons() {
 }
 
 watch(
-  () => props.message.rendered === true,
-  (isRendered) => {
-    if (isRendered) nextTick(attachCopyButtons)
-  },
+  () => props.message.content,
+  () => { nextTick(attachCopyButtons) },
+  { immediate: true },
   { immediate: true }  // 历史消息挂载即 rendered
 )
 
@@ -93,11 +93,9 @@ watch(
 
       <div class="msg-bubble"
            :class="message.role === 'user' ? 'msg-bubble-user' : 'msg-bubble-ai'">
-        <div v-if="renderedHtml !== null"
-             ref="bubble-content-ref"
+        <div ref="bubble-content-ref"
              class="msg-markdown"
              v-html="renderedHtml"></div>
-        <template v-else>{{ message.content }}</template>
       </div>
 
       <span v-if="message.time && message.role === 'ai'"
