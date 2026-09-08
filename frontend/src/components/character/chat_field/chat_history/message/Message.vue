@@ -108,8 +108,7 @@ watch(
 
     <!-- RAG 引用 chips（Phase 2：替换 collapse；点击弹浮层显示原文） -->
     <div v-if="message.role === 'ai' && message.citations?.length"
-         class="flex flex-wrap gap-1.5 mt-1.5"
-         :class="showHeader ? 'ml-12' : ''">
+         class="flex flex-wrap gap-1.5 mt-1.5">
       <button v-for="c in message.citations" :key="c.index"
               type="button"
               class="bg-black/25 backdrop-blur text-white/90 rounded-full px-2.5 py-1 text-xs
