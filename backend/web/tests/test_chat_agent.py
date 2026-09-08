@@ -436,6 +436,94 @@ class TestChatSSEEndpoint:
 
         assert Message.objects.filter(friend=friend).count() >= 1
 
+    @patch("web.views.friend.message.chat.chat.websockets.connect")
+    @patch("web.views.friend.message.chat.chat.ChatGraph.create_app")
+    def test_sse_message_saved_with_citations(self, mock_create_app, mock_ws_connect,
+                                              auth_client, friend, mock_tasks_started_ws):
+        """正常路径：流含 ToolMessage → Message.citations 落库四元组（含原文）"""
+        from web.models.friend import Message
+        from web.views.friend.message.chat.chat import extract_citations
+
+        tool_content = (
+            "从知识库中找到以下相关信息：\n\n"
+            "[来源1: 测试文档.pdf 第3段]\n检索到的内容...\n"
+        )
+        mock_graph = MagicMock()
+
+        async def mock_astream(inputs, stream_mode="messages"):
+            tool_msg = ToolMessage(
+                content=tool_content,
+                name="search_knowledge_base",
+                tool_call_id="call_1",
+            )
+            yield (tool_msg, {})
+            yield (AIMessageChunk(content="根据测试文档..."), {})
+
+        mock_graph.astream = mock_astream
+        mock_create_app.return_value = mock_graph
+        mock_ws_connect.return_value = mock_tasks_started_ws
+
+        resp = auth_client.post(
+            "/api/friend/message/chat/",
+            {"friend_id": friend.id, "message": "Hi"},
+        )
+        # Consume the stream fully
+        b"".join(resp.streaming_content)
+
+        msg = Message.objects.filter(friend=friend).order_by('-id').first()
+        assert msg is not None
+        assert msg.citations == extract_citations(tool_content)
+        assert msg.citations[0]["content"] == "检索到的内容..."
+
+    @patch("web.views.friend.message.chat.chat.check_quota")
+    @patch("web.views.friend.message.chat.chat.ChatGraph.create_app")
+    def test_tts_quota_exceeded_citations_event_includes_content(
+        self, mock_create_app, mock_check, auth_client, friend,
+    ):
+        """TTS 配额耗尽降级路径 → citations SSE 事件仍携带 content"""
+        tool_content = (
+            "从知识库中找到以下相关信息：\n\n"
+            "[来源1: 降级路径文档.pdf 第2段]\n降级路径正文...\n"
+        )
+        mock_graph = MagicMock()
+
+        async def mock_astream(inputs, stream_mode="messages"):
+            tool_msg = ToolMessage(
+                content=tool_content,
+                name="search_knowledge_base",
+                tool_call_id="call_1",
+            )
+            yield (tool_msg, {})
+            yield (AIMessageChunk(content="降级回复"), {})
+
+        mock_graph.astream = mock_astream
+        mock_create_app.return_value = mock_graph
+
+        def side_effect(user_id, api_type):
+            if api_type == 'llm':
+                return (True, 0, 10_000)
+            elif api_type == 'tts':
+                return (False, 10_000, 10_000)
+            return (True, 0, 10_000)
+        mock_check.side_effect = side_effect
+
+        resp = auth_client.post(
+            "/api/friend/message/chat/",
+            {"friend_id": friend.id, "message": "Hi"},
+        )
+        content = b"".join(resp.streaming_content).decode("utf-8")
+        lines = content.strip().split("\n\n")
+
+        citation_lines = [l for l in lines if "citations" in l]
+        assert len(citation_lines) == 1, f"Expected 1 citations event, got: {lines}"
+        data_prefix = "data: "
+        citation_data = json.loads(citation_lines[0][len(data_prefix):])
+        citations = citation_data["citations"]
+        assert len(citations) == 1
+        assert citations[0]["title"] == "降级路径文档.pdf"
+        assert citations[0]["chunk_index"] == 1  # 展示值「第2段」→ 0-based 归一化存储
+        assert citations[0]["content"] == "降级路径正文..."
+
     def test_sse_friend_not_found(self, auth_client):
         """Friend does not exist → SSE error stream"""
         resp = auth_client.post(

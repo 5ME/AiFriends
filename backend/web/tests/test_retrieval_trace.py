@@ -354,8 +354,11 @@ class TestCitationParsing:
         )
         citations = citation_data["citations"]
         assert len(citations) == 1
+        assert citations[0]["index"] == 1
         assert citations[0]["title"] == "测试文档.pdf"
-        assert citations[0]["chunk_index"] == 3
+        assert citations[0]["chunk_index"] == 2  # 展示值「第3段」→ 0-based 归一化存储
+        # Q3/Q4 后端批次：citations 事件携带 content（引用原文，向后兼容）
+        assert citations[0]["content"] == "检索到的内容..."
 
     def test_citation_re_system_knowledge_source(self):
         """系统知识库来源标记 '系统知识库' 也能被正则匹配"""

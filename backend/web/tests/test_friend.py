@@ -119,3 +119,46 @@ class TestGetCount:
         assert resp.status_code == status.HTTP_200_OK
         data = resp.json()
         assert data["friend_count"] == 1
+
+
+class TestGetHistory:
+    """GET /api/friend/message/get_history/"""
+
+    def test_get_history_returns_created_at_and_citations(self, auth_client, friend):
+        """每条消息含 created_at ISO 时间与 citations 字段（Q3/Q4 后端批次）"""
+        from web.models.friend import Message
+
+        citations = [
+            {'index': 1, 'title': '测试文档.pdf', 'chunk_index': 3, 'content': '引用正文'},
+        ]
+        msg_with_citations = Message.objects.create(
+            friend=friend,
+            user_message='你好',
+            output='你好呀',
+            citations=citations,
+        )
+        msg_without_citations = Message.objects.create(
+            friend=friend,
+            user_message='第二条',
+            output='回复',
+        )
+
+        resp = auth_client.get(
+            "/api/friend/message/get_history/",
+            {"friend_id": friend.id},
+        )
+        assert resp.status_code == status.HTTP_200_OK
+        data = resp.json()
+        assert data["message"] == "success"
+        assert len(data["messages"]) == 2
+
+        # 按 -id 排序：最新（无 citations）在前
+        newest = data["messages"][0]
+        oldest = data["messages"][1]
+        assert newest["id"] == msg_without_citations.id
+        assert newest["created_at"] == msg_without_citations.created_at.isoformat()
+        assert newest["citations"] == []
+
+        assert oldest["id"] == msg_with_citations.id
+        assert oldest["created_at"] == msg_with_citations.created_at.isoformat()
+        assert oldest["citations"] == citations

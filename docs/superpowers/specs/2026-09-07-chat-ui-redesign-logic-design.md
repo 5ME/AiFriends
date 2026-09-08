@@ -32,7 +32,7 @@
 | D-L2 | **friend 数据唯一入口 = `POST get_or_create(character_id)`** | 幂等接口；卡片点击、直达/刷新、会话切换三条路径统一走它，一次请求即得 friend（含 character 全部字段）。SessionList 的列表数据仅作选择 UI，不作为 ChatWindow 数据源 |
 | D-L3 | **发送统一入口 = ChatWindow.sendMessage(text)** | ChatWindow 持 `inputFieldRef`，`sendMessage` 转发 `inputFieldRef.handleSend(text)`（现有 handleSend 已支持字符串参数，SSE 逻辑零改动）；空态示例问题由 ChatHistory `emit('quickSend', text)` → ChatWindow 转调 |
 | D-L4 | **资源生命周期 = 组件卸载 + :key 重建** | 切换会话：更新 `activeCharacterId` → ChatWindow `:key` 变化 → 旧树整体卸载 → `InputField.onUnmounted`（现有：abort + stopAudio）与 `Microphone.onUnmounted`（现有：vad destroy）自动释放 → 新树挂载重新加载。**无需新增手动释放代码**；生成中切换会话由后端 C2 断连路径兜底落库（现有机制） |
-| D-L5 | **markdown 渲染时机 = 流式结束才渲染** | 流式期间 content 以纯文本展示（避免逐 token 重解析的闪烁与性能浪费）；收到 `[DONE]`/isDone 后对最后一条 AI 消息标记 `rendered=true`，Message.vue computed 一次性 marked+DOMPurify 渲染。历史消息加载即 rendered |
+| D-L5 | **markdown 渲染时机 = 边流边渲染**（✔ 2026-09-08 实测修订） | 原"流式结束才渲染"在 TTS 音频尾巴期间产生"文字已吐完仍裸文本、随后突然渲染"的明显延迟（用户实测反馈）；实测 marked+DOMPurify 对增量文本 <2ms/次、无性能影响。实现：Message.vue 始终渲染 markdown（`renderedHtml` 常算），复制按钮按 content 变化重挂（幂等） |
 | D-L6 | **滚动节流，内容更新不节流** | 每 SSE chunk 更新 content（Vue 局部 patch 开销可忽略）；`scrollToBottom` 改为 `requestAnimationFrame` 合并执行（每帧最多一次）。理由与虚拟列表结论见 LD §7 |
 | D-L7 | **用户级设置 = useChatSettings 模块级单例** | 仿照 `useVoiceToggle` 模式：`simpleBackground`（默认 false）、`autoSendVoice`（默认 false），localStorage 持久化（key：`chatSimpleBg` / `chatAutoSendVoice`）。WindowHeader 与 InputField 共享 |
 | D-L8 | **ChatField.vue 下线（删除文件）** | 其内部逻辑分别迁移：布局壳 → ChatWindow；历史 → ChatHistory（改造）；输入/音频 → InputField（改造）。删除文件而非保留死代码 |
@@ -129,7 +129,7 @@
 - **渲染**：
   - 组首：头像 36px + 名字（AI=角色名 / user=store 用户名）
   - 气泡：AI 左对齐 `--bubble-ai`；用户右对齐 `--bubble-user`；`break-words whitespace-pre-wrap`；max-w 75%
-  - markdown：`message.rendered` 为 true 时 `computed(() => DOMPurify.sanitize(marked.parse(content)))`，否则纯文本（D-L5）；白名单 S §5.3；代码块复制按钮（navigator.clipboard）
+  - markdown（D-L5 已修订为边流边渲染）：AI 消息 `computed(() => DOMPurify.sanitize(marked.parse(content)))` 常算（增量全量重解析 <2ms/次），无 `rendered` 触发；用户消息不走 markdown（纯文本 `pre-wrap`），S §5.3 仅要求 AI 回复；白名单 S §5.3；代码块复制按钮（navigator.clipboard，按 content 变化重挂、幂等）
   - 引用 chips：`message.citations` 非空 → 气泡下横排 chips，点击弹浮层（内容取决于 Q4 结果：原文 / 标题+段落号）
   - hover 时间：`message.time`（格式 `HH:mm`，数据源取决于 Q3）→ `group-hover` 显示
   - 日期分隔：`dateLabel` 非空 → 该消息前插入胶囊分隔线
@@ -253,7 +253,7 @@ sendMessage(text)（统一入口，D-L3）
    ├─ content   → 首片时 thinking=false, streaming=true；appendToLastMessage(delta)；rAF 调度 scrollToBottom（D-L6）
    ├─ audio     → handleAudioChunk（MSE 队列，现有）
    ├─ error     → appendToLastMessage(error 文案)；stopAudio()；streaming=false
-   [DONE]/isDone → streaming=false；最后一条 AI 消息 rendered=true（D-L5）；scrollToBottom
+   [DONE]/isDone → streaming=false；scrollToBottom（markdown 已边流边渲染，无 rendered 触发，D-L5）
 停止生成（■ 按钮）：
  → abortController.abort() + stopAudio()；streaming=false；
    停止后不加标记、保留已有文本（Q8 已拍板）
@@ -301,7 +301,7 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 | 历史错误 | loadError | 居中"加载失败" + 重试 | — |
 | 思考中 | `thinking` | 尾部三点气泡 | — |
 | 流式中 | `streaming` | 输入栏显示 ■ 停止；输入禁用发送但可编辑 | — |
-| 流式结束 | done/error/abort | 停止按钮消失；滚动到底；markdown 渲染 | `rendered=true` |
+| 流式结束 | done/error/abort | 停止按钮消失；滚动到底 | —（markdown 边流边渲染，无需标记，D-L5） |
 | 上滑加载 | 哨兵可见 | 前置插入 + 滚动补偿（F3） | — |
 
 ---
@@ -336,7 +336,7 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 1. **虚拟列表：不需要**。依据：单会话消息为个人陪伴场景，规模在百级；已按 10 条/次分页 + 上滑哨兵加载；DOM 节点数 = 当前已加载条数，Message 组件轻量。虚拟列表引入的滚动定位复杂度 >> 收益。**若未来单会话超千条再评估**（结论记录在案）。
 2. **流式滚动节流**：`scrollToBottom` 由每 chunk 直接调用改为 rAF 合并（`scheduleScroll()`：`pending ? void 0 : (pending=true, requestAnimationFrame(()=>{scrollTop=scrollHeight; pending=false}))`）。ChatHistory 暴露 `scheduleScroll()`，ChatWindow append 后调用。
 3. **content 追加**：保持每 chunk 一次 `last.content += delta`（Vue 局部 patch）；**禁止**每 chunk 触发 `nextTick + scrollHeight`（现状 `handleAppendToLastMessage` 里每 chunk 都 scrollToBottom，改由 rAF 节流后主开销消除）。
-4. **markdown 只在 done 渲染一次**（D-L5）：流式期间零 DOM 解析开销，结束后单次 marked 调用。
+4. **markdown 边流边渲染**（D-L5 已修订）：文字自始即排版，` ` ` 标记不裸露，无"吐完再突变"；渲染为增量全量重解析（<2ms/次），极端超长回复可后续加 100ms 节流（当前不做）。
 5. **背景采样**：16×16 canvas 一次性异步，`seq` 令牌防竞态（3.10）；失败走默认值不阻塞；不做二次采样（窗口尺寸变化不需要——蒙层与尺寸无关）。
 6. **会话列表分页**：20/次滚动加载，无预取；搜索为前端本地过滤（数据量小）。
 7. **TTS/MSE**：现有音频链路不动（队列 + SourceBuffer 已有背压逻辑）。

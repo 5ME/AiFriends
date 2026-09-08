@@ -52,6 +52,34 @@ TOOL_RULES = (
 CITATION_RE = re.compile(r'\[来源(\d+): (.+?) 第(\d+)段\]')
 
 
+def extract_citations(tool_content: str) -> List[dict]:
+    """从 ToolMessage 内容解析 [来源N: 标题 第M段] 块，返回四元组列表（含原文）。
+
+    按标记行分块：每个来源块 = 标记行 + 其后正文（检索 chunk 原文），
+    无标记的引导文本块自动跳过。
+
+    注意：标记中「第M段」是 graph 用 0-based DB 值 +1 打印的展示值；
+    此处存储时归一化回 0-based（与 RetrievalTrace.chunk_index 语义一致），
+    前端展示再 +1，避免双重 +1 的 off-by-one（PR #35 review 修复）。
+    """
+    citations = []
+    for block in re.split(r'\n(?=\[来源\d+: )', tool_content):
+        block = block.strip()
+        if not block:
+            continue
+        m = CITATION_RE.search(block)
+        if not m:
+            continue
+        content = block[m.end():].strip()          # 标记行之后的正文 = 检索 chunk 原文
+        citations.append({
+            'index': int(m.group(1)),
+            'title': m.group(2),
+            'chunk_index': int(m.group(3)) - 1,    # 展示值 → 0-based 归一化
+            'content': content,
+        })
+    return citations
+
+
 class SSERenderer(BaseRenderer):
     media_type = 'text/event-stream'
     format = 'txt'
@@ -278,6 +306,7 @@ class MessageChatView(APIView):
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 total_tokens=total_tokens,
+                citations=getattr(self, '_citations', []),
             )
         except Exception:
             logger.exception('聊天消息保存失败, friend_id=%s', friend.id)
@@ -322,29 +351,35 @@ class MessageChatView(APIView):
                 output = ''.join(getattr(self, '_output_buffer', []))
                 if output and friend and message:
                     usage = getattr(self, '_output_usage', {})
-                    Message.objects.create(
-                        friend=friend,
-                        user_message=message[:5000],
-                        input=[m.model_dump() for m in inputs_dict.get('messages', [])]
-                            if inputs_dict else [],
-                        output=output[:5000],
-                        input_tokens=usage.get('input_tokens', 0),
-                        output_tokens=usage.get('output_tokens', 0),
-                        total_tokens=usage.get('total_tokens', 0),
-                    )
-                    record_api_usage(
-                        user_id=user_id,
-                        api_type='llm',
-                        model_name='deepseek-v4-flash',
-                        token_count=usage.get('total_tokens', 0),
-                        duration_ms=0,
-                        success=not getattr(self, '_has_error', False),
-                        error_message='客户端断开连接',
-                    )
-                    logger.info(
-                        'Chat Agent 断连路径完成, friend_id=%s, output_len=%d',
-                        friend.id, len(output)
-                    )
+                    # 落库失败绝不能让异常外逃：否则下方 mq.put(None) 不执行，
+                    # SSE generator 将永远 mq.get(timeout=1) 空转，前端连接挂死
+                    try:
+                        Message.objects.create(
+                            friend=friend,
+                            user_message=message[:5000],
+                            input=[m.model_dump() for m in inputs_dict.get('messages', [])]
+                                if inputs_dict else [],
+                            output=output[:5000],
+                            input_tokens=usage.get('input_tokens', 0),
+                            output_tokens=usage.get('output_tokens', 0),
+                            total_tokens=usage.get('total_tokens', 0),
+                            citations=getattr(self, '_citations', []),
+                        )
+                        record_api_usage(
+                            user_id=user_id,
+                            api_type='llm',
+                            model_name='deepseek-v4-flash',
+                            token_count=usage.get('total_tokens', 0),
+                            duration_ms=0,
+                            success=not getattr(self, '_has_error', False),
+                            error_message='客户端断开连接',
+                        )
+                        logger.info(
+                            'Chat Agent 断连路径完成, friend_id=%s, output_len=%d',
+                            friend.id, len(output)
+                        )
+                    except Exception:
+                        logger.exception('Chat Agent 断连路径落库失败, friend_id=%s', friend.id)
             mq.put(None)  # 阻塞确保哨兵送达；消费者死掉时 daemon 线程随 worker 退出清理
         # TTS usage 在同步上下文中写入（避免 async 中调 ORM 的 SynchronousOnlyOperation）
         if hasattr(self, '_tts_usage'):
@@ -364,7 +399,7 @@ class MessageChatView(APIView):
         task_id = uuid.uuid4().hex
         if not tts_allowed:
             # 跳过 TTS：只跑 LLM 文字流，TTS usage 不记录（无 _tts_usage）
-            await self._stream_llm_only(app, inputs, mq, user_id)
+            await self._stream_llm_only(app, inputs, mq, user_id, cancel_event)
             return
         wss_url = os.getenv('WSS_URL')
         api_key = os.getenv('API_KEY')
@@ -406,7 +441,7 @@ class MessageChatView(APIView):
         except Exception:
             # TTS WebSocket 连接失败或中途异常 → 降级为纯文本，不阻断 LLM 流
             logger.warning('TTS 不可用，降级为纯文本, task_id=%s', task_id)
-            await self._stream_llm_only(app, inputs, mq, user_id)
+            await self._stream_llm_only(app, inputs, mq, user_id, cancel_event)
 
     async def tts_sender(
             self,
@@ -432,15 +467,11 @@ class MessageChatView(APIView):
                 # LangGraph 时序：ToolMessage 在第一个 AIMessageChunk 之前到达，
                 # 确保 citations 事件先于 content 发送到前端
                 if isinstance(msg, ToolMessage) and msg.name == "search_knowledge_base":
-                    citations = []
-                    for m in CITATION_RE.finditer(msg.content):
-                        citations.append({
-                            "index": int(m.group(1)),
-                            "title": m.group(2),
-                            "chunk_index": int(m.group(3)),
-                        })
-                    if citations and (not cancel_event or not cancel_event.is_set()):
-                        mq.put_nowait({'citations': citations})
+                    # P1-3：无条件提取并收集四元组 citations（含原文），
+                    # 不受 cancel_event 门控 — 断连路径落库同样需要
+                    self._citations = extract_citations(msg.content)
+                    if self._citations and (not cancel_event or not cancel_event.is_set()):
+                        mq.put_nowait({'citations': self._citations})
 
                 elif isinstance(msg, BaseMessageChunk):
                     if msg.content:
@@ -549,29 +580,44 @@ class MessageChatView(APIView):
             inputs,
             mq: queue.Queue,
             user_id: int,
+            cancel_event: threading.Event = None,  # C2: 与 tts_sender 对齐的断连门控
     ):
-        """仅 LLM 文字流的降级路径 — TTS 配额超限或 TTS 失败时使用。"""
+        """仅 LLM 文字流的降级路径 — TTS 配额超限或 TTS 失败时使用。
+
+        断连（cancel_event set）后只收集 _output_buffer/_output_usage 不再推 mq，
+        避免无人消费的队列写满后 queue.Full 被当作 LLM 异常（_has_error 误标）
+        且 astream 提前中止导致断连落库丢失尾部（PR #35 review 修复）。
+        """
+        # P1-3：与 tts_sender 对齐的成员收集 — 断连时 work() 仍可落库
+        self._output_buffer = []   # 始终收集完整 LLM 输出
+        self._output_usage = {}    # usage_metadata，断连时供 work() 使用
+        self._has_error = False    # LLM 异常标志，供 work() 断连路径用
         try:
             async for msg, metadata in app.astream(inputs, stream_mode="messages"):
                 if isinstance(msg, ToolMessage) and msg.name == "search_knowledge_base":
-                    citations = []
-                    for m in CITATION_RE.finditer(msg.content):
-                        citations.append({
-                            "index": int(m.group(1)),
-                            "title": m.group(2),
-                            "chunk_index": int(m.group(3)),
-                        })
-                    if citations:
-                        mq.put_nowait({'citations': citations})
+                    # P1-3：无条件提取并收集四元组 citations（含原文）
+                    self._citations = extract_citations(msg.content)
+                    if self._citations and (not cancel_event or not cancel_event.is_set()):
+                        self._safe_put(mq, {'citations': self._citations})
 
                 elif isinstance(msg, BaseMessageChunk):
                     if msg.content:
-                        mq.put_nowait({'content': msg.content})
+                        self._output_buffer.append(msg.content)  # 始终收集完整输出
+                        if not cancel_event or not cancel_event.is_set():
+                            self._safe_put(mq, {'content': msg.content})
                     if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
-                        mq.put_nowait({'usage': msg.usage_metadata})
+                        self._output_usage = msg.usage_metadata  # 始终记录
+                        if not cancel_event or not cancel_event.is_set():
+                            self._safe_put(mq, {'usage': msg.usage_metadata})
         except Exception:
+            self._has_error = True
             logger.exception('LLM 文字流异常（TTS 降级模式）')
-            try:
-                mq.put_nowait({'error': '系统异常，请稍后重试'})
-            except queue.Full:
-                pass
+            self._safe_put(mq, {'error': '系统异常，请稍后重试'})
+
+    @staticmethod
+    def _safe_put(mq: queue.Queue, payload: dict):
+        """put_nowait + queue.Full 记日志（断连后消费者已死，Full 属预期而非 LLM 错误）。"""
+        try:
+            mq.put_nowait(payload)
+        except queue.Full:
+            logger.warning('队列满，消息丢弃: %s', list(payload.keys()))
