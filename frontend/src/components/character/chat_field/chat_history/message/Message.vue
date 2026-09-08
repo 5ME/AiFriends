@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import {useUserStore} from '@/stores/user';
+import { useToast } from '@/composables/useToast'
+import { formatTime } from '@/utils/chatFormat'
+import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps({
-  message: Object,
+  message: { type: Object, required: true },
   character: Object,
   showHeader: { type: Boolean, default: true },
+  dateLabel: { type: String, default: null },
 })
 
 const user = useUserStore()
+const toast = useToast()
 
 const avatar = computed(() =>
   props.message.role === 'ai' ? props.character?.photo : user.photo
@@ -16,10 +21,93 @@ const avatar = computed(() =>
 const name = computed(() =>
   props.message.role === 'ai' ? props.character?.name : user.username
 )
+
+// markdown：流式期间纯文本；message.rendered === true 后一次性 marked+DOMPurify 渲染（D-L5）
+const renderedHtml = computed(() =>
+  props.message.rendered === true ? renderMarkdown(props.message.content || '') : null
+)
+
+// 代码块右上角「复制」按钮（v-html 内容不携带 scope 属性，样式经 :deep 前缀挂载）
+const bubbleContentRef = useTemplateRef('bubble-content-ref')
+
+function attachCopyButtons() {
+  const root = bubbleContentRef.value
+  if (!root) return
+  root.querySelectorAll('pre').forEach((pre) => {
+    if (pre.dataset.copyBound) return  // 幂等：仅挂一次
+    pre.dataset.copyBound = '1'
+    const codeText = pre.querySelector('code')?.textContent ?? pre.textContent ?? ''
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'code-copy-btn'
+    btn.setAttribute('aria-label', '复制代码')
+    btn.textContent = '复制'
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(codeText)
+        toast.success('代码已复制')
+      } catch (e) {
+        toast.error('复制失败，请手动选择复制')
+      }
+    })
+    pre.appendChild(btn)
+  })
+}
+
+watch(
+  () => props.message.rendered === true,
+  (isRendered) => {
+    if (isRendered) nextTick(attachCopyButtons)
+  },
+  { immediate: true }  // 历史消息挂载即 rendered
+)
+
+// 引用 chips 浮层：Teleport to body、限高 40vh 内部滚动、点击外部 / Esc 关闭
+const activeCitation = ref(null)
+const chipRect = ref(null)
+
+function openCitation(citation, event) {
+  activeCitation.value = citation
+  chipRect.value = event.currentTarget.getBoundingClientRect()
+}
+
+function closeCitation() {
+  activeCitation.value = null
+  chipRect.value = null
+}
+
+function onKeydown(e) {
+  if (e.key === 'Escape') closeCitation()
+}
+
+watch(activeCitation, (v) => {
+  if (v) window.addEventListener('keydown', onKeydown)
+  else window.removeEventListener('keydown', onKeydown)
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+
+// 浮层定位：chips 下方弹出，放不下翻转到上方，水平方向夹在视口内
+const popoverStyle = computed(() => {
+  const rect = chipRect.value
+  if (!rect) return {}
+  const width = Math.min(320, window.innerWidth - 16)
+  const estHeight = Math.min(window.innerHeight * 0.4 + 64, window.innerHeight - 16)
+  const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8)
+  let top = rect.bottom + 8
+  if (top + estHeight > window.innerHeight) {
+    top = Math.max(8, rect.top - 8 - estHeight)
+  }
+  return { left: `${left}px`, top: `${top}px`, width: `${width}px` }
+})
 </script>
 
 <template>
   <div v-if="message.content" :class="showHeader ? 'mt-3' : 'mt-1'">
+    <!-- 日期分隔胶囊（组首 + 与上一条跨天时） -->
+    <div v-if="dateLabel" class="flex justify-center my-2">
+      <span class="date-capsule">{{ dateLabel }}</span>
+    </div>
+
     <!-- 组首：头像 + 名字 pill（N1 底衬保证亮图可读） -->
     <div v-if="showHeader" class="flex items-center gap-2 mb-1"
          :class="message.role === 'user' ? 'flex-row-reverse' : ''">
@@ -31,30 +119,111 @@ const name = computed(() =>
       <span class="msg-name-pill">{{ name }}</span>
     </div>
 
-    <!-- 气泡（spec §8.2：break-words、max-w 75%、圆角 16px 头像侧 4px） -->
-    <div class="flex" :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
+    <!-- 气泡（spec §8.2：break-words、max-w 75%、圆角 16px 头像侧 4px）+ hover 时间 -->
+    <div class="group flex items-end gap-1.5"
+         :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
+      <span v-if="message.time && message.role === 'user'"
+            class="opacity-0 group-hover:opacity-100 transition-opacity text-white/60 text-[11px] shrink-0 pb-0.5">
+        {{ formatTime(message.time) }}
+      </span>
+
       <div class="msg-bubble"
            :class="message.role === 'user' ? 'msg-bubble-user' : 'msg-bubble-ai'">
-        {{ message.content }}
+        <div v-if="renderedHtml !== null"
+             ref="bubble-content-ref"
+             class="msg-markdown"
+             v-html="renderedHtml"></div>
+        <template v-else>{{ message.content }}</template>
       </div>
+
+      <span v-if="message.time && message.role === 'ai'"
+            class="opacity-0 group-hover:opacity-100 transition-opacity text-white/60 text-[11px] shrink-0 pb-0.5">
+        {{ formatTime(message.time) }}
+      </span>
     </div>
 
-    <!--RAG 引用来源（Phase 1 保留现有 collapse，Phase 2 改为 chips）-->
+    <!-- RAG 引用 chips（Phase 2：替换 collapse；点击弹浮层显示原文） -->
     <div v-if="message.role === 'ai' && message.citations?.length"
-         class="collapse collapse-arrow mt-0.5 w-fit max-w-80 rounded-box"
+         class="flex flex-wrap gap-1.5 mt-1.5"
          :class="showHeader ? 'ml-12' : ''">
-      <input type="checkbox" />
-      <div class="collapse-title text-xs font-medium opacity-60 text-white/80 py-1">
-        📖 {{ message.citations.length }} 条参考来源
-      </div>
-      <div class="collapse-content text-xs opacity-50 text-white/70">
-        <p v-for="c in message.citations" :key="c.index" class="py-0.5">
-          {{ c.index }}. {{ c.title || '系统知识库' }} 第{{ c.chunk_index + 1 }}段
-        </p>
-      </div>
+      <button v-for="c in message.citations" :key="c.index"
+              type="button"
+              class="bg-black/25 backdrop-blur text-white/90 rounded-full px-2.5 py-1 text-xs
+                     cursor-pointer hover:bg-black/40 transition-colors max-w-48"
+              :aria-label="`查看参考来源：《${c.title || '系统知识库'}》 第${c.chunk_index + 1}段`"
+              @click="openCitation(c, $event)">
+        <span class="truncate">📖 {{ c.title || '系统知识库' }}</span>
+      </button>
     </div>
   </div>
+
+  <!-- 引用原文浮层（Teleport to body；透明遮罩捕获外部点击） -->
+  <Teleport to="body">
+    <div v-if="activeCitation"
+         class="fixed inset-0 z-50"
+         role="dialog" aria-modal="true" aria-label="引用原文"
+         @click="closeCitation">
+      <div class="absolute flex flex-col overflow-hidden rounded-xl border border-white/10
+                  bg-neutral-900/95 backdrop-blur-xl shadow-2xl max-h-[calc(100vh-16px)]"
+           :style="popoverStyle"
+           @click.stop>
+        <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-white/10 shrink-0">
+          <p class="text-sm font-medium text-white/90 truncate">
+            《{{ activeCitation.title || '系统知识库' }}》 第{{ activeCitation.chunk_index + 1 }}段
+          </p>
+          <button type="button"
+                  class="btn btn-xs btn-ghost text-white/70 shrink-0"
+                  aria-label="关闭引用浮层"
+                  @click="closeCitation">✕</button>
+        </div>
+        <!-- 限高 40vh 内部滚动显示 content 原文；无 content 仅显示头信息 -->
+        <div v-if="activeCitation.content"
+             class="overflow-y-auto max-h-[40vh] px-4 py-3 text-sm leading-relaxed
+                    text-white/80 whitespace-pre-wrap break-words">
+          {{ activeCitation.content }}
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
+/* markdown 渲染内容（v-html 无 scope 属性 → 经 .msg-markdown 根用 :deep 下钻） */
+.msg-markdown {
+  white-space: normal;
+}
+.msg-markdown :deep(p) { margin: 0.4em 0; }
+.msg-markdown :deep(p:first-child) { margin-top: 0; }
+.msg-markdown :deep(p:last-child) { margin-bottom: 0; }
+.msg-markdown :deep(ul), .msg-markdown :deep(ol) { margin: 0.4em 0; padding-left: 1.3em; }
+.msg-markdown :deep(ul) { list-style: disc; }
+.msg-markdown :deep(ol) { list-style: decimal; }
+.msg-markdown :deep(li) { margin: 0.2em 0; }
+.msg-markdown :deep(h1), .msg-markdown :deep(h2),
+.msg-markdown :deep(h3), .msg-markdown :deep(h4) { font-weight: 600; line-height: 1.3; margin: 0.5em 0 0.3em; }
+.msg-markdown :deep(h1) { font-size: 1.25em; }
+.msg-markdown :deep(h2) { font-size: 1.18em; }
+.msg-markdown :deep(h3) { font-size: 1.1em; }
+.msg-markdown :deep(h4) { font-size: 1.05em; }
+.msg-markdown :deep(code) { background: rgba(0, 0, 0, 0.4); border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.85em; }
+.msg-markdown :deep(pre) { position: relative; background: rgba(0, 0, 0, 0.45); border-radius: 8px; padding: 0.6em 0.8em; margin: 0.5em 0; overflow-x: auto; }
+.msg-markdown :deep(pre code) { background: transparent; padding: 0; }
+.msg-markdown :deep(blockquote) { border-left: 3px solid rgba(255, 255, 255, 0.3); padding-left: 0.7em; margin: 0.4em 0; color: rgba(255, 255, 255, 0.85); }
+.msg-markdown :deep(a) { color: #7dd3fc; text-decoration: underline; word-break: break-all; }
+
+/* 代码块复制按钮（动态注入 DOM，样式经 .msg-markdown 下钻以享受 scoped 隔离） */
+.msg-markdown :deep(pre .code-copy-btn) {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  cursor: pointer;
+  border: none;
+}
+.msg-markdown :deep(pre .code-copy-btn:hover) { background: rgba(0, 0, 0, 0.75); }
 </style>

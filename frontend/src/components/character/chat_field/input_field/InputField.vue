@@ -202,6 +202,8 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
           return
         }
         if (isDone) {
+          // 流式结束 → 最后一条 AI 消息标记 rendered（D-L5），一次性 markdown 渲染
+          emits('appendToLastMessage', {rendered: true})
           setStreamState(false, false)
           return
         }

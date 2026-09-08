@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import Message from "@/components/character/chat_field/chat_history/message/Message.vue";
 import api from "@/js/http/api";
-import {nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef} from "vue";
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef} from "vue";
+import { dateLabel, groupMessages } from "@/utils/chatFormat";
 
 const props = defineProps(['friendId', 'character', 'history', 'thinking'])
 const emits = defineEmits(['pushFrontMessage', 'quickSend'])
@@ -17,7 +18,7 @@ async function scrollToBottom() {
 const loadError = ref('')
 const initialLoading = ref(true)
 let isLoading = false
-let hasMessages = true
+const hasMessages = ref(true)
 let lastMessageId = 0
 
 // 判断哨兵是否能被看到
@@ -30,7 +31,7 @@ function checkSentinelVisible() {
 }
 
 async function loadMore() {
-  if (isLoading || !hasMessages) {
+  if (isLoading || !hasMessages.value) {
     return
   }
   isLoading = true
@@ -53,7 +54,7 @@ async function loadMore() {
     isLoading = false
     initialLoading.value = false
     if (newMessages.length === 0) {
-      hasMessages = false
+      hasMessages.value = false
     } else {
       const oldHeight = scrollRef.value.scrollHeight
       const oldTop = scrollRef.value.scrollTop
@@ -63,15 +64,17 @@ async function loadMore() {
           role: 'ai',
           content: m.output,
           id: crypto.randomUUID(),
-          // Q3 拍板后端批次后，历史消息将携带 created_at/citations（Phase 2 消费）
+          // 历史消息挂载即 rendered（D-L5）；time/citations 消费 Step A 新字段
           time: m.created_at,
           citations: m.citations,
+          rendered: true,
         })
         emits('pushFrontMessage', {
           role: 'user',
           content: m.user_message,
           id: crypto.randomUUID(),
           time: m.created_at,
+          rendered: true,
         })
         lastMessageId = m.id
       }
@@ -92,14 +95,32 @@ async function loadMore() {
 // 错误重试：重置失败标记后重放 loadMore
 function retry() {
   loadError.value = ''
-  hasMessages = true
+  hasMessages.value = true
   loadMore()
 }
 
-// Phase 1 分组：仅按 role 变化切组（时间差 >5min 与日期分隔为 Phase 2）
+// 空态示例问题（D7 文案）
+const quickQuestions = ['介绍一下你自己吧', '讲个今天发生的故事', '和我聊聊最近的烦恼']
+
+// Phase 2 分组（LD §9.2）：同 role 连续且时间差 ≤5min 一组；首条恒为组首
+const groups = computed(() => groupMessages(props.history))
+const groupHeadSet = computed(() => {
+  const set = new Set()
+  for (const g of groups.value) {
+    set.add(g.startIndex)
+  }
+  return set
+})
+
 function showHeaderFor(index) {
-  if (index === 0) return true
-  return props.history[index].role !== props.history[index - 1].role
+  return groupHeadSet.value.has(index)
+}
+
+// 组首消息前的日期胶囊：与上一条消息跨天时出「今天/昨天/M月D日」
+function dateLabelFor(index) {
+  if (!groupHeadSet.value.has(index)) return null
+  const prevTime = index > 0 ? props.history[index - 1]?.time : null
+  return dateLabel(prevTime, props.history[index]?.time)
 }
 
 let observer = null
@@ -156,7 +177,27 @@ defineExpose({
              :message="message"
              :character="character"
              :show-header="showHeaderFor(index)"
+             :date-label="dateLabelFor(index)"
     />
+
+    <!-- 空态：新会话 introduction + 示例问题（D7 文案；点击 quickSend 直达发送） -->
+    <div v-if="!initialLoading && !hasMessages && history.length === 0"
+         class="h-full flex flex-col items-center justify-center gap-5 px-6 text-center">
+      <p v-if="character?.introduction" class="text-white/90 text-lg leading-relaxed">
+        {{ character.introduction }}
+      </p>
+      <div class="flex flex-col items-stretch gap-2.5 w-full max-w-60">
+        <button v-for="q in quickQuestions" :key="q"
+                type="button"
+                class="bg-black/25 backdrop-blur text-white/90 rounded-full px-4 py-2 text-sm
+                       cursor-pointer hover:bg-black/40 transition-colors
+                       focus-visible:ring-2 ring-white/40"
+                :aria-label="`发送示例问题：${q}`"
+                @click="emits('quickSend', q)">
+          {{ q }}
+        </button>
+      </div>
+    </div>
 
     <!-- 思考中指示（首 token 前） -->
     <div v-if="thinking" class="flex justify-start my-2">
