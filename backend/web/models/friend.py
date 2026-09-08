@@ -31,6 +31,8 @@ class Message(models.Model):
     input_tokens = models.IntegerField(default=0)
     output_tokens = models.IntegerField(default=0)
     total_tokens = models.IntegerField(default=0)
+    citations = models.JSONField(default=list, blank=True,
+                                 help_text='RAG 引用来源: [{index,title,chunk_index,content}]')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
