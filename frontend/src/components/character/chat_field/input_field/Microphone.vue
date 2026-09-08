@@ -132,7 +132,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="absolute bottom-4 left-2 h-12 w-86 flex items-center bg-black/30 backdrop-blur rounded-md">
+  <!-- 根节点参与 flex 文档流（修复：原 absolute bottom-4 left-2 w-86 会脱离布局
+       盖住消息区最后一条消息，且宽度不对齐输入栏；改为与输入栏同宽的流式块。
+       h-12/rounded-xl/bg-black/35 与文字输入框保持一致，两态切换无跳变） -->
+  <div class="relative w-full h-12 flex items-center bg-black/35 backdrop-blur rounded-xl">
     <!--初始化中-->
     <div v-if="!vadReady" class="flex items-center justify-center gap-1.5 flex-1">
       <span class="w-1 h-1 bg-blue-400 rounded-full animate-pulse-dot"

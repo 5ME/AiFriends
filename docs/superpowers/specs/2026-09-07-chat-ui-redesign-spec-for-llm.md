@@ -111,7 +111,7 @@
 ### 5.1 路由
 
 ```
-path: /chat/                       name: 'chat-index'       meta: { needLogin: true, hideSearch: true, hideFooter: true }   （会话中心，Q7-b）
+path: /chat/                       name: 'chat-hub'         meta: { needLogin: true, hideSearch: true, hideFooter: true }   （会话中心，Q7-b；实现命名 chat-hub——vue-router 不允许两条记录同名）
 path: /chat/:character_id/        name: 'chat-index'       meta: { needLogin: true, hideSearch: true, hideFooter: true }   （Q1：URL 参数=角色 id）
 ```
 
@@ -204,7 +204,7 @@ views/chat/ChatIndex.vue                     （页面壳：布局 + 会话状�
 
 ### 6.2 舞台背景（桌面端）
 
-- 同一张角色背景图，`<img>` 铺满舞台：`object-fit: cover; transform: scale(1.1); filter: blur(40px) saturate(1.2);` 叠加 `background: rgba(0,0,0, calc(0.5 * var(--overlay-k)))`。
+- 同一张角色背景图，`<img>` 铺满舞台：`object-fit: cover; transform: scale(1.1); filter: blur(24px) saturate(1.35);` 叠加 `background: rgba(0,0,0, 0.35)`。（2026-09-07 实机调优：40px+0.5 过灰、失场景感；Phase 4 引入 `--overlay-k` 自适应时以 0.35 为基准系数起调。）
 - 目的：大屏不空、氛围统一、不干扰窗口内容。移动端无舞台（窗口全屏）。
 
 ### 6.3 窗口渐变蒙层

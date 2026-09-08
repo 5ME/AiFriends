@@ -6,13 +6,18 @@ import CreateIcon from "@/components/navbar/icons/CreateIcon.vue";
 import SearchIcon from "@/components/navbar/icons/SearchIcon.vue";
 import {useUserStore} from "@/stores/user.js";
 import UserMenu from "@/components/navbar/UserMenu.vue";
-import {ref, watch} from "vue";
+import {computed, ref, watch} from "vue";
 import {useRoute, useRouter} from "vue-router";
 import logoUrl from "@/assets/logo.png";
 import KnowledgeBaseIcon from "@/components/navbar/icons/KnowledgeBaseIcon.vue";
+import ChatIcon from "@/components/navbar/icons/ChatIcon.vue";
 
 const router = useRouter()
 const route = useRoute()
+
+// 聊天入口有两个路由记录（/chat/ 与 /chat/:character_id/），RouterLink 的
+// active-class 只对同一条记录生效 → 手动按 path 前缀计算选中态（问题 5）
+const isChatActive = computed(() => route.path.startsWith('/chat'))
 
 const user = useUserStore()
 const searchText = ref('')
@@ -50,7 +55,7 @@ function handleSearch() {
             <div class="px-2 font-bold text-2xl">AI Friends</div>
           </RouterLink>
         </div>
-        <div class="navbar-center w-4/5 max-w-180 flex justify-center">
+        <div v-if="!route.meta.hideSearch" class="navbar-center w-4/5 max-w-180 flex justify-center">
           <form @submit.prevent="handleSearch" class="join w-4/5 flex justify-center">
             <input v-model="searchText" class="input join-item rounded-l-full w-4/5" placeholder="搜索你感兴趣的内容"/>
             <button class="btn join-item rounded-r-full gap-0">
@@ -77,7 +82,7 @@ function handleSearch() {
         <slot></slot>
       </div>
 
-      <footer class="footer sm:footer-horizontal footer-center bg-base-300 text-base-content p-4">
+      <footer v-if="!route.meta.hideFooter" class="footer sm:footer-horizontal footer-center bg-base-300 text-base-content p-4">
         <aside>
           <p>Copyright © {{ new Date().getFullYear() }} - All rights reserved by AI Friends</p>
         </aside>
@@ -105,6 +110,16 @@ function handleSearch() {
               <!-- Friend icon -->
               <FriendIcon/>
               <span class="is-drawer-close:hidden text-base whitespace-nowrap">好友</span>
+            </RouterLink>
+          </li>
+          <!-- List item -->
+          <li>
+            <RouterLink :to="{ name: 'chat-hub' }"
+                        :class="{ 'menu-focus': isChatActive }"
+                        :aria-current="isChatActive ? 'page' : undefined"
+                        class="is-drawer-close:tooltip is-drawer-close:tooltip-right py-3" data-tip="聊天">
+              <ChatIcon/>
+              <span class="is-drawer-close:hidden text-base whitespace-nowrap">聊天</span>
             </RouterLink>
           </li>
           <!-- List item -->

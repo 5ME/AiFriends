@@ -380,7 +380,7 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 - 运行时动态值（accent/overlay/user-bubble-bg）经 ChatWindow 根节点 `:style` 注入同名 CSS 变量覆盖（CSS 变量级联天然生效于子树）。
 - 己方气泡背景由纯函数 `resolveUserBubble(accent)` 解析（review P0-2 改良方案）：mix 70%→60%→50% 三档取首个白字对比度 ≥4.5:1 的档位，全部不达标 → `#10b981`@70%（对比度 ≈4.85）。固定 mix 无法覆盖任意亮色 accent（如黄色 @70% 仅 ≈3.2:1），故必须阶梯寻档。
 - `--overlay-k` 用于两个渐变停点 `rgba(0,0,0,0.25*K) 0%, rgba(0,0,0,0.60*K) 100%` → 直接写 `linear-gradient(180deg, rgba(0,0,0,calc(0.25 * var(--overlay-k))) 0%, rgba(0,0,0,calc(0.60 * var(--overlay-k))) 100%)`（CSS calc 支持）。
-- 舞台层：`filter: blur(40px) saturate(1.2); transform: scale(1.1);` + 叠加 `rgba(0,0,0,calc(0.5 * var(--overlay-k)))`。
+- 舞台层：`filter: blur(24px) saturate(1.35); transform: scale(1.1);` + 叠加 `rgba(0,0,0,0.35)`（2026-09-07 实机调优值；Phase 4 自适应时以 0.35 为基准系数）。
 - 复杂度评估：全部为既有 CSS 能力（color-mix/calc/自定义属性），无需新依赖；Tailwind 4 与任意值类（`w-[min(420px,...)]`）均支持，或按 8.1 用少量自定义 class 落 `main.css`（推荐后者，可读性高）。
 
 ### 8.3 玻璃/气泡类清单（落 `main.css` 或组件 scoped）
