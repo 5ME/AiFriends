@@ -59,7 +59,7 @@ def extract_citations(tool_content: str) -> list[dict]:
         citations.append({
             'index': int(m.group(1)),
             'title': m.group(2),
-            'chunk_index': int(m.group(3)),
+            'chunk_index': int(m.group(3)) - 1,    # 归一化为 0-based（与 RetrievalTrace 一致；前端 +1 展示）
             'content': content,
         })
     return citations
