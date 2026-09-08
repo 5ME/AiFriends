@@ -52,6 +52,30 @@ TOOL_RULES = (
 CITATION_RE = re.compile(r'\[来源(\d+): (.+?) 第(\d+)段\]')
 
 
+def extract_citations(tool_content: str) -> List[dict]:
+    """从 ToolMessage 内容解析 [来源N: 标题 第M段] 块，返回四元组列表（含原文）。
+
+    按标记行分块：每个来源块 = 标记行 + 其后正文（检索 chunk 原文），
+    无标记的引导文本块自动跳过。
+    """
+    citations = []
+    for block in re.split(r'\n(?=\[来源\d+: )', tool_content):
+        block = block.strip()
+        if not block:
+            continue
+        m = CITATION_RE.search(block)
+        if not m:
+            continue
+        content = block[m.end():].strip()          # 标记行之后的正文 = 检索 chunk 原文
+        citations.append({
+            'index': int(m.group(1)),
+            'title': m.group(2),
+            'chunk_index': int(m.group(3)),
+            'content': content,
+        })
+    return citations
+
+
 class SSERenderer(BaseRenderer):
     media_type = 'text/event-stream'
     format = 'txt'
@@ -278,6 +302,7 @@ class MessageChatView(APIView):
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 total_tokens=total_tokens,
+                citations=getattr(self, '_citations', []),
             )
         except Exception:
             logger.exception('聊天消息保存失败, friend_id=%s', friend.id)
@@ -331,6 +356,7 @@ class MessageChatView(APIView):
                         input_tokens=usage.get('input_tokens', 0),
                         output_tokens=usage.get('output_tokens', 0),
                         total_tokens=usage.get('total_tokens', 0),
+                        citations=getattr(self, '_citations', []),
                     )
                     record_api_usage(
                         user_id=user_id,
@@ -432,15 +458,11 @@ class MessageChatView(APIView):
                 # LangGraph 时序：ToolMessage 在第一个 AIMessageChunk 之前到达，
                 # 确保 citations 事件先于 content 发送到前端
                 if isinstance(msg, ToolMessage) and msg.name == "search_knowledge_base":
-                    citations = []
-                    for m in CITATION_RE.finditer(msg.content):
-                        citations.append({
-                            "index": int(m.group(1)),
-                            "title": m.group(2),
-                            "chunk_index": int(m.group(3)),
-                        })
-                    if citations and (not cancel_event or not cancel_event.is_set()):
-                        mq.put_nowait({'citations': citations})
+                    # P1-3：无条件提取并收集四元组 citations（含原文），
+                    # 不受 cancel_event 门控 — 断连路径落库同样需要
+                    self._citations = extract_citations(msg.content)
+                    if self._citations and (not cancel_event or not cancel_event.is_set()):
+                        mq.put_nowait({'citations': self._citations})
 
                 elif isinstance(msg, BaseMessageChunk):
                     if msg.content:
@@ -551,25 +573,27 @@ class MessageChatView(APIView):
             user_id: int,
     ):
         """仅 LLM 文字流的降级路径 — TTS 配额超限或 TTS 失败时使用。"""
+        # P1-3：与 tts_sender 对齐的成员收集 — 断连时 work() 仍可落库
+        self._output_buffer = []   # 始终收集完整 LLM 输出
+        self._output_usage = {}    # usage_metadata，断连时供 work() 使用
+        self._has_error = False    # LLM 异常标志，供 work() 断连路径用
         try:
             async for msg, metadata in app.astream(inputs, stream_mode="messages"):
                 if isinstance(msg, ToolMessage) and msg.name == "search_knowledge_base":
-                    citations = []
-                    for m in CITATION_RE.finditer(msg.content):
-                        citations.append({
-                            "index": int(m.group(1)),
-                            "title": m.group(2),
-                            "chunk_index": int(m.group(3)),
-                        })
-                    if citations:
-                        mq.put_nowait({'citations': citations})
+                    # P1-3：无条件提取并收集四元组 citations（含原文）
+                    self._citations = extract_citations(msg.content)
+                    if self._citations:
+                        mq.put_nowait({'citations': self._citations})
 
                 elif isinstance(msg, BaseMessageChunk):
                     if msg.content:
+                        self._output_buffer.append(msg.content)  # 始终收集完整输出
                         mq.put_nowait({'content': msg.content})
                     if hasattr(msg, 'usage_metadata') and msg.usage_metadata:
+                        self._output_usage = msg.usage_metadata  # 始终记录
                         mq.put_nowait({'usage': msg.usage_metadata})
         except Exception:
+            self._has_error = True
             logger.exception('LLM 文字流异常（TTS 降级模式）')
             try:
                 mq.put_nowait({'error': '系统异常，请稍后重试'})
