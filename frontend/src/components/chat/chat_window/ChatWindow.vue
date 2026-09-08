@@ -66,15 +66,18 @@ function scheduleScroll() {
 </script>
 
 <template>
-  <!-- 舞台（桌面端：同图模糊压暗延展；移动端无舞台） -->
-  <div class="absolute inset-0 overflow-hidden hidden lg:block">
-    <div class="absolute -inset-[10%] bg-cover bg-center stage-blur"
-         :style="{ backgroundImage: `url(${friend.character.background_image})` }"></div>
-    <div class="absolute inset-0 stage-dim"></div>
-  </div>
+  <!-- 单根容器：absolute 铺满舞台，内部 flex 居中窗口
+       （修复：原多根组件导致窗口在 main 的 flex 布局中未真正居中） -->
+  <div class="absolute inset-0 flex items-center justify-center">
+    <!-- 舞台（桌面端：同图模糊压暗延展；移动端无舞台） -->
+    <div class="absolute inset-0 overflow-hidden hidden lg:block">
+      <div class="absolute -inset-[10%] bg-cover bg-center stage-blur"
+           :style="{ backgroundImage: `url(${friend.character.background_image})` }"></div>
+      <div class="absolute inset-0 stage-dim"></div>
+    </div>
 
-  <!-- 角色之窗（3:5，桌面居中 / 移动端全屏，纯 CSS 尺寸公式） -->
-  <div class="chat-window relative mx-auto flex flex-col">
+    <!-- 角色之窗（3:5，桌面居中 / 移动端全屏，纯 CSS 尺寸公式） -->
+    <div class="chat-window relative flex flex-col">
     <!-- 窗口背景 + 渐变蒙层 -->
     <div class="absolute inset-0 bg-cover bg-center"
          :style="{ backgroundImage: `url(${friend.character.background_image})` }"></div>
@@ -96,6 +99,7 @@ function scheduleScroll() {
                   @appendToLastMessage="appendToLastMessage"
                   @streamState="handleStreamState" />
     </div>
+  </div>
   </div>
 </template>
 
