@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import {useUserStore} from '@/stores/user';
 import { useToast } from '@/composables/useToast'
 import { formatTime } from '@/utils/chatFormat'
@@ -11,6 +11,7 @@ const props = defineProps({
   showHeader: { type: Boolean, default: true },
   dateLabel: { type: String, default: null },
 })
+const emits = defineEmits(['openCitation'])
 
 const user = useUserStore()
 const toast = useToast()
@@ -62,41 +63,6 @@ watch(
   { immediate: true }  // 历史消息挂载即 rendered
 )
 
-// 引用 chips 浮层：Teleport to body、限高 40vh 内部滚动、点击外部 / Esc 关闭
-const activeCitation = ref(null)
-
-function openCitation(citation) {
-  activeCitation.value = citation
-}
-
-function closeCitation() {
-  activeCitation.value = null
-  chipRect.value = null
-}
-
-function onKeydown(e) {
-  if (e.key === 'Escape') closeCitation()
-}
-
-watch(activeCitation, (v) => {
-  if (v) window.addEventListener('keydown', onKeydown)
-  else window.removeEventListener('keydown', onKeydown)
-})
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
-
-// 浮层定位：chips 下方弹出，放不下翻转到上方，水平方向夹在视口内
-const popoverStyle = computed(() => {
-  const rect = chipRect.value
-  if (!rect) return {}
-  const width = Math.min(320, window.innerWidth - 16)
-  const estHeight = Math.min(window.innerHeight * 0.4 + 64, window.innerHeight - 16)
-  const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8)
-  let top = rect.bottom + 8
-  if (top + estHeight > window.innerHeight) {
-    top = Math.max(8, rect.top - 8 - estHeight)
-  }
-  return { left: `${left}px`, top: `${top}px`, width: `${width}px` }
-})
 </script>
 
 <template>
@@ -149,40 +115,11 @@ const popoverStyle = computed(() => {
               class="bg-black/25 backdrop-blur text-white/90 rounded-full px-2.5 py-1 text-xs
                      cursor-pointer hover:bg-black/40 transition-colors max-w-48"
               :aria-label="`查看参考来源：《${c.title || '系统知识库'}》 第${c.chunk_index + 1}段`"
-              @click="openCitation(c)">
+              @click="emits('openCitation', c)">
         <span class="truncate">📖 {{ c.title || '系统知识库' }}</span>
       </button>
     </div>
   </div>
-
-  <!-- 引用原文浮层（Teleport to body；透明遮罩捕获外部点击） -->
-  <Teleport to="body">
-    <div v-if="activeCitation"
-         class="fixed inset-0 z-50 flex items-center justify-center p-4"
-         role="dialog" aria-modal="true" aria-label="引用原文"
-         @click="closeCitation">
-      <div class="flex flex-col overflow-hidden rounded-xl border border-white/10
-                  bg-neutral-900/95 backdrop-blur-xl shadow-2xl
-                  w-[min(92vw,420px)] max-h-[70vh]"
-           @click.stop>
-        <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-white/10 shrink-0">
-          <p class="text-sm font-medium text-white/90 truncate">
-            《{{ activeCitation.title || '系统知识库' }}》 第{{ activeCitation.chunk_index + 1 }}段
-          </p>
-          <button type="button"
-                  class="btn btn-xs btn-ghost text-white/70 shrink-0"
-                  aria-label="关闭引用浮层"
-                  @click="closeCitation">✕</button>
-        </div>
-        <!-- 限高 40vh 内部滚动显示 content 原文；无 content 仅显示头信息 -->
-        <div v-if="activeCitation.content"
-             class="overflow-y-auto max-h-[40vh] px-4 py-3 text-sm leading-relaxed
-                    text-white/80 whitespace-pre-wrap break-words">
-          {{ activeCitation.content }}
-        </div>
-      </div>
-    </div>
-  </Teleport>
 </template>
 
 <style scoped>

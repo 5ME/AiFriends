@@ -5,7 +5,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef} fro
 import { dateLabel, groupMessages } from "@/utils/chatFormat";
 
 const props = defineProps(['friendId', 'character', 'history', 'thinking'])
-const emits = defineEmits(['pushFrontMessage', 'quickSend'])
+const emits = defineEmits(['pushFrontMessage', 'quickSend', 'openCitation'])
 
 const scrollRef = useTemplateRef('scroll-ref')
 const sentinelRef = useTemplateRef('sentinel-ref')
@@ -178,6 +178,7 @@ defineExpose({
              :character="character"
              :show-header="showHeaderFor(index)"
              :date-label="dateLabelFor(index)"
+             @openCitation="emits('openCitation', $event)"
     />
 
     <!-- 空态：新会话 introduction + 示例问题（D7 文案；点击 quickSend 直达发送） -->
