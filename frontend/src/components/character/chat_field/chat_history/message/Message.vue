@@ -64,11 +64,9 @@ watch(
 
 // 引用 chips 浮层：Teleport to body、限高 40vh 内部滚动、点击外部 / Esc 关闭
 const activeCitation = ref(null)
-const chipRect = ref(null)
 
-function openCitation(citation, event) {
+function openCitation(citation) {
   activeCitation.value = citation
-  chipRect.value = event.currentTarget.getBoundingClientRect()
 }
 
 function closeCitation() {
@@ -151,7 +149,7 @@ const popoverStyle = computed(() => {
               class="bg-black/25 backdrop-blur text-white/90 rounded-full px-2.5 py-1 text-xs
                      cursor-pointer hover:bg-black/40 transition-colors max-w-48"
               :aria-label="`查看参考来源：《${c.title || '系统知识库'}》 第${c.chunk_index + 1}段`"
-              @click="openCitation(c, $event)">
+              @click="openCitation(c)">
         <span class="truncate">📖 {{ c.title || '系统知识库' }}</span>
       </button>
     </div>
@@ -160,12 +158,12 @@ const popoverStyle = computed(() => {
   <!-- 引用原文浮层（Teleport to body；透明遮罩捕获外部点击） -->
   <Teleport to="body">
     <div v-if="activeCitation"
-         class="fixed inset-0 z-50"
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
          role="dialog" aria-modal="true" aria-label="引用原文"
          @click="closeCitation">
-      <div class="absolute flex flex-col overflow-hidden rounded-xl border border-white/10
-                  bg-neutral-900/95 backdrop-blur-xl shadow-2xl max-h-[calc(100vh-16px)]"
-           :style="popoverStyle"
+      <div class="flex flex-col overflow-hidden rounded-xl border border-white/10
+                  bg-neutral-900/95 backdrop-blur-xl shadow-2xl
+                  w-[min(92vw,420px)] max-h-[70vh]"
            @click.stop>
         <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-white/10 shrink-0">
           <p class="text-sm font-medium text-white/90 truncate">
