@@ -27,6 +27,8 @@ class GetHistoryView(APIView):
                     'id': message.id,
                     'user_message': message.user_message,
                     'output': message.output,
+                    'created_at': message.created_at.isoformat(),
+                    'citations': message.citations,
                 })
             return Response({'message': 'success', 'messages': messages})
         except Exception as e:
