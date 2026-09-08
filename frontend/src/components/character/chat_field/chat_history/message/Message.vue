@@ -23,10 +23,13 @@ const name = computed(() =>
   props.message.role === 'ai' ? props.character?.name : user.username
 )
 
-// markdown：始终渲染（2026-09-08 修订：原 D-L5「流式结束才渲染」导致裸文本+代码块标记长时间裸露，
-// 改为边收边渲染；marked+DOMPurify 对增量文本开销可忽略）
+// markdown：AI 消息始终边流边渲染（D-L5 修订 2026-09-08：原「流式结束才渲染」导致
+// 裸文本+代码块标记长时间裸露；marked+DOMPurify 对增量文本开销可忽略）。
+// 用户消息不走 markdown（spec §5.3 仅要求 AI 回复；避免 * / # / 1. 被误解析）
 const renderedHtml = computed(() =>
-  props.message.content ? renderMarkdown(props.message.content) : ''
+  props.message.role === 'ai' && props.message.content
+    ? renderMarkdown(props.message.content)
+    : ''
 )
 
 // 代码块右上角「复制」按钮（v-html 内容不携带 scope 属性，样式经 :deep 前缀挂载）
@@ -59,8 +62,7 @@ function attachCopyButtons() {
 watch(
   () => props.message.content,
   () => { nextTick(attachCopyButtons) },
-  { immediate: true },
-  { immediate: true }  // 历史消息挂载即 rendered
+  { immediate: true },  // AI 消息挂载即挂复制按钮（D-L5：边流边渲染）
 )
 
 </script>
@@ -93,9 +95,12 @@ watch(
 
       <div class="msg-bubble"
            :class="message.role === 'user' ? 'msg-bubble-user' : 'msg-bubble-ai'">
-        <div ref="bubble-content-ref"
+        <!-- AI：markdown 边流边渲染（DOMPurify 白名单已过滤）；用户：纯文本保留换行/多空格 -->
+        <div v-if="message.role === 'ai'"
+             ref="bubble-content-ref"
              class="msg-markdown"
              v-html="renderedHtml"></div>
+        <div v-else class="msg-markdown-plain">{{ message.content }}</div>
       </div>
 
       <span v-if="message.time && message.role === 'ai'"
@@ -109,11 +114,12 @@ watch(
          class="flex flex-wrap gap-1.5 mt-1.5">
       <button v-for="c in message.citations" :key="c.index"
               type="button"
-              class="bg-black/25 backdrop-blur text-white/90 rounded-full px-2.5 py-1 text-xs
+              class="flex items-center gap-1 bg-black/25 backdrop-blur text-white/90 rounded-full px-2.5 py-1 text-xs
                      cursor-pointer hover:bg-black/40 transition-colors max-w-48"
               :aria-label="`查看参考来源：《${c.title || '系统知识库'}》 第${c.chunk_index + 1}段`"
               @click="emits('openCitation', c)">
-        <span class="truncate">📖 {{ c.title || '系统知识库' }}</span>
+        <span class="truncate min-w-0">📖 {{ c.title || '系统知识库' }}</span>
+        <span class="shrink-0 text-white/75">第{{ c.chunk_index + 1 }}段</span>
       </button>
     </div>
   </div>
@@ -123,6 +129,11 @@ watch(
 /* markdown 渲染内容（v-html 无 scope 属性 → 经 .msg-markdown 根用 :deep 下钻） */
 .msg-markdown {
   white-space: normal;
+}
+/* 用户消息纯文本（不走 markdown）：保留换行与多空格 */
+.msg-markdown-plain {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .msg-markdown :deep(p) { margin: 0.4em 0; }
 .msg-markdown :deep(p:first-child) { margin-top: 0; }

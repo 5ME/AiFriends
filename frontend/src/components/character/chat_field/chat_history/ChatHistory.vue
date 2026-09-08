@@ -181,8 +181,9 @@ defineExpose({
              @openCitation="emits('openCitation', $event)"
     />
 
-    <!-- 空态：新会话 introduction + 示例问题（D7 文案；点击 quickSend 直达发送） -->
-    <div v-if="!initialLoading && !hasMessages && history.length === 0"
+    <!-- 空态：新会话 introduction + 示例问题（D7 文案；点击 quickSend 直达发送）。
+         与错误态互斥（LD §5:300/301）：loadMore 失败时只显示「加载失败+重试」，不同屏双态 -->
+    <div v-if="!initialLoading && !hasMessages && history.length === 0 && !loadError"
          class="h-full flex flex-col items-center justify-center gap-5 px-6 text-center">
       <p v-if="character?.introduction" class="text-white/90 text-lg leading-relaxed">
         {{ character.introduction }}

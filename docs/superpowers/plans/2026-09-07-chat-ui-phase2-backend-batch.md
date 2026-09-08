@@ -246,7 +246,7 @@ git commit -m "feat(chat): 完整分组 + 日期分隔 + hover 时间 + 引用 c
 
 Run: `cd frontend && npm install marked dompurify`
 
-- [ ] **Step 2：渲染时机（D-L5）**：流式期间纯文本；`rendered=true` 后 `computed(() => DOMPurify.sanitize(marked.parse(content)))` 一次性渲染。历史消息加载即 rendered（ChatHistory pushFront 时置 true）；新消息在 isDone 后由 InputField append 事件标记（`appendToLastMessage({rendered:true})` → ChatWindow append 逻辑补 rendered 分支）。
+- [ ] **Step 2：渲染时机（D-L5 修订 2026-09-08）**：**边流边渲染**——AI 消息 `computed(() => DOMPurify.sanitize(marked.parse(content)))` 常算（`renderedHtml`），无「流式期间纯文本、结束时一次性渲染」的触发；用户消息纯文本 `pre-wrap`（仅 AI 回复走 markdown）。复制按钮按 content 变化重挂（幂等）。历史消息挂载即渲染；遗留 `rendered` 标志已无消费方，随 Phase 3 清理。
 
 - [ ] **Step 3：白名单与代码块**：DOMPurify ALLOWED_TAGS 白名单（strong/em/ul/ol/li/code/pre/blockquote/a/br/h1~h4/p），禁止 img；pre 块右上角复制按钮（navigator.clipboard + toast 反馈）。
 

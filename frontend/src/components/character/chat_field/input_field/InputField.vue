@@ -202,7 +202,8 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
           return
         }
         if (isDone) {
-          // 流式结束 → 最后一条 AI 消息标记 rendered（D-L5），一次性 markdown 渲染
+          // 流式结束（D-L5 修订：markdown 已边流边渲染，无需渲染触发；
+          // rendered 标志已无消费方，Phase 3 状态机重构时清理）
           emits('appendToLastMessage', {rendered: true})
           setStreamState(false, false)
           return

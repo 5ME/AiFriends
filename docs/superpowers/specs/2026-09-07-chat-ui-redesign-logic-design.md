@@ -129,7 +129,7 @@
 - **渲染**：
   - 组首：头像 36px + 名字（AI=角色名 / user=store 用户名）
   - 气泡：AI 左对齐 `--bubble-ai`；用户右对齐 `--bubble-user`；`break-words whitespace-pre-wrap`；max-w 75%
-  - markdown：`message.rendered` 为 true 时 `computed(() => DOMPurify.sanitize(marked.parse(content)))`，否则纯文本（D-L5）；白名单 S §5.3；代码块复制按钮（navigator.clipboard）
+  - markdown（D-L5 已修订为边流边渲染）：AI 消息 `computed(() => DOMPurify.sanitize(marked.parse(content)))` 常算（增量全量重解析 <2ms/次），无 `rendered` 触发；用户消息不走 markdown（纯文本 `pre-wrap`），S §5.3 仅要求 AI 回复；白名单 S §5.3；代码块复制按钮（navigator.clipboard，按 content 变化重挂、幂等）
   - 引用 chips：`message.citations` 非空 → 气泡下横排 chips，点击弹浮层（内容取决于 Q4 结果：原文 / 标题+段落号）
   - hover 时间：`message.time`（格式 `HH:mm`，数据源取决于 Q3）→ `group-hover` 显示
   - 日期分隔：`dateLabel` 非空 → 该消息前插入胶囊分隔线
@@ -253,7 +253,7 @@ sendMessage(text)（统一入口，D-L3）
    ├─ content   → 首片时 thinking=false, streaming=true；appendToLastMessage(delta)；rAF 调度 scrollToBottom（D-L6）
    ├─ audio     → handleAudioChunk（MSE 队列，现有）
    ├─ error     → appendToLastMessage(error 文案)；stopAudio()；streaming=false
-   [DONE]/isDone → streaming=false；最后一条 AI 消息 rendered=true（D-L5）；scrollToBottom
+   [DONE]/isDone → streaming=false；scrollToBottom（markdown 已边流边渲染，无 rendered 触发，D-L5）
 停止生成（■ 按钮）：
  → abortController.abort() + stopAudio()；streaming=false；
    停止后不加标记、保留已有文本（Q8 已拍板）
@@ -301,7 +301,7 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 | 历史错误 | loadError | 居中"加载失败" + 重试 | — |
 | 思考中 | `thinking` | 尾部三点气泡 | — |
 | 流式中 | `streaming` | 输入栏显示 ■ 停止；输入禁用发送但可编辑 | — |
-| 流式结束 | done/error/abort | 停止按钮消失；滚动到底；markdown 渲染 | `rendered=true` |
+| 流式结束 | done/error/abort | 停止按钮消失；滚动到底 | —（markdown 边流边渲染，无需标记，D-L5） |
 | 上滑加载 | 哨兵可见 | 前置插入 + 滚动补偿（F3） | — |
 
 ---

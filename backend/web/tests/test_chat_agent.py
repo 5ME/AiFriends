@@ -521,7 +521,7 @@ class TestChatSSEEndpoint:
         citations = citation_data["citations"]
         assert len(citations) == 1
         assert citations[0]["title"] == "降级路径文档.pdf"
-        assert citations[0]["chunk_index"] == 2
+        assert citations[0]["chunk_index"] == 1  # 展示值「第2段」→ 0-based 归一化存储
         assert citations[0]["content"] == "降级路径正文..."
 
     def test_sse_friend_not_found(self, auth_client):

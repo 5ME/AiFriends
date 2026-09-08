@@ -38,9 +38,9 @@ class TestExtractCitations:
         """2 个来源块 → 2 条四元组，content = 标记行后正文"""
         citations = extract_citations(TOOL_CONTENT)
         assert citations == [
-            {'index': 1, 'title': '社保政策.pdf', 'chunk_index': 1,
+            {'index': 1, 'title': '社保政策.pdf', 'chunk_index': 0,
              'content': '社保制度介绍...'},
-            {'index': 2, 'title': '就业指南.md', 'chunk_index': 5,
+            {'index': 2, 'title': '就业指南.md', 'chunk_index': 4,
              'content': '养老保险说明...'},
         ]
 
@@ -69,7 +69,7 @@ class TestExtractCitations:
         """系统知识库来源 title 为 '系统知识库'"""
         citations = extract_citations('[来源1: 系统知识库 第1段]\n系统内容...')
         assert citations == [
-            {'index': 1, 'title': '系统知识库', 'chunk_index': 1,
+            {'index': 1, 'title': '系统知识库', 'chunk_index': 0,
              'content': '系统内容...'},
         ]
 
@@ -131,6 +131,8 @@ class TestWorkDisconnectCitations:
         assert msg.citations == extract_citations(TOOL_CONTENT)
         # usage 落库自 _output_usage
         assert msg.total_tokens == 15
+        # 断连不应被误标为 LLM 异常（queue.Full 门控修复：_stream_llm_only 断连后不再推 mq）
+        assert view._has_error is False
 
     @patch('web.views.friend.message.chat.chat.check_quota')
     @patch('web.views.friend.message.chat.chat.websockets.connect')
