@@ -4,23 +4,44 @@
 
 **Goal:** 完成聊天输入与语音交互（停止生成、语音状态机、Microphone 受控化、识别回填确认、错误态/重试、音量波形），并清理 PR #35 遗留的 `rendered` 死代码。
 
-**Architecture:** 语音交互实现为「InputField 持有状态 + Microphone 受控组件只出事件」：纯函数 `voiceReducer`（LD §6 转移表）单测锁定状态流转，InputField 按状态切换输入栏三区域（🎤/textarea/波形区），Microphone 通过 `getStream` 注入让 VAD 与 AnalyserNode 波形共用同一条麦克风流。
+**Architecture:** 语音交互实现为「InputField 持有状态 + Microphone 受控组件只出事件」：纯函数 `voiceReducer`（LD §6 转移表）单测锁定状态流转，InputField 按状态切换输入栏三区域（🎤/textarea/波形区），Microphone 通过 `getStream`/`pauseStream`/`resumeStream` 三覆盖让 **VAD 与 AnalyserNode 波形始终共用同一条麦克风流、且流生命周期完全由组件自持**。
 
-**Tech Stack:** Vue 3 Composition API + vitest + jsdom（沿用 Phase 2 引入的测试基建）；`@ricky0123/vad-web@0.0.30`（支持 `getStream` 注入，已核实 d.ts）；后端零改动。
+**Tech Stack:** Vue 3 Composition API + vitest + jsdom（沿用 Phase 2 测试基建）；`@ricky0123/vad-web@0.0.30`（已核实 `RealTimeVADOptions` 含 `getStream`/`pauseStream`/`resumeStream`，且默认 `pauseStream` 会 `stop()` 全部 track、默认 `resumeStream` 自建新流——必须显式覆盖）；后端零改动。
 
 ---
 
-> 状态：待执行
-> 前置：PR #35 已合并 master（`32c4841`）；本计划从 master 切 `feature/gqyin/chat-ui-redesign-phase3`
-> 事实源：`2026-09-07-chat-ui-redesign-spec-for-llm.md`（spec §5.3/§9/§11/§13）+ `2026-09-07-chat-ui-redesign-logic-design.md`（LD §3.8/§3.9/§6/§9.2）+ PR #35 复审遗留项（rendered 死代码）
+> 状态：待执行（**v2，已按 2026-09-08 评审修订**）
+> 前置：PR #35 已合并 master（`32c4841`）；本计划从 master 切 `feature/gqyin/chat-ui-redesign-phase3`（已有分支含本计划 v1，直接复用并追加修订 commit）
+> 事实源：`2026-09-07-chat-ui-redesign-spec-for-llm.md`（spec §5.3/§9/§11/§13）+ `2026-09-07-chat-ui-redesign-logic-design.md`（LD §3.8/§3.9/§6/§9.2）+ PR #35 复审遗留项（rendered 死代码）+ 本计划 v1 评审报告
+> 评审修订记录（v1 → v2）：
+>
+> | 编号 | 结论 | 处置 |
+> |------|------|------|
+> | P0 | vad-web 默认 `pauseStream` 杀 track / `resumeStream` 自建新流 → 共享流一次取消即断裂 | **采纳**：`MicVAD.new` 显式覆盖 `pauseStream: async () => {}` + `resumeStream: async () => streamRef`；流生命周期归 `pause()/destroy()`；`start()` 检测 ended track 重建流与 analyser |
+> | P1 | `start()` 无 `active` 守卫：init 期取消后 VAD 静默启动 | **采纳**：每个 `await` 后 `if (!active)` 守卫 + 清理刚建好的流，避免麦克风常亮 |
+> | P2-1 | 事实核查补全 + 风险表回退方案覆盖 pause/resume 语义 | **采纳**：已写入风险表 |
+> | P2-2 | Task 4 后中间 commit 功能断裂（新 Microphone 无人 start） | **采纳**：Task 4/5 合并为单个 commit「Microphone 受控化 + 状态机接入」 |
+> | P2-3 | E6 网络层并发：speechEnd 后 VAD 仍监听 → transcribing 期间二次 ASR | **采纳**：`onSpeechEnd` 内先 `pause()` 停采集（PCM 已捕获，ASR 不依赖活动流），confirm/cancel 后由 `start()` 重启 |
+> | P2-4 | `getUserMedia({audio:true})` 缺约束 | **采纳**：照抄库默认（channelCount:1 + 回声消除/降噪/自动增益） |
+> | P2-5 | spec §9 文案缺口（"正在聆听…"） | **采纳**：波形下补文案；✕ 沿用 KeyboardIcon（aria-label「取消语音输入」，偏离记录在范围拍板 #9） |
+> | P2-6a | `@started="() => {}"` 空处理器 | **采纳**：移除模板绑定；`started` emit 保留（LD §3.9 契约） |
+> | P2-6b | reducer 超出 LD §6 表的新增行未标注 | **采纳**：错误态 SEND→idle 等标注「补全行」 |
+> | P2-6c | 「语音初始化中…」与红字报错同屏 | **拒绝**：错误态（vad_failed/mic_denied/asr_failed）下波形区 `v-show` 隐藏、只显示 textarea + 红字条，二者不同屏，问题不成立 |
+> | F5 | 停止生成注释「随后的 onerror 幂等清理」措辞不准 | **采纳**：fetch-event-source 2.0.1 外部 abort 为静默 resolve 不触发 onerror（`fetch.js:43-46` 已核实），注释与风险表同步修正 |
+> | F6 | 单测计数算术错误（17→22） | **采纳**：Task 1 后 50 passed、Task 2 后 56 passed，全文 Expected 同步 |
+> | F7 | `closeMic` 零调用方 | **采纳**：删除，`defineExpose({focus, handleSend})` |
+
 > 范围拍板（本计划内的边界决策）：
 > 1. **停止生成按钮**：spec Phase 2 断言 6 后半未交付、PR #35 已声明移入本 Phase，纳入本计划（Task 3）。
 > 2. **`rendered` 死代码**：PR #35 两轮 review 登记「随 Phase 3 清理」，纳入本计划（Task 3）。
 > 3. **自动发送开关（800ms 定时器 + ⚙ UI + useChatSettings）**：**不在本计划**——LD Phase 4 表把 `useChatSettings.js` 与 WindowHeader ⚙ 设置弹层归入 Phase 4；Phase 3 只实现 spec 断言 4「默认不自动发送」（confirm 仅回填）。
 > 4. **不引入** `@vue/test-utils`（LD §9.1：仅在组件级用例需要时引入——本轮纯函数单测 + 手工验收足够）；停止生成/真实麦克风流程按 LD §9.3 归为手工验收。
-> 5. E6 与 LD §6 的冲突拍板：`transcribing` 期间 🎤 按钮 **disabled**（E6，防并发 ASR）；Esc 仍可 CANCEL（LD §6 表 transcribing+CANCEL→idle 行保留）。
+> 5. E6 与 LD §6 的冲突拍板：`transcribing` 期间 🎤 按钮 **disabled**（E6，防并发 ASR）；Esc 仍可 CANCEL（LD §6 表 transcribing+CANCEL→idle 行保留）。另按评审 P2-3 在**网络层**也切断并发：speechEnd 即暂停 VAD 采集。
 > 6. Microphone emits 偏离声明：LD §3.9 清单（started/speechEnded/transcript/error/cancel）之外**增加 `speechStart`**——LD §6 表「SPEECH_START → 打断 TTS（现状保留）」需要该信号，spec 清单是最小集而非封闭集，属必要的补全。
 > 7. CANCEL 后的迟到结果丢弃：取消聆听/识别后，in-flight ASR 的 `transcript`/`error` 事件必须在 InputField 侧按当前态守卫丢弃（LD §6「transcribing+CANCEL → idle，忽略结果」）。
+> 8. **流生命周期归属**（评审 P0）：track 的 start/stop 完全由 Microphone 的 `pause()/destroy()` 自持，`vadInstance.pause()` 不得动流（覆盖 pauseStream 为空操作）；每次录音重新 getUserMedia（权限已授权不会重复弹窗），取消/识别完成后立即停流——浏览器「录音中」指示随状态熄灭，无隐私残留。
+> 9. **取消入口视觉**（评审 P2-5）：右侧取消按钮沿用 KeyboardIcon（历史一致、零跳变），语义 = ✕ 取消（aria-label「取消语音输入」）；spec §9 的「正在聆听…」文案按评审补入波形区。
+> 10. **commit 粒度**（评审 P2-2）：Task 4 = 「Microphone 受控化 + InputField 状态机接入」单 commit——两者拆分时任何中间态都会导致语音入口不可用（新 Microphone 无 start 调用方 / 旧 InputField 等不到新 emits）。
 
 ---
 
@@ -35,17 +56,16 @@ Run:
 
 ```bash
 cd /d/MyProjects/AiFriends   # 仓库根
-git checkout master
-git pull origin master       # 应已在 32c4841（PR #35 合并提交）
-git checkout -b feature/gqyin/chat-ui-redesign-phase3
+git checkout feature/gqyin/chat-ui-redesign-phase3   # v1 计划分支（含 f0bc23a）
+git pull origin feature/gqyin/chat-ui-redesign-phase3
 ```
 
-Expected: 新分支基于 `32c4841`，工作树与 master 一致。
+Expected: 分支 head 含计划 v1（`f0bc23a`）与本修订 commit；基线 = master `32c4841`。
 
 - [ ] **Step 2：确认基线**
 
-Run: `git log --oneline -1 && npm --prefix frontend run test:unit`
-Expected: `32c4841 Merge pull request #35 ...`；`28 passed`（既有测试不受影响）。
+Run: `git merge-base --is-ancestor 32c4841 HEAD && git log --oneline -1 && npm --prefix frontend run test:unit`
+Expected: exit 0；`28 passed`（既有测试不受影响）。
 
 ---
 
@@ -64,7 +84,7 @@ import { voiceReducer, VOICE_STATES, VOICE_EVENTS } from '../voiceState'
 
 const S = VOICE_STATES, E = VOICE_EVENTS
 
-describe('voiceReducer（LD §6 转移表全行）', () => {
+describe('voiceReducer（LD §6 转移表全行 + 标注的补全行）', () => {
   it('idle + CLICK_MIC → listening', () => {
     expect(voiceReducer(S.IDLE, E.CLICK_MIC)).toBe(S.LISTENING)
   })
@@ -107,7 +127,8 @@ describe('voiceReducer（LD §6 转移表全行）', () => {
   it.each([S.VAD_FAILED, S.MIC_DENIED, S.ASR_FAILED])('%s + RETRY → listening', (state) => {
     expect(voiceReducer(state, E.RETRY)).toBe(S.LISTENING)
   })
-  it.each([S.IDLE, S.VAD_FAILED, S.MIC_DENIED, S.ASR_FAILED])('%s + SEND → idle（错误态可正常打字发送）', (state) => {
+  // 补全行：LD §6 表未覆盖——错误态下用户仍可打字直接发送，SEND 一律回 idle
+  it.each([S.IDLE, S.VAD_FAILED, S.MIC_DENIED, S.ASR_FAILED])('%s + SEND → idle（补全行：错误态可打字发送）', (state) => {
     expect(voiceReducer(state, E.SEND)).toBe(S.IDLE)
   })
   it('未知事件 → 原状态（no-op）', () => {
@@ -159,7 +180,7 @@ export const VOICE_EVENTS = {
 const TRANSITIONS = {
   [VOICE_STATES.IDLE]: {
     [VOICE_EVENTS.CLICK_MIC]: VOICE_STATES.LISTENING,
-    [VOICE_EVENTS.SEND]: VOICE_STATES.IDLE,
+    [VOICE_EVENTS.SEND]: VOICE_STATES.IDLE,          // 补全行：idle 打字发送
   },
   [VOICE_STATES.LISTENING]: {
     [VOICE_EVENTS.SPEECH_START]: VOICE_STATES.LISTENING,
@@ -181,15 +202,15 @@ const TRANSITIONS = {
   },
   [VOICE_STATES.VAD_FAILED]: {
     [VOICE_EVENTS.RETRY]: VOICE_STATES.LISTENING,
-    [VOICE_EVENTS.SEND]: VOICE_STATES.IDLE,
+    [VOICE_EVENTS.SEND]: VOICE_STATES.IDLE,          // 补全行：错误态打字发送
   },
   [VOICE_STATES.MIC_DENIED]: {
     [VOICE_EVENTS.RETRY]: VOICE_STATES.LISTENING,
-    [VOICE_EVENTS.SEND]: VOICE_STATES.IDLE,
+    [VOICE_EVENTS.SEND]: VOICE_STATES.IDLE,          // 补全行：错误态打字发送
   },
   [VOICE_STATES.ASR_FAILED]: {
     [VOICE_EVENTS.RETRY]: VOICE_STATES.LISTENING,
-    [VOICE_EVENTS.SEND]: VOICE_STATES.IDLE,
+    [VOICE_EVENTS.SEND]: VOICE_STATES.IDLE,          // 补全行：错误态打字发送
   },
 }
 
@@ -201,7 +222,7 @@ export function voiceReducer(state, event) {
 - [ ] **Step 4：运行确认通过**
 
 Run: `cd frontend && npm run test:unit`
-Expected: `voiceState.test.js` 全绿，总计 `28 + 17 = 45 passed`（17 = 上表用例数：13 it + it.each 展开 4 + 3 内层 → 实际按运行输出为准，全部 passed）。
+Expected: `voiceState.test.js` 全绿（**22 个用例**），总计 **`28 + 22 = 50 passed`**。
 
 - [ ] **Step 5：提交**
 
@@ -268,7 +289,7 @@ export function shouldSendOnEnter(e) {
 - [ ] **Step 4：运行确认通过**
 
 Run: `cd frontend && npm run test:unit`
-Expected: `inputKey.test.js` 全绿，总计 `45 + 6 = 51 passed`。
+Expected: `inputKey.test.js` 全绿，总计 **`50 + 6 = 56 passed`**。
 
 - [ ] **Step 5：提交**
 
@@ -335,13 +356,14 @@ function handleKeydown(e) {
 
 ```js
 // 停止生成（spec Phase 2 断言 6 后半 / Phase 3 断言 3）：
-// abort → 后端断连路径落库（服务端保留完整输出）；前端已生成文本保留在 history，不再追加
+// fetch-event-source 2.0.1 外部 signal abort → 静默 resolve，不触发 onerror（fetch.js:43-46 已核实）；
+// 后端断连路径落库（服务端保留完整输出）；前端已生成文本保留在 history，不再追加
 function stopGenerate() {
   if (!abortController) return
   abortController.abort()
   abortController = null
   stopAudio()
-  setStreamState(false, false)  // 随后的 onerror 幂等清理（同 processId，无副作用）
+  setStreamState(false, false)
 }
 ```
 
@@ -372,7 +394,7 @@ function stopGenerate() {
     </button>
 ```
 
-> 说明：语音状态导致的 disable（listening/transcribing）在 Task 5 接入状态机时再合并进 `:disabled`。
+> 说明：语音状态导致的 disable（listening/transcribing）在 Task 4 接入状态机时合并进 `:disabled`。
 
 - [ ] **Step 5：ChatWindow 删除 `rendered` 分支**
 
@@ -399,7 +421,7 @@ cd frontend && npm run test:unit
 npm run build
 ```
 
-Expected: `51 passed`；`✓ built in ...s`（exit 0，仅既有 daisyUI/chunk 警告）。
+Expected: **`56 passed`**；`✓ built in ...s`（exit 0，仅既有 daisyUI/chunk 警告）。
 
 - [ ] **Step 8：手工验证（断言 3 前置冒烟）**
 
@@ -415,14 +437,17 @@ git commit -m "feat(chat): 停止生成按钮（保留已生成文本）+ 清理
 
 ---
 
-## Task 4：Microphone 受控化 + AnalyserNode 音量波形
+## Task 4：Microphone 受控化 + InputField 语音状态机接入（单 commit，评审 P2-2）
+
+> 为什么合并：只换 Microphone（旧 InputField 无人调 `start()` → 🎤 永久「语音初始化中…」）或只换 InputField（旧 Microphone 无 `start/retry` 暴露）都会产生功能断裂的中间 commit；语音链路整体切换后每个 commit 才保持可用（bisect/回滚友好）。
 
 **Files:**
-- Modify（重写 script/template/style）: `frontend/src/components/character/chat_field/input_field/Microphone.vue`
+- Modify（重写）: `frontend/src/components/character/chat_field/input_field/Microphone.vue`
+- Modify: `frontend/src/components/character/chat_field/input_field/InputField.vue`
 
-- [ ] **Step 1：重写为受控组件（完整代码替换）**
+- [ ] **Step 1：重写 Microphone.vue（完整替换）**
 
-以下为完整新文件内容（保留：VAD Cache API 缓存、PCM16 转换、ASR 请求；新增：`getStream` 注入共用流、错误映射、AnalyserNode 波形、`start/pause/destroy/retry` 暴露、`transcript/error/cancel` emits）：
+保留：VAD Cache API 缓存、PCM16 转换、ASR 请求、阈值参数。新增：三覆盖流管理（P0）、`active` 守卫（P1）、speechEnd 即暂停采集（P2-3）、约束参数（P2-4）、「正在聆听…」文案（P2-5）、`start/pause/destroy/retry` 暴露、`transcript/error/cancel` emits。
 
 ```vue
 <script setup lang="ts">
@@ -442,12 +467,23 @@ const mode = ref<'wave' | 'transcribing'>('wave')  // 波形区视觉：音浪 /
 const bars = ref(new Array(32).fill(8))            // 32 根柱高（px），AnalyserNode 实时驱动
 
 let vadInstance = null
-let streamRef = null          // getUserMedia 流：VAD 与 Analyser 共用（getStream 注入）
+let streamRef = null          // getUserMedia 流：VAD 与 Analyser 共用（三覆盖保证不脱钩）
 let audioContext = null
 let analyser = null
 let rafId = 0
-let active = false            // 组件是否处于工作期（start 后 true，pause/destroy 后 false）
+let active = false            // 工作期标志：start 后 true；P1 竞态守卫依赖它
 const preferReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+// 与 vad-web 默认 getUserMedia 约束一致（channelCount:1 + 回声消除/降噪/自动增益，
+// 评审 P2-4），避免 VAD 误触发与音质回归
+const AUDIO_CONSTRAINTS = {
+  audio: {
+    channelCount: 1,
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  }
+}
 
 const VAD_CACHE = 'vad-assets-v1';
 const VAD_PATH = '/static/frontend/vad/';
@@ -477,20 +513,25 @@ const initVAD = async () => {
   const origFetch = window.fetch;
   window.fetch = makeCachedFetch(origFetch);
   try {
-    // getStream 注入：VAD 复用外部 getUserMedia 的流（与 AnalyserNode 同源）
     vadInstance = await MicVAD.new({
       baseAssetPath: baseUrl,
       startOnLoad: false,
+      // 评审 P0：库默认 pauseStream 会 stop() 全部 track、默认 resumeStream 会自建新流——
+      // 显式覆盖为空操作 + 返回自持流；track 生命周期完全归 pause()/destroy()，
+      // 保证 VAD 与 Analyser 始终共用同一条流
       getStream: async () => streamRef,
+      pauseStream: async () => {},
+      resumeStream: async () => streamRef,
       onSpeechStart: () => {
         emits("speechStart")   // 说话开始 → InputField 打断 TTS（现状保留）
       },
       onSpeechEnd: (audio) => {
+        // 评审 P2-3（E6 网络层）：speechEnd 即暂停采集——PCM 已捕获、ASR 不依赖活动流，
+        // transcribing 期间不会再触发第二个 speechEnd/ASR；录音指示随之熄灭
         mode.value = 'transcribing'
-        stopWave()
+        pause()
         emits("speechEnded")
-        const pcm16 = float32ToInt16(audio);
-        sendToBackend(pcm16);
+        sendToBackend(float32ToInt16(audio));
       },
       ortConfig: (ort) => {
         ort.env.wasm.wasmPaths = baseUrl;
@@ -536,7 +577,7 @@ const sendToBackend = async (arrayBuffer) => {
   }
 };
 
-// ==== AnalyserNode 实时波形（spec §5.3：替换 CSS 定时器动画；reduced-motion 柱高固定 8px）====
+// ==== AnalyserNode 实时波形（spec §5.3；reduced-motion 柱高固定 8px）====
 function setupAnalyser() {
   if (!streamRef || analyser) return
   audioContext = new AudioContext()
@@ -569,19 +610,37 @@ function stopWave() {
   }
 }
 
+// 停流 + 清引用 + 关 analyser（P0 配套：track 生命周期唯一归属点）
+function teardownStream() {
+  stopWave()
+  if (streamRef) {
+    streamRef.getTracks().forEach(t => t.stop())
+    streamRef = null
+  }
+  if (audioContext) {
+    audioContext.close().catch(() => {})
+    audioContext = null
+    analyser = null
+  }
+}
+
 // ==== 受控 API ====
 async function start() {
   active = true
   mode.value = 'wave'
   try {
-    if (!streamRef) {
-      streamRef = await navigator.mediaDevices.getUserMedia({audio: true})
+    // 已授权过 → 不重复弹权限框；每次录音重新申请（P0：暂停即停流）
+    if (!streamRef || streamRef.getTracks().every(t => t.readyState === 'ended')) {
+      streamRef = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS)
       setupAnalyser()
     }
+    if (!active) { teardownStream(); return }   // P1：getUserMedia 期间被取消 → 停掉刚建的流
     if (!vadInstance) {
       await initVAD()
     }
+    if (!active) { teardownStream(); return }   // P1：initVAD（WASM 下载）期间被取消
     await vadInstance.start()
+    if (!active) { await pause(); return }      // P1：vad.start() 完成前被取消
     startWave()
     emits("started")
   } catch (e) {
@@ -593,28 +652,19 @@ async function start() {
 
 async function pause() {
   active = false
-  stopWave()
   if (vadInstance) {
     try { await vadInstance.pause() } catch (e) { console.error('VAD pause 失败:', e) }
   }
+  teardownStream()
 }
 
 async function destroy() {
   active = false
-  stopWave()
   if (vadInstance) {
     try { await vadInstance.destroy() } catch (e) { console.error('VAD destroy 失败:', e) }
     vadInstance = null
   }
-  if (streamRef) {
-    streamRef.getTracks().forEach(t => t.stop())
-    streamRef = null
-  }
-  if (audioContext) {
-    try { await audioContext.close() } catch (e) { console.error('AudioContext close 失败:', e) }
-    audioContext = null
-    analyser = null
-  }
+  teardownStream()
   vadReady.value = false
 }
 
@@ -647,11 +697,14 @@ defineExpose({start, pause, destroy, retry})
             :style="{ animationDelay: '0.4s' }"></span>
       <span class="text-white/40 text-sm ml-2">语音初始化中...</span>
     </div>
-    <!--音浪（AnalyserNode 实时音量驱动）-->
-    <div v-else-if="mode === 'wave'" class="flex items-center justify-center gap-1 h-6 flex-1" aria-hidden="true">
-      <div v-for="(h, i) in bars" :key="i"
-           class="w-0.5 bg-blue-400 rounded-full"
-           :style="{ height: h + 'px' }"></div>
+    <!--音浪（AnalyserNode 实时音量驱动）+「正在聆听…」文案（spec §9 / 评审 P2-5）-->
+    <div v-else-if="mode === 'wave'" class="flex flex-col items-center justify-center gap-0.5 flex-1" aria-hidden="true">
+      <div class="flex items-center gap-1 h-5">
+        <div v-for="(h, i) in bars" :key="i"
+             class="w-0.5 bg-blue-400 rounded-full"
+             :style="{ height: h + 'px' }"></div>
+      </div>
+      <span class="text-white/40 text-[11px] leading-none">正在聆听…</span>
     </div>
     <!--识别中（transcribing）-->
     <div v-else class="flex items-center justify-center gap-1.5 flex-1">
@@ -663,6 +716,7 @@ defineExpose({start, pause, destroy, retry})
             :style="{ animationDelay: '0.4s' }"></span>
       <span class="text-white/40 text-sm ml-2">识别中...</span>
     </div>
+    <!--取消（✕ 语义，沿用 KeyboardIcon，aria-label 明确）-->
     <div @click="emits('cancel')"
          class="absolute right-2 w-8 h-8 flex justify-center items-center cursor-pointer"
          aria-label="取消语音输入">
@@ -689,34 +743,21 @@ defineExpose({start, pause, destroy, retry})
 </style>
 ```
 
-- [ ] **Step 2：构建校验**
+- [ ] **Step 2：InputField script 接线（完整替换 script 顶部至 defineExpose 的相关部分）**
 
-Run: `cd frontend && npm run build`
-Expected: exit 0。注意：此阶段 Microphone 新 emits 尚无消费方（InputField 还是旧接线），构建不报错即可；Task 5 完成接线。
+import 行更新（vue import 加 `computed`）：
 
-- [ ] **Step 3：提交**
-
-```bash
-git add frontend/src/components/character/chat_field/input_field/Microphone.vue
-git commit -m "refactor(chat): Microphone 受控化（start/pause/destroy/retry + 错误映射 + AnalyserNode 波形）"
+```js
+import {computed, nextTick, onUnmounted, ref, useTemplateRef, watch} from "vue";
 ```
 
----
-
-## Task 5：InputField 语音状态机接入（核心）
-
-**Files:**
-- Modify: `frontend/src/components/character/chat_field/input_field/InputField.vue`
-
-- [ ] **Step 1：script 头部接线**
-
-`InputField.vue` import 增加（同时把 vue import 补上 `computed`：`import {computed, nextTick, onUnmounted, ref, useTemplateRef, watch} from "vue"`）：
+新增 import：
 
 ```js
 import { voiceReducer, VOICE_STATES, VOICE_EVENTS } from "@/utils/voiceState";
 ```
 
-删除 `const showMic = ref(false)`；新增：
+删除 `const showMic = ref(false)`，新增语音状态机区（放在 `streaming` 定义之后）：
 
 ```js
 // ===== 语音状态机（LD §6）：状态由 InputField 持有，Microphone 只出事件 =====
@@ -819,41 +860,25 @@ watch(micState, (s) => {
 })
 ```
 
-`onUnmounted` 增加一行（保留现有逻辑）：
+`onUnmounted` 现有逻辑后追加一行：
 
 ```js
   window.removeEventListener('keydown', onGlobalKeydown)
 ```
 
-- [ ] **Step 2：发送路径并入状态机**
+- [ ] **Step 3：handleSend 并入状态机**
 
-`handleSend` 开头（`if (!content) return` 之后）增加：
+`handleSend` 中 `if (!content) { return }` 之后增加：
 
 ```js
-  // 发送即回 idle（confirm→idle；错误态/常态不变语义）；同步 pause 语音
+  // 发送即回 idle（confirm→idle；错误态/常态语义不变）；同步暂停语音
   micState.value = voiceReducer(micState.value, VOICE_EVENTS.SEND)
   micRef.value?.pause()
 ```
 
-`handleKeydown` 内 send 前无需变化；textarea `@input` 增加 confirm 编辑事件：
+- [ ] **Step 4：删除旧语音接线（closeMic/handleStop/showMic）**
 
-```html
-      <textarea class="flex-1 min-w-0 resize-none bg-black/35 backdrop-blur text-base text-white rounded-xl
-                      px-3 py-2.5 leading-6 outline-none"
-              placeholder="文本输入"
-              aria-label="消息输入"
-              ref="input-ref" v-model="message"
-              rows="1"
-              style="height: 48px; overflow: hidden;"
-              @input="transition(VOICE_EVENTS.EDIT_TEXT)"
-              @keydown="handleKeydown"></textarea>
-```
-
-> 说明：`EDIT_TEXT` 仅在 confirm 态有效（reducer 表），其他态 no-op，无需条件判断。
-
-- [ ] **Step 3：删除旧语音接线**
-
-删除以下整段（被状态机取代）：
+删除以下整段：
 
 ```js
 function closeMic() {
@@ -869,15 +894,13 @@ function handleStop() {
 }
 ```
 
-`defineExpose` 更新为：
+`defineExpose` 替换为（评审 F7：closeMic 零调用方，删除）：
 
 ```js
-defineExpose({focus, closeMic: cancelMic, handleSend})
+defineExpose({focus, handleSend})
 ```
 
-（`closeMic` 名保留以兼容 ChatWindow/ChatIndex 潜在调用，语义 = 取消语音。）
-
-- [ ] **Step 4：模板重构（输入栏三区域）**
+- [ ] **Step 5：模板重构（输入栏三区域 + 错误条）**
 
 将现有 `<form v-show="!showMic" ...>` 整块（含麦克风按钮、textarea、发送按钮）与 `<div v-if="showMic">`（KeepAlive + Microphone）**整体替换**为：
 
@@ -914,7 +937,6 @@ defineExpose({focus, closeMic: cancelMic, handleSend})
     <!-- 波形区（常驻挂载，v-show 切换——VAD 实例随 InputField 生命周期，KeepAlive 已移除） -->
     <div v-show="!isTextMode" class="flex-1 min-w-0">
       <Microphone ref="mic-ref"
-                  @started="() => {}"
                   @speechStart="onMicSpeechStart"
                   @speechEnded="onMicSpeechEnded"
                   @transcript="onMicTranscript"
@@ -954,11 +976,7 @@ defineExpose({focus, closeMic: cancelMic, handleSend})
 </template>
 ```
 
-同步删除模板内旧的「<!-- 输入框 -->\n<!-- 输入框（textarea 自动增高...）」重复注释行（合并为一条）。
-
-- [ ] **Step 5：script 头部残留清理**
-
-删除旧 `showMic` 相关引用（Step 1 已删 ref；确认模板中无 `showMic` 残留、`<KeepAlive>` 已随 Step 4 移除）；确认 `computed` 已加入 vue import（Step 1 已含）。
+同步删除模板内旧的「<!-- 输入框 -->\n<!-- 输入框（textarea 自动增高...）」重复注释行（合并为一条，已在上面模板中体现）。
 
 - [ ] **Step 6：构建 + 单测**
 
@@ -969,18 +987,23 @@ cd frontend && npm run test:unit
 npm run build
 ```
 
-Expected: `51 passed`（voiceState/inputKey 不受影响）；build exit 0。
+Expected: **`56 passed`**（voiceState/inputKey 不受影响）；build exit 0。
 
-- [ ] **Step 7：提交**
+- [ ] **Step 7：本地手工冒烟（核心路径）**
+
+本地前后端联调，逐项过 Task 6 清单第 3~13 项。
+Expected: 全过；特别注意——**第二次录音必须正常**（取消后重录、识别后重录均验证，评审 P0 修复点）。
+
+- [ ] **Step 8：提交**
 
 ```bash
-git add frontend/src/components/character/chat_field/input_field/InputField.vue
-git commit -m "feat(chat): 语音状态机接入 InputField（聆听/识别/回填确认/错误重试/Esc 取消/覆盖重录）"
+git add frontend/src/components/character/chat_field/input_field/Microphone.vue frontend/src/components/character/chat_field/input_field/InputField.vue
+git commit -m "feat(chat): 语音状态机接入（Microphone 受控化 + InputField 三区域切换/回填确认/错误重试/Esc 取消）"
 ```
 
 ---
 
-## Task 6：全局验证 + 手工验收清单 + 部署
+## Task 5：全局验证 + 手工验收清单 + 部署
 
 **Files:**
 - 无（后端零改动）
@@ -994,9 +1017,9 @@ cd frontend && npm run test:unit
 npm run build
 ```
 
-Expected: `51 passed`；build exit 0。
+Expected: **`56 passed`**；build exit 0。
 
-- [ ] **Step 2：手工验收清单（对照 spec §13 Phase 3 断言 1~6 + Phase 2 断言 6 后半）**
+- [ ] **Step 2：手工验收清单（对照 spec §13 Phase 3 断言 1~6 + Phase 2 断言 6 后半 + 评审 P0/P1 修复点）**
 
 本地前后端联调（`npm run dev` + Django `:8000`）：
 
@@ -1005,15 +1028,16 @@ Expected: `51 passed`；build exit 0。
 | 1 | 断言 1：输入 200 字 | 无横向滚动条；超 4 行内部滚动（Phase 2 已实现，回归即可） |
 | 2 | 断言 2：中文输入法候选状态按 Enter | 不发送（Phase 2 已实现，回归即可） |
 | 3 | **断言 3 + Phase 2 断言 6 后半：流式中点 ■** | 已生成文本保留、流不再追加；按钮变回 ➤；可立即发送；TTS 停止 |
-| 4 | 断言 4：🎤 说一句话 | 波形随音量起伏（静音≈4px、大声≈20px）；识别后文本**回填** textarea 可编辑，默认不自动发送；Enter/➤ 发送 |
-| 5 | 断言 5：浏览器拒绝麦克风权限 | 内联"请允许使用麦克风后重试" + 重试按钮，不再卡"语音初始化中..."；允许权限后点重试 → 正常聆听 |
-| 6 | 断言 6：说话太短/杂音导致 ASR 空文本 | 内联"未听清，请重试" |
-| 7 | E6：识别中（transcribing）点 🎤 | 无效（禁用）；Esc 取消回 idle |
-| 8 | 覆盖重录：confirm 态再点 🎤 | 回填文本被清空，重新进入聆听 |
-| 9 | Esc 取消聆听 | 回 idle，音频丢弃，无发送 |
-| 10 | 说话开始打断 TTS（现状保留） | AI 语音停止；流 UI 冻结；可发新消息 |
-| 11 | reduced-motion | 系统开启"减弱动态效果"时柱高恒定 8px |
-| 12 | 会话切换/关闭窗口 | 无控制台报错；麦克风指示消失；VAD 资源释放 |
+| 4 | 断言 4：🎤 说一句话 | 波形随音量起伏（静音≈4px、大声≈20px）+「正在聆听…」；识别后文本**回填** textarea 可编辑，默认不自动发送；Enter/➤ 发送 |
+| 5 | **P0 修复点：取消（Esc/✕）后再次点 🎤 录音** | 第二次录音正常（波形动、能识别）——共享流未断裂；浏览器「录音中」指示随取消熄灭、随重录再亮 |
+| 6 | **P0 修复点：识别回填（confirm）后再点 🎤 覆盖重录** | 回填文本清空、第二次录音正常 |
+| 7 | 断言 5：浏览器拒绝麦克风权限 | 内联"请允许使用麦克风后重试" + 重试按钮，不再卡"语音初始化中..."；允许权限后点重试 → 正常聆听 |
+| 8 | 断言 6：说话太短/杂音导致 ASR 空文本 | 内联"未听清，请重试" |
+| 9 | **P1 修复点：首次点 🎤 后立刻 Esc（VAD WASM 下载中）** | 回 idle、录音指示熄灭、无静默采集；不产生隐藏副作用（AI 流状态不受影响） |
+| 10 | E6：识别中（transcribing）点 🎤 | 无效（禁用）；Esc 取消回 idle；识别期间再次说话不会发起第二次 ASR（P2-3） |
+| 11 | 说话开始打断 TTS（现状保留） | AI 语音停止；流 UI 冻结；可发新消息 |
+| 12 | reduced-motion | 系统开启"减弱动态效果"时柱高恒定 8px |
+| 13 | 会话切换/关闭窗口 | 无控制台报错；录音指示消失；VAD 资源释放（destroy） |
 
 - [ ] **Step 3：部署云服务器（验收用）**
 
@@ -1024,7 +1048,7 @@ ACR_IMAGE=crpi-2ltqkeifvac3nlun.cn-shanghai.personal.cr.aliyuncs.com/gqyin-sh/gq
 # 服务器（8.153.201.12）：cd /home/gqyin/source-code/ai-friends && ./deploy/server-deploy.sh
 ```
 
-Expected: 健康检查 `{"status":"ok","db":"ok","redis":"ok","celery":"ok"}`；云上复验手工清单 3~11。
+Expected: 健康检查 `{"status":"ok","db":"ok","redis":"ok","celery":"ok"}`；云上复验手工清单 3~13。
 
 - [ ] **Step 4：提交（如有验收后修复则另开 fix commit）**
 
@@ -1039,7 +1063,8 @@ git commit -m "docs(chat): Phase 3 验收完成记录"
 
 ## 风险与回滚
 
-- **语音链路无自动化测试**（LD §9.3：真实麦克风权限流归手工）——Task 6 手工清单是合入门槛；若后续回归频繁，再评估引入 `@vue/test-utils` 对 Microphone 做 mock 级组件测试（非本期）。
-- **`getStream` 注入与 vad-web 0.0.30 的兼容性**：已核实 `MicVAD.new(options: Partial<RealTimeVADOptions>)` 支持 `getStream`（`dist/real-time-vad.d.ts:33`）；若实机发现异常，回退方案 = 不自建 getUserMedia（恢复 vad-web 内部申请），波形改为 `onFrameProcessed` 概率驱动（近似音量），代价小。
-- **停止生成的 abort 语义**：前端 abort → 后端断连路径落库（`work()` C2，已含 try/except 防护，PR #35 修复）——停止后服务端仍保留完整输出，前端仅显示已生成部分（与断言 3 一致）。
-- 回滚 = revert Task 3~5 三个 commit；Phase 1/2 功能不受影响（改动仅限 InputField/Microphone/ChatWindow/ChatHistory 四文件）。
+- **vad-web 流语义（评审 P0，已按库真实语义设计）**：`pauseStream`/`resumeStream` 默认实现会杀流/自建流，本计划显式覆盖为空操作 + 返回自持流，track 生命周期唯一归属 `pause()/destroy()`；每次录音重新 getUserMedia（已授权不重复弹窗），取消/识别后即停流（录音指示熄灭）。**回退方案**：若实机发现 0.0.30 行为与 d.ts 不符（如 `resumeStream` 返回 null 报错），改为「取消即 `destroy()` 全量重建 + 下次 start 重新 initVAD」（WASM 已 Cache API 缓存，代价 = 每次重录多一次 MicVAD.new，秒级）；波形不受影响（每次 setupAnalyser 重建）。
+- **停止生成的 abort 语义（评审 F5 已核实）**：fetch-event-source 2.0.1 外部 signal abort → 静默 resolve，**不触发 onerror、不追加错误文本**；后端断连路径落库（`work()` C2，已含 try/except 防护，PR #35 修复）——停止后服务端仍保留完整输出，前端仅显示已生成部分（与断言 3 一致）。
+- **语音链路无自动化测试**（LD §9.3：真实麦克风权限流归手工）——Task 5 手工清单是合入门槛（含 P0/P1 专项第 5/6/9 项）；若后续回归频繁，再评估引入 `@vue/test-utils` 对 Microphone 做 mock 级组件测试（非本期）。
+- **P1 竞态类问题**（init 期取消）已用 `active` 守卫 + teardown 覆盖三个 await 点；若新增 await 步骤，必须同样补守卫（已在代码注释标注）。
+- 回滚 = revert Task 3 / Task 4 两个 commit（每个 commit 独立可用）；Phase 1/2 功能不受影响（改动仅限 InputField/Microphone/ChatWindow/ChatHistory 四文件）。
