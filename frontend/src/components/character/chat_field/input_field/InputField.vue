@@ -7,7 +7,7 @@ import {computed, nextTick, onUnmounted, ref, useTemplateRef, watch} from "vue";
 import Microphone from "@/components/character/chat_field/input_field/Microphone.vue";
 import {useVoiceToggle} from "@/composables/useVoiceToggle.js";
 import {shouldSendOnEnter} from "@/utils/inputKey";
-import { voiceReducer, VOICE_STATES, VOICE_EVENTS } from "@/utils/voiceState";
+import { voiceReducer, VOICE_STATES, VOICE_EVENTS, acceptTranscript, acceptMicError } from "@/utils/voiceState";
 
 const props = defineProps(['friendId'])
 const emits = defineEmits(['pushBackMessage', 'appendToLastMessage', 'streamState'])
@@ -59,7 +59,8 @@ function cancelMic() {
 function retryMic(kind) {
   // 复审修复：仅错误态可重试（否则 micRef.retry→start 会启动无 UI 指示的录音）
   if (![VOICE_STATES.VAD_FAILED, VOICE_STATES.MIC_DENIED, VOICE_STATES.ASR_FAILED].includes(micState.value)) return
-  const k = kind === VOICE_STATES.VAD_FAILED ? 'vad_init_failed' : kind   // 统一 kind 字符串族
+  const KINDS = { [VOICE_STATES.VAD_FAILED]: 'vad_init_failed', [VOICE_STATES.MIC_DENIED]: 'mic_permission_denied' }   // 统一 kind 字符串族（vad/mic 对称）
+  const k = KINDS[kind] || kind
   const seq = ++micSeqCounter
   activeMicSeq.value = seq
   micErrorKind.value = ''
@@ -107,15 +108,14 @@ function onMicSpeechEnded() {
 
 function onMicTranscript(text, seq) {
   // 迟到结果（CANCEL 后 in-flight ASR）或旧会话结果丢弃：状态 + seq 令牌双守卫（LD §6「忽略结果」）
-  if (micState.value !== VOICE_STATES.TRANSCRIBING || seq !== activeMicSeq.value) return
+  if (!acceptTranscript(micState.value, seq, activeMicSeq.value)) return
   message.value = text       // 回填 textarea（D6：不再识别即发送；watch(message) 自动 autoGrow）
   transition(VOICE_EVENTS.TRANSCRIPT_TEXT)
 }
 
 function onMicError(kind, seq) {
   // 迟到错误同样丢弃：asr_failed 只在 transcribing 有效，vad/mic 错误只在 listening 有效
-  const expectState = kind === 'asr_failed' ? VOICE_STATES.TRANSCRIBING : VOICE_STATES.LISTENING
-  if (micState.value !== expectState || seq !== activeMicSeq.value) return
+  if (!acceptMicError(micState.value, kind, seq, activeMicSeq.value)) return
   micErrorKind.value = kind
   const eventMap = {
     vad_init_failed: VOICE_EVENTS.VAD_INIT_FAILED,

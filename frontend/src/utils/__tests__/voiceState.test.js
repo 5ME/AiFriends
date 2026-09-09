@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { voiceReducer, VOICE_STATES, VOICE_EVENTS } from '../voiceState'
+import { voiceReducer, VOICE_STATES, VOICE_EVENTS, acceptTranscript, acceptMicError } from '../voiceState'
 
 const S = VOICE_STATES, E = VOICE_EVENTS
 
@@ -56,5 +56,34 @@ describe('voiceReducer（LD §6 转移表全行 + 标注的补全行）', () => 
   })
   it('未知状态 → 原状态（no-op）', () => {
     expect(voiceReducer('ghost', E.SEND)).toBe('ghost')
+  })
+})
+
+describe('acceptTranscript / acceptMicError（Task 4 复审：seq 守卫契约）', () => {
+  it('transcript：状态与令牌均匹配 → true', () => {
+    expect(acceptTranscript(S.TRANSCRIBING, 2, 2)).toBe(true)
+  })
+  it('transcript：状态不匹配 → false（CANCEL 后迟到结果）', () => {
+    expect(acceptTranscript(S.IDLE, 1, 1)).toBe(false)
+  })
+  it('transcript：令牌不匹配 → false（旧会话迟到结果）', () => {
+    expect(acceptTranscript(S.TRANSCRIBING, 1, 2)).toBe(false)
+  })
+  it('transcript：emit 漏传 seq（undefined）→ false（锁定回归：错误 emit 未带令牌）', () => {
+    expect(acceptTranscript(S.TRANSCRIBING, undefined, 1)).toBe(false)
+  })
+  it('error：asr_failed 仅 transcribing + 令牌一致 → true', () => {
+    expect(acceptMicError(S.TRANSCRIBING, 'asr_failed', 3, 3)).toBe(true)
+  })
+  it('error：vad/mic 错误仅 listening 有效', () => {
+    expect(acceptMicError(S.LISTENING, 'vad_init_failed', 3, 3)).toBe(true)
+    expect(acceptMicError(S.LISTENING, 'mic_permission_denied', 3, 3)).toBe(true)
+    expect(acceptMicError(S.CONFIRM, 'vad_init_failed', 3, 3)).toBe(false)
+  })
+  it('error：令牌不匹配 → false', () => {
+    expect(acceptMicError(S.LISTENING, 'vad_init_failed', 1, 2)).toBe(false)
+  })
+  it('error：emit 漏传 seq（undefined）→ false（锁定回归）', () => {
+    expect(acceptMicError(S.LISTENING, 'vad_init_failed', undefined, 1)).toBe(false)
   })
 })

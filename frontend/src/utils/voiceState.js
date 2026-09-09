@@ -65,3 +65,15 @@ const TRANSITIONS = {
 export function voiceReducer(state, event) {
   return TRANSITIONS[state]?.[event] ?? state
 }
+
+// ===== 事件接纳守卫（InputField 使用；抽出纯函数以便单测锁定 seq/状态契约） =====
+// transcript 接纳条件：当前态为 transcribing 且会话令牌一致
+export function acceptTranscript(state, seq, activeSeq) {
+  return state === VOICE_STATES.TRANSCRIBING && seq === activeSeq
+}
+
+// error 接纳条件：asr_failed 只在 transcribing 有效，vad/mic 错误只在 listening 有效；且令牌一致
+export function acceptMicError(state, kind, seq, activeSeq) {
+  const expectState = kind === 'asr_failed' ? VOICE_STATES.TRANSCRIBING : VOICE_STATES.LISTENING
+  return state === expectState && seq === activeSeq
+}

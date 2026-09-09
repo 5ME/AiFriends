@@ -77,6 +77,7 @@ const initVAD = async () => {
         emits("speechStart")   // 说话开始 → InputField 打断 TTS（现状保留）
       },
       onSpeechEnd: (audio) => {
+        if (!active) return   // 暂停/取消间隙的迟到帧不发起 ASR（跨会话竞态守卫）
         // 评审 P2-3（E6 网络层）：speechEnd 即暂停采集——PCM 已捕获、ASR 不依赖活动流，
         // transcribing 期间不会再触发第二个 speechEnd/ASR；录音指示随之熄灭
         const seq = currentSeq   // 捕获会话令牌：ASR 迟到结果在 InputField 按 seq 丢弃
@@ -96,10 +97,12 @@ const initVAD = async () => {
     });
     vadReady.value = true;
   } catch (e) {
-    // 注（v2 复审 P3-2）：失败后 start() 因 vadInstance 为 null 会再抛 TypeError → 双重 error emit；
-    // InputField 状态守卫丢弃第二次，无害；第二次进入 start() 的 catch 并执行 teardown 兜底
+    // 注（Critical 回归修复）：initVAD 失败后 start() 因 vadInstance 为 null 会再抛 TypeError → 双重 error emit。
+    // 两个 emit 均携带 currentSeq：InputField 守卫按「状态 + 令牌」接纳第一条（此刻仍 listening 且令牌一致），
+    // 状态随即转入 vad_failed，第二条（start() 的 catch 发出）因状态不匹配被守卫丢弃，无害。
+    // 修复前两条 emit 都缺 seq，第一条也被静默丢弃 → vad_failed 状态与错误横幅不可达。
     console.error("VAD 初始化失败:", e);
-    emits("error", "vad_init_failed")
+    emits("error", "vad_init_failed", currentSeq)
   } finally {
     window.fetch = origFetch;
   }
@@ -205,7 +208,7 @@ async function start(seq = 0) {
     active = false
     if (streamRef) teardownStream()
     const denied = e && ['NotAllowedError', 'PermissionDeniedError', 'SecurityError'].includes(e.name)
-    emits("error", denied ? "mic_permission_denied" : "vad_init_failed")
+    emits("error", denied ? "mic_permission_denied" : "vad_init_failed", currentSeq)
   }
 }
 
