@@ -34,6 +34,8 @@ const streaming = ref(false)
 const micRef = useTemplateRef('mic-ref')
 const micState = ref(VOICE_STATES.IDLE)
 const micErrorKind = ref('')   // 错误态类型：vad_init_failed / mic_permission_denied / asr_failed
+let micSeqCounter = 0          // 会话令牌计数：每次 start/retry 递增
+const activeMicSeq = ref(0)    // 当前会话令牌：transcript/error 迟到结果按 seq 丢弃
 
 const ERROR_COPY = {
   vad_init_failed: '语音初始化失败，请重试',
@@ -55,9 +57,14 @@ function cancelMic() {
 }
 
 function retryMic(kind) {
+  // 复审修复：仅错误态可重试（否则 micRef.retry→start 会启动无 UI 指示的录音）
+  if (![VOICE_STATES.VAD_FAILED, VOICE_STATES.MIC_DENIED, VOICE_STATES.ASR_FAILED].includes(micState.value)) return
+  const k = kind === VOICE_STATES.VAD_FAILED ? 'vad_init_failed' : kind   // 统一 kind 字符串族
+  const seq = ++micSeqCounter
+  activeMicSeq.value = seq
   micErrorKind.value = ''
   transition(VOICE_EVENTS.RETRY)
-  micRef.value?.retry(kind)
+  micRef.value?.retry(k, seq)
 }
 
 // 🎤 按钮：idle → 开麦；confirm → 覆盖重录（清空回填文本）；listening → 取消；
@@ -65,13 +72,17 @@ function retryMic(kind) {
 function handleMicClick() {
   if (micState.value === VOICE_STATES.IDLE) {
     micErrorKind.value = ''
+    const seq = ++micSeqCounter
+    activeMicSeq.value = seq
     transition(VOICE_EVENTS.CLICK_MIC)
-    micRef.value?.start()
+    micRef.value?.start(seq)
   } else if (micState.value === VOICE_STATES.CONFIRM) {
     message.value = ''                        // 覆盖重录：清空回填文本（LD §6）
     micErrorKind.value = ''
+    const seq = ++micSeqCounter
+    activeMicSeq.value = seq
     transition(VOICE_EVENTS.CLICK_MIC)
-    micRef.value?.start()
+    micRef.value?.start(seq)
   } else if (micState.value === VOICE_STATES.LISTENING) {
     cancelMic()
   } else if ([VOICE_STATES.VAD_FAILED, VOICE_STATES.MIC_DENIED, VOICE_STATES.ASR_FAILED]
@@ -94,17 +105,17 @@ function onMicSpeechEnded() {
   transition(VOICE_EVENTS.SPEECH_END)
 }
 
-function onMicTranscript(text) {
-  // 已取消（CANCEL 后 in-flight ASR 迟到）：丢弃结果（LD §6「忽略结果」）
-  if (micState.value !== VOICE_STATES.TRANSCRIBING) return
+function onMicTranscript(text, seq) {
+  // 迟到结果（CANCEL 后 in-flight ASR）或旧会话结果丢弃：状态 + seq 令牌双守卫（LD §6「忽略结果」）
+  if (micState.value !== VOICE_STATES.TRANSCRIBING || seq !== activeMicSeq.value) return
   message.value = text       // 回填 textarea（D6：不再识别即发送；watch(message) 自动 autoGrow）
   transition(VOICE_EVENTS.TRANSCRIPT_TEXT)
 }
 
-function onMicError(kind) {
+function onMicError(kind, seq) {
   // 迟到错误同样丢弃：asr_failed 只在 transcribing 有效，vad/mic 错误只在 listening 有效
   const expectState = kind === 'asr_failed' ? VOICE_STATES.TRANSCRIBING : VOICE_STATES.LISTENING
-  if (micState.value !== expectState) return
+  if (micState.value !== expectState || seq !== activeMicSeq.value) return
   micErrorKind.value = kind
   const eventMap = {
     vad_init_failed: VOICE_EVENTS.VAD_INIT_FAILED,
@@ -280,7 +291,8 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
   }
 
   // 发送即回 idle（confirm→idle；错误态/常态语义不变）；同步暂停语音
-  micState.value = voiceReducer(micState.value, VOICE_EVENTS.SEND)
+  transition(VOICE_EVENTS.SEND)
+  micErrorKind.value = ''   // 发送即清错误横幅（复审：SEND 后不残留错误提示）
   micRef.value?.pause()
 
   initAudioStream()
@@ -423,7 +435,10 @@ defineExpose({focus, handleSend})
 
   <!-- 错误态内联提示（spec §9：红字 + 重试；不卡死、textarea 仍可用） -->
   <div v-if="micErrorKind && isTextMode" class="shrink-0 px-4 pb-2 flex items-center gap-3">
-    <p class="text-red-300 text-xs flex-1">{{ ERROR_COPY[micErrorKind] }}</p>
+    <p class="text-red-300 text-xs flex-1"
+       :title="micErrorKind === 'mic_permission_denied' ? '请允许使用麦克风' : ERROR_COPY[micErrorKind]">
+      {{ ERROR_COPY[micErrorKind] }}
+    </p>
     <button type="button" class="btn btn-xs btn-neutral shrink-0" @click="retryMic(micErrorKind)">
       重试
     </button>

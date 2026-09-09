@@ -20,6 +20,8 @@ let audioContext = null
 let analyser = null
 let rafId = 0
 let active = false            // 工作期标志：start 后 true；P1 竞态守卫依赖它
+// 会话令牌：start() 递增来源在 InputField；ASR 迟到结果按 seq 丢弃（跨会话竞态修复）
+let currentSeq = 0
 const preferReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 // 与 vad-web 默认 getUserMedia 约束一致（channelCount:1 + 回声消除/降噪/自动增益），
@@ -71,15 +73,17 @@ const initVAD = async () => {
       pauseStream: async () => {},
       resumeStream: async () => streamRef,
       onSpeechStart: () => {
+        if (!active) return   // 暂停/销毁后的迟到帧不 emit speechStart（跨会话竞态守卫）
         emits("speechStart")   // 说话开始 → InputField 打断 TTS（现状保留）
       },
       onSpeechEnd: (audio) => {
         // 评审 P2-3（E6 网络层）：speechEnd 即暂停采集——PCM 已捕获、ASR 不依赖活动流，
         // transcribing 期间不会再触发第二个 speechEnd/ASR；录音指示随之熄灭
+        const seq = currentSeq   // 捕获会话令牌：ASR 迟到结果在 InputField 按 seq 丢弃
         mode.value = 'transcribing'
         pause()
         emits("speechEnded")
-        sendToBackend(float32ToInt16(audio));
+        sendToBackend(float32ToInt16(audio), seq);
       },
       ortConfig: (ort) => {
         ort.env.wasm.wasmPaths = baseUrl;
@@ -111,19 +115,20 @@ const float32ToInt16 = (float32Array) => {
   return buffer.buffer;
 };
 
-// ASR：成功且有文本 → transcript(text)（InputField 回填，D6）；空文本/异常 → asr_failed
-const sendToBackend = async (arrayBuffer) => {
+// ASR：成功且有文本 → transcript(text, seq)（InputField 回填，D6）；空文本/异常 → asr_failed(seq)
+const sendToBackend = async (arrayBuffer, seq) => {
   const blob = new Blob([arrayBuffer], {type: "audio/pcm"})
   const formData = new FormData();
   formData.append("audio", blob, "voice.pcm")
   try {
     const response = await api.post("/api/friend/message/asr/asr/", formData)
     const text = (response.data?.text || '').trim()
-    if (text) emits("transcript", text)
-    else emits("error", "asr_failed")
+    // 空文本折叠为 asr_failed（LD §6 的 TRANSCRIPT('') 行保留在 reducer，组件侧统一走 error 事件）
+    if (text) emits("transcript", text, seq)
+    else emits("error", "asr_failed", seq)
   } catch (e) {
     console.log(e)
-    emits("error", "asr_failed")
+    emits("error", "asr_failed", seq)
   }
 };
 
@@ -175,11 +180,12 @@ function teardownStream() {
 }
 
 // ==== 受控 API ====
-async function start() {
+async function start(seq = 0) {
+  currentSeq = seq
   active = true
   mode.value = 'wave'
   try {
-    // 已授权过 → 不重复弹权限框；每次录音重新申请（P0：暂停即停流）
+    // 每次录音重新申请流（P0：暂停即停流；已授权 origin 不重复弹权限框）；ended-track 检测为防御性兜底
     if (!streamRef || streamRef.getTracks().every(t => t.readyState === 'ended')) {
       streamRef = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS)
       setupAnalyser()
@@ -196,6 +202,7 @@ async function start() {
   } catch (e) {
     // 权限被拒（NotAllowedError/SecurityError）→ mic_denied（E9）；其余 → vad_init_failed
     // v2 复审 P3-1：vad_init_failed 路径流已存活 → 立即 teardown，避免错误态下「录音中」指示常亮
+    active = false
     if (streamRef) teardownStream()
     const denied = e && ['NotAllowedError', 'PermissionDeniedError', 'SecurityError'].includes(e.name)
     emits("error", denied ? "mic_permission_denied" : "vad_init_failed")
@@ -220,12 +227,12 @@ async function destroy() {
   vadReady.value = false
 }
 
-async function retry(kind) {
+async function retry(kind, seq = 0) {
   // vad/权限类：全量重建（重新 getUserMedia + 重新 initVAD）；asr_failed：仅重启监听
   if (kind === 'vad_init_failed' || kind === 'mic_permission_denied') {
     await destroy()
   }
-  await start()
+  await start(seq)
 }
 
 onBeforeUnmount(() => {
@@ -268,8 +275,12 @@ defineExpose({start, pause, destroy, retry})
             :style="{ animationDelay: '0.4s' }"></span>
       <span class="text-white/40 text-sm ml-2">识别中...</span>
     </div>
-    <!--取消（✕ 语义，沿用 KeyboardIcon，aria-label 明确）-->
+    <!--取消（✕ 语义，沿用 KeyboardIcon；role=button + 键盘可达）-->
     <div @click="emits('cancel')"
+         role="button"
+         tabindex="0"
+         @keydown.enter.prevent="emits('cancel')"
+         @keydown.space.prevent="emits('cancel')"
          class="absolute right-2 w-8 h-8 flex justify-center items-center cursor-pointer"
          aria-label="取消语音输入">
       <KeyboardIcon/>
