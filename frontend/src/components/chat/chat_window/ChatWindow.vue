@@ -52,9 +52,6 @@ function appendToLastMessage(delta) {
     if (delta.citations) {
       last.citations = delta.citations
     }
-    if (delta.rendered) {
-      last.rendered = true  // D-L5：isDone 后标记，触发 markdown 渲染
-    }
   } else {
     last.content += delta
   }

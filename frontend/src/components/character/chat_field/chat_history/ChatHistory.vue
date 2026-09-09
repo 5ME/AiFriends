@@ -64,17 +64,15 @@ async function loadMore() {
           role: 'ai',
           content: m.output,
           id: crypto.randomUUID(),
-          // 历史消息挂载即 rendered（D-L5）；time/citations 消费 Step A 新字段
+          // 历史消息挂载即渲染（D-L5 边流边渲染）；time/citations 消费 Step A 新字段
           time: m.created_at,
           citations: m.citations,
-          rendered: true,
         })
         emits('pushFrontMessage', {
           role: 'user',
           content: m.user_message,
           id: crypto.randomUUID(),
           time: m.created_at,
-          rendered: true,
         })
         lastMessageId = m.id
       }

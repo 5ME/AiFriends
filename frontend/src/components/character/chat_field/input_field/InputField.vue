@@ -6,6 +6,7 @@ import streamApi from "@/js/http/streamApi";
 import {nextTick, onUnmounted, ref, useTemplateRef, watch} from "vue";
 import Microphone from "@/components/character/chat_field/input_field/Microphone.vue";
 import {useVoiceToggle} from "@/composables/useVoiceToggle.js";
+import {shouldSendOnEnter} from "@/utils/inputKey";
 
 const props = defineProps(['friendId'])
 const emits = defineEmits(['pushBackMessage', 'appendToLastMessage', 'streamState'])
@@ -98,6 +99,17 @@ const stopAudio = () => {
   }
 };
 
+// 停止生成（spec Phase 2 断言 6 后半 / Phase 3 断言 3）：
+// fetch-event-source 2.0.1 外部 signal abort → 静默 resolve，不触发 onerror（fetch.js:43-46 已核实）；
+// 后端断连路径落库（服务端保留完整输出）；前端已生成文本保留在 history，不再追加
+function stopGenerate() {
+  if (!abortController) return
+  abortController.abort()
+  abortController = null
+  stopAudio()
+  setStreamState(false, false)
+}
+
 const handleAudioChunk = (base64Data) => {  // 将语音片段添加到播放器队列中
   if (!voiceEnabled.value) return       // 语音关闭时不消费音频数据
   try {
@@ -143,11 +155,9 @@ function autoGrow() {
 // 输入变化（含发送后清空）→ 下一帧重算高度
 watch(message, () => nextTick(autoGrow))
 
-// Enter 发送 / Shift+Enter 换行 / IME 组合中 Enter 不发送（E8 硬性）
+// Enter 发送 / Shift+Enter 换行 / IME 组合中 Enter 不发送（E8 硬性，逻辑收口到 inputKey 纯函数）
 function handleKeydown(e) {
-  if (e.key !== 'Enter') return
-  if (e.isComposing || e.keyCode === 229) return
-  if (e.shiftKey) return
+  if (!shouldSendOnEnter(e)) return
   e.preventDefault()
   handleSend()
 }
@@ -202,9 +212,7 @@ async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
           return
         }
         if (isDone) {
-          // 流式结束（D-L5 修订：markdown 已边流边渲染，无需渲染触发；
-          // rendered 标志已无消费方，Phase 3 状态机重构时清理）
-          emits('appendToLastMessage', {rendered: true})
+          // 流式结束（D-L5：markdown 边流边渲染，无需 rendered 触发；PR #35 review 死代码已清）
           setStreamState(false, false)
           return
         }
@@ -284,8 +292,18 @@ defineExpose({focus, closeMic, handleSend})
               style="height: 48px; overflow: hidden;"
               @keydown="handleKeydown"></textarea>
 
-    <!-- 发送（48px 圆形；流式期间变 ■ 停止；空内容禁用） -->
-    <button type="submit"
+    <!-- 发送/停止（48px 圆形；流式期间变 ■ 停止；空内容或语音聆听/识别中禁用；aria-label 无障碍） -->
+    <button v-if="streaming"
+            type="button"
+            class="w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-white cursor-pointer
+                   bg-[var(--accent)] focus-visible:ring-2 ring-white/40 tooltip tooltip-top"
+            aria-label="停止生成"
+            data-tip="停止"
+            @click="stopGenerate">
+      ■
+    </button>
+    <button v-else
+            type="submit"
             class="w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-white cursor-pointer
                    transition-opacity focus-visible:ring-2 ring-white/40 tooltip tooltip-top"
             :class="message.trim() ? 'bg-[var(--accent)]' : 'bg-neutral-700 opacity-50'"
