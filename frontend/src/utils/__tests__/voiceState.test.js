@@ -75,6 +75,9 @@ describe('acceptTranscript / acceptMicError（Task 4 复审：seq 守卫契约�
   it('error：asr_failed 仅 transcribing + 令牌一致 → true', () => {
     expect(acceptMicError(S.TRANSCRIBING, 'asr_failed', 3, 3)).toBe(true)
   })
+  it('error：asr_failed 在 listening 态 → false（kind 对角）', () => {
+    expect(acceptMicError(S.LISTENING, 'asr_failed', 3, 3)).toBe(false)
+  })
   it('error：vad/mic 错误仅 listening 有效', () => {
     expect(acceptMicError(S.LISTENING, 'vad_init_failed', 3, 3)).toBe(true)
     expect(acceptMicError(S.LISTENING, 'mic_permission_denied', 3, 3)).toBe(true)

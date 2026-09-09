@@ -59,6 +59,7 @@ const makeCachedFetch = (origFetch) => {
 };
 
 const initVAD = async () => {
+  const seq = currentSeq   // 会话令牌在入口捕获：幽灵会话迟到失败带旧 seq，不污染新会话
   const baseUrl = CONFIG_API.VAD_URL;
   const origFetch = window.fetch;
   window.fetch = makeCachedFetch(origFetch);
@@ -98,11 +99,13 @@ const initVAD = async () => {
     vadReady.value = true;
   } catch (e) {
     // 注（Critical 回归修复）：initVAD 失败后 start() 因 vadInstance 为 null 会再抛 TypeError → 双重 error emit。
-    // 两个 emit 均携带 currentSeq：InputField 守卫按「状态 + 令牌」接纳第一条（此刻仍 listening 且令牌一致），
+    // 两个 emit 均携带入口捕获的 seq：InputField 守卫按「状态 + 令牌」接纳第一条（此刻仍 listening 且令牌一致），
     // 状态随即转入 vad_failed，第二条（start() 的 catch 发出）因状态不匹配被守卫丢弃，无害。
     // 修复前两条 emit 都缺 seq，第一条也被静默丢弃 → vad_failed 状态与错误横幅不可达。
+    // 入口捕获语义：seq 是 initVAD 启动时（而非 emit 时）的 currentSeq——若本会话已被取消且新会话
+    // 已启动（currentSeq 已递增），幽灵会话的迟到失败仍带旧 seq，被 InputField 守卫丢弃，不污染新会话。
     console.error("VAD 初始化失败:", e);
-    emits("error", "vad_init_failed", currentSeq)
+    emits("error", "vad_init_failed", seq)
   } finally {
     window.fetch = origFetch;
   }
@@ -203,12 +206,14 @@ async function start(seq = 0) {
     startWave()
     emits("started")
   } catch (e) {
-    // 权限被拒（NotAllowedError/SecurityError）→ mic_denied（E9）；其余 → vad_init_failed
+    // 权限被拒（NotAllowedError/PermissionDeniedError/SecurityError）→ mic_denied（E9）；其余 → vad_init_failed
     // v2 复审 P3-1：vad_init_failed 路径流已存活 → 立即 teardown，避免错误态下「录音中」指示常亮
+    // 幽灵会话守卫：迟到失败（属于旧 seq）不得重置 active/teardown 新会话的流，也不得 emit
+    if (currentSeq !== seq) return
     active = false
     if (streamRef) teardownStream()
     const denied = e && ['NotAllowedError', 'PermissionDeniedError', 'SecurityError'].includes(e.name)
-    emits("error", denied ? "mic_permission_denied" : "vad_init_failed", currentSeq)
+    emits("error", denied ? "mic_permission_denied" : "vad_init_failed", seq)
   }
 }
 
