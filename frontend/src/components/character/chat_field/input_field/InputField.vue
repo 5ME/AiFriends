@@ -2,6 +2,7 @@
 
 import MicIcon from "@/components/character/icons/MicIcon.vue";
 import SendIcon from "@/components/character/icons/SendIcon.vue";
+import StopIcon from "@/components/character/icons/StopIcon.vue";
 import streamApi from "@/js/http/streamApi";
 import {computed, nextTick, onUnmounted, ref, useTemplateRef, watch} from "vue";
 import Microphone from "@/components/character/chat_field/input_field/Microphone.vue";
@@ -411,7 +412,7 @@ defineExpose({focus, handleSend})
                   @cancel="cancelMic" />
     </div>
 
-    <!-- 发送/停止（48px 圆形；流式期间变 ■ 停止；空内容或语音聆听/识别中禁用） -->
+    <!-- 发送/停止（48px 圆形；流式期间变 StopIcon 停止；空内容或语音聆听/识别中禁用） -->
     <button v-if="streaming"
             type="button"
             class="w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-white cursor-pointer
@@ -419,7 +420,7 @@ defineExpose({focus, handleSend})
             aria-label="停止生成"
             data-tip="停止"
             @click="stopGenerate">
-      ■
+      <StopIcon class="w-4 h-4"/>
     </button>
     <button v-else
             type="submit"
