@@ -69,11 +69,24 @@ function retryMic(kind) {
   micRef.value?.retry(k, seq)
 }
 
+// 打断 TTS + 冻结当前流 UI 更新（原 handleStop 语义，抽取共用）。触发时机两处：
+// ① 点击 🎤 进入聆听时（用户拍板 2026-09-09：按下即静音 AI，免 VAD 检测延迟窗口）；
+// ② 说话开始（LD §6 现状保留，兜底迟到帧）
+function interruptTts() {
+  ++processId
+  stopAudio()
+  setStreamState(false, false)
+}
+
 // 🎤 按钮：idle → 开麦；confirm → 覆盖重录（清空回填文本）；listening → 取消；
 // transcribing → 禁用（E6 防并发 ASR）；错误态 → 重试
 function handleMicClick() {
   if (micState.value === VOICE_STATES.IDLE) {
     micErrorKind.value = ''
+    // 用户拍板：点击 🎤 即打断——AI 播报/流式期间进入聆听立即停 TTS + 冻结文字流
+    if (thinking.value || streaming.value) {
+      interruptTts()
+    }
     const seq = ++micSeqCounter
     activeMicSeq.value = seq
     transition(VOICE_EVENTS.CLICK_MIC)
@@ -96,10 +109,8 @@ function handleMicClick() {
 
 // Microphone 事件 → 状态机
 function onMicSpeechStart() {
-  // 现状保留（旧 handleStop 语义）：说话开始打断 TTS + 冻结当前流 UI 更新
-  ++processId
-  stopAudio()
-  setStreamState(false, false)
+  // 说话开始打断 TTS（LD §6 现状保留；点击进入聆听时已打断则此处幂等）
+  interruptTts()
   transition(VOICE_EVENTS.SPEECH_START)
 }
 
