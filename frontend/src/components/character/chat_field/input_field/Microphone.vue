@@ -187,29 +187,36 @@ function teardownStream() {
 
 // ==== 受控 API ====
 async function start(seq = 0) {
-  currentSeq = seq
   active = true
   mode.value = 'wave'
+  currentSeq = seq
   try {
     // 每次录音重新申请流（P0：暂停即停流；已授权 origin 不重复弹权限框）；ended-track 检测为防御性兜底
     if (!streamRef || streamRef.getTracks().every(t => t.readyState === 'ended')) {
-      streamRef = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS)
+      const fresh = await navigator.mediaDevices.getUserMedia(AUDIO_CONSTRAINTS)
+      // 终审修复：申请期间被取消或已被新会话取代 → 丢弃刚申请的流（不得 clobber 新会话的 streamRef）
+      if (!active || currentSeq !== seq) { fresh.getTracks().forEach(t => t.stop()); return }
+      streamRef = fresh
       setupAnalyser()
     }
-    if (!active) { teardownStream(); return }   // P1：getUserMedia 期间被取消 → 停掉刚建的流
+    // P1/终审修复：本会话取消（pause 已 teardown）或幽灵会话（不动新会话状态）→ 直接返回
+    if (!active || currentSeq !== seq) return
     if (!vadInstance) {
       await initVAD()
     }
-    if (!active) { teardownStream(); return }   // P1：initVAD（WASM 下载）期间被取消
+    if (!active || currentSeq !== seq) return
     await vadInstance.start()
-    if (!active) { await pause(); return }      // P1：vad.start() 完成前被取消
+    if (!active || currentSeq !== seq) {
+      if (currentSeq === seq) await pause()   // 本会话在 vad.start() 完成前被取消：正常停
+      return                                    // 幽灵会话：不 pause（会 teardown 新会话的流）
+    }
     startWave()
     emits("started")
   } catch (e) {
-    // 权限被拒（NotAllowedError/PermissionDeniedError/SecurityError）→ mic_denied（E9）；其余 → vad_init_failed
-    // v2 复审 P3-1：vad_init_failed 路径流已存活 → 立即 teardown，避免错误态下「录音中」指示常亮
     // 幽灵会话守卫：迟到失败（属于旧 seq）不得重置 active/teardown 新会话的流，也不得 emit
     if (currentSeq !== seq) return
+    // 权限被拒（NotAllowedError/PermissionDeniedError/SecurityError）→ mic_denied（E9）；其余 → vad_init_failed
+    // v2 复审 P3-1：vad_init_failed 路径流已存活 → 立即 teardown，避免错误态下「录音中」指示常亮
     active = false
     if (streamRef) teardownStream()
     const denied = e && ['NotAllowedError', 'PermissionDeniedError', 'SecurityError'].includes(e.name)
