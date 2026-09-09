@@ -263,11 +263,11 @@ defineExpose({start, pause, destroy, retry})
   <div class="relative w-full h-12 flex items-center bg-black/35 backdrop-blur rounded-xl">
     <!--初始化中-->
     <div v-if="!vadReady" class="flex items-center justify-center gap-1.5 flex-1">
-      <span class="w-1 h-1 bg-blue-400 rounded-full animate-pulse-dot"
+      <span :class="['w-1 h-1 bg-blue-400 rounded-full', { 'animate-pulse-dot': !preferReduced }]"
             :style="{ animationDelay: '0s' }"></span>
-      <span class="w-1 h-1 bg-blue-400 rounded-full animate-pulse-dot"
+      <span :class="['w-1 h-1 bg-blue-400 rounded-full', { 'animate-pulse-dot': !preferReduced }]"
             :style="{ animationDelay: '0.2s' }"></span>
-      <span class="w-1 h-1 bg-blue-400 rounded-full animate-pulse-dot"
+      <span :class="['w-1 h-1 bg-blue-400 rounded-full', { 'animate-pulse-dot': !preferReduced }]"
             :style="{ animationDelay: '0.4s' }"></span>
       <span class="text-white/40 text-sm ml-2">语音初始化中...</span>
     </div>
@@ -282,11 +282,11 @@ defineExpose({start, pause, destroy, retry})
     </div>
     <!--识别中（transcribing）-->
     <div v-else class="flex items-center justify-center gap-1.5 flex-1">
-      <span class="w-1 h-1 bg-blue-400 rounded-full animate-pulse-dot"
+      <span :class="['w-1 h-1 bg-blue-400 rounded-full', { 'animate-pulse-dot': !preferReduced }]"
             :style="{ animationDelay: '0s' }"></span>
-      <span class="w-1 h-1 bg-blue-400 rounded-full animate-pulse-dot"
+      <span :class="['w-1 h-1 bg-blue-400 rounded-full', { 'animate-pulse-dot': !preferReduced }]"
             :style="{ animationDelay: '0.2s' }"></span>
-      <span class="w-1 h-1 bg-blue-400 rounded-full animate-pulse-dot"
+      <span :class="['w-1 h-1 bg-blue-400 rounded-full', { 'animate-pulse-dot': !preferReduced }]"
             :style="{ animationDelay: '0.4s' }"></span>
       <span class="text-white/40 text-sm ml-2">识别中...</span>
     </div>
