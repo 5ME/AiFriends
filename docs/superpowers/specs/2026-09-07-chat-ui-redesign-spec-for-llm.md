@@ -130,7 +130,7 @@ views/chat/ChatIndex.vue                     （页面壳：布局 + 会话状�
 │  ├─ components/chat/chat_window/WindowHeader.vue （56px 玻璃条）
 │  │   ├─ CharacterPhotoField.vue（复用，36px 头像 + 名字，点击开 CharacterDetail）
 │  │   ├─ VoiceToggle.vue（复用，加 aria-label）
-│  │   └─ CloseButton（✕ → router.back()；失败回退 {name:'friend-index'}）
+│  │   └─ CloseButton（✕ → 会话中心 `{name:'chat-hub'}`，2026-09-09 拍板）
 │  ├─ ChatHistory.vue（改造：flex-1、分组、日期分隔、空态、骨架、错误重试）
 │  │  └─ Message.vue（改造：分组渲染、markdown、引用 chips、hover 时间）
 │  ├─ InputField.vue（改造：textarea 自动增高、停止生成、语音回填确认）
@@ -244,7 +244,7 @@ views/chat/ChatIndex.vue                     （页面壳：布局 + 会话状�
 | 行为 | 规则 |
 |------|------|
 | 卡片点"开始聊天" | `POST /api/friend/get_or_create/` 成功 → `router.push({name:'chat-index', params:{character_id: character.id}})`（Q1）；失败 → toast 错误 |
-| 聊天页头部 ✕ | `router.back()`；若历史栈为空（刷新直达）→ `router.replace({name:'friend-index'})` |
+| 聊天页头部 ✕ | `router.replace({name:'chat-hub'})` 会话中心（2026-09-09 拍板：关闭=退出当前会话回工作区中心选下一好友；浏览器后退仍可回来源页；replace 避免 back 回到已关闭会话） |
 | 会话栏点击切换 | 先 get_or_create（幂等），**成功才** `router.replace` 同步 URL（Q2：刷新/分享正确、不新增历史栈；404 留在原会话，N2）；`:key` 变化重建 ChatWindow 与输入/音频状态 |
 | 移动端抽屉 | 打开时锁定背景滚动（`overflow:hidden` on body），点击遮罩/选中会话后关闭 |
 | 浏览器后退 | 从聊天页退到来源页（首页或好友列表）；会话内切换不产生历史记录 |

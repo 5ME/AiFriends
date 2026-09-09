@@ -106,7 +106,7 @@
 - **emits**：`close`、`toggleSimple`、`toggleAutoSend`
 - **结构**：`[CharacterPhotoField(复用)] [VoiceToggle(复用)] [⚙设置] [简约背景切换] [✕关闭]`，56px `bg-black/40 backdrop-blur`，`shrink-0`
 - **⚙ 设置弹层**（Q6 已拍板落点；点击展开，点击外部关闭）：两个开关项——"简约背景"、"语音自动发送"
-- **关闭**：`emit('close')`；ChatIndex 内：`history.state.back ? router.back() : router.replace({name:'friend-index'})`（S §7）
+- **关闭**：`emit('close')`；ChatIndex 内：`router.replace({name:'chat-hub'})` 会话中心（2026-09-09 拍板，替代原 S §7「返回来源页」；浏览器后退仍回来源页）
 - **无障碍**：所有按钮 `aria-label` + `data-tip`
 
 ### 3.6 `ChatHistory.vue`【改造】
@@ -146,7 +146,7 @@
   - `@keydown.enter`：`if (e.isComposing || e.keyCode === 229) return;`（E8 硬性）；`e.shiftKey ? 换行 : (preventDefault + handleSend())`
   - 发送键 disabled：`!message.trim() || micState==='listening' || micState==='transcribing'`
 - **语音状态机**：见 LD §6（状态由 InputField 持有，Microphone 只出事件）
-- **暴露**：`handleSend`（供 ChatWindow.sendMessage）、`focus()`、`closeMic()`（迁移自现 ChatField）
+- **暴露**：`handleSend`（供 ChatWindow.sendMessage）、`focus()`（F7 拍板：`closeMic()` 已删除，Phase 3 实施后不再暴露）
 - **流式状态上抛**：`thinking=true`（发送前）→ 首 content 后 `thinking=false, streaming=true` → done/error 后 `streaming=false` → `emit('streamState', ...)`
 
 ### 3.9 `Microphone.vue`【改造】
@@ -436,7 +436,7 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 | 修改 | `Character.vue`（删 ChatField → router.push） |
 | 修改 | `CharacterDetail.vue`（删 ChatField → router.push） |
 | 修改 | `ChatHistory.vue`（flex-1 布局、骨架/错误重试，逻辑保留） |
-| 修改 | `InputField.vue`（布局迁移：去绝对定位；逻辑保留；暴露 handleSend/focus/closeMic；补 streamState emit） |
+| 修改 | `InputField.vue`（布局迁移：去绝对定位；逻辑保留；暴露 handleSend/focus（F7 拍板删 closeMic）；补 streamState emit） |
 | 修改 | `Message.vue`（分组 props 接入；样式按 S §8.2；markdown 延后 Phase 2） |
 | 删除 | `ChatField.vue` |
 | 依赖 | 无新增 |
