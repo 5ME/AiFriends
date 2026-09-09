@@ -98,8 +98,10 @@ function goBack() {
   }
 }
 
+// ✕ 关闭（2026-09-09 用户拍板）：聊天工作区关闭 → 会话中心 /chat/（选下一个好友）；
+// replace 避免关闭后浏览器 back 又回到已关闭的会话；想回来源页仍可用浏览器后退
 function handleClose() {
-  goBack()
+  router.replace({ name: 'chat-hub' })
 }
 </script>
 

@@ -106,7 +106,7 @@
 - **emits**：`close`、`toggleSimple`、`toggleAutoSend`
 - **结构**：`[CharacterPhotoField(复用)] [VoiceToggle(复用)] [⚙设置] [简约背景切换] [✕关闭]`，56px `bg-black/40 backdrop-blur`，`shrink-0`
 - **⚙ 设置弹层**（Q6 已拍板落点；点击展开，点击外部关闭）：两个开关项——"简约背景"、"语音自动发送"
-- **关闭**：`emit('close')`；ChatIndex 内：`history.state.back ? router.back() : router.replace({name:'friend-index'})`（S §7）
+- **关闭**：`emit('close')`；ChatIndex 内：`router.replace({name:'chat-hub'})` 会话中心（2026-09-09 拍板，替代原 S §7「返回来源页」；浏览器后退仍回来源页）
 - **无障碍**：所有按钮 `aria-label` + `data-tip`
 
 ### 3.6 `ChatHistory.vue`【改造】
