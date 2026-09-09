@@ -30,6 +30,8 @@
 > | F5 | 停止生成注释「随后的 onerror 幂等清理」措辞不准 | **采纳**：fetch-event-source 2.0.1 外部 abort 为静默 resolve 不触发 onerror（`fetch.js:43-46` 已核实），注释与风险表同步修正 |
 > | F6 | 单测计数算术错误（17→22） | **采纳**：Task 1 后 50 passed、Task 2 后 56 passed，全文 Expected 同步 |
 > | F7 | `closeMic` 零调用方 | **采纳**：删除，`defineExpose({focus, handleSend})` |
+>
+> v2 → v3（2026-09-08 复审 P3，均采纳）：① `start()` catch 补 `if (streamRef) teardownStream()`——vad_init_failed 路径下流已存活，不 teardown 则错误态「录音中」指示常亮（唯一隐私死角）；② initVAD 失败的双重 error emit 加注释登记（InputField 状态守卫丢弃第二次，无害）。
 
 > 范围拍板（本计划内的边界决策）：
 > 1. **停止生成按钮**：spec Phase 2 断言 6 后半未交付、PR #35 已声明移入本 Phase，纳入本计划（Task 3）。
@@ -544,6 +546,8 @@ const initVAD = async () => {
     });
     vadReady.value = true;
   } catch (e) {
+    // 注（v2 复审 P3-2）：失败后 start() 因 vadInstance 为 null 会再抛 TypeError → 双重 error emit；
+    // InputField 状态守卫丢弃第二次，无害；第二次进入 start() 的 catch 并执行 teardown 兜底
     console.error("VAD 初始化失败:", e);
     emits("error", "vad_init_failed")
   } finally {
@@ -645,6 +649,8 @@ async function start() {
     emits("started")
   } catch (e) {
     // 权限被拒（NotAllowedError/SecurityError）→ mic_denied（E9）；其余 → vad_init_failed
+    // v2 复审 P3-1：vad_init_failed 路径流已存活 → 立即 teardown，避免错误态下「录音中」指示常亮
+    if (streamRef) teardownStream()
     const denied = e && ['NotAllowedError', 'PermissionDeniedError', 'SecurityError'].includes(e.name)
     emits("error", denied ? "mic_permission_denied" : "vad_init_failed")
   }
