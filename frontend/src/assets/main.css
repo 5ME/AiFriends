@@ -38,6 +38,8 @@
 .glass-bar {
   background: var(--chat-glass);
   backdrop-filter: blur(12px);
+  /* 简约模式下玻璃色 = 窗口底色，无描边则两种面板糊成一片（Task 5 评审 M3） */
+  box-shadow: inset 0 0 0 1px var(--chat-glass-border, transparent);
 }
 
 /* 胶囊按钮（引用 chip / 示例问题） */
@@ -105,7 +107,8 @@
   --chat-text-2: color-mix(in srgb, var(--color-base-content) 85%, transparent);
   --chat-text-3: color-mix(in srgb, var(--color-base-content) 70%, transparent);
   --chat-text-4: color-mix(in srgb, var(--color-base-content) 60%, transparent);
-  --chat-text-5: color-mix(in srgb, var(--color-base-content) 45%, transparent);
+  /* 45% 在浅色面板上仅 2.88:1（<3:1 下限），提到 55% ≈4.0:1（Task 5 评审 M2） */
+  --chat-text-5: color-mix(in srgb, var(--color-base-content) 55%, transparent);
   --chat-error: #b91c1c;
   --chat-glass: var(--color-base-200);
   --chat-glass-border: var(--color-base-300);
