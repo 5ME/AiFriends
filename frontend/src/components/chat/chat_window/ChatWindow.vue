@@ -4,6 +4,7 @@ import WindowHeader from '@/components/chat/chat_window/WindowHeader.vue'
 import ChatHistory from '@/components/character/chat_field/chat_history/ChatHistory.vue'
 import InputField from '@/components/character/chat_field/input_field/InputField.vue'
 import { useChatSettings } from '@/composables/useChatSettings.js'
+import CloseIcon from '@/components/character/icons/CloseIcon.vue'
 
 const props = defineProps(['friend', 'overlayK', 'userBubbleBg'])
 const { simpleBackground } = useChatSettings()
@@ -145,7 +146,7 @@ function scheduleScroll() {
           <button type="button"
                   class="btn btn-xs btn-ghost text-white/70 shrink-0"
                   aria-label="关闭引用浮层"
-                  @click="closeCitation">✕</button>
+                  @click="closeCitation"><CloseIcon class="w-4 h-4"/></button>
         </div>
         <div v-if="activeCitation.content"
              class="overflow-y-auto max-h-[40vh] px-4 py-3 text-sm leading-relaxed

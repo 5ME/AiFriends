@@ -4,6 +4,7 @@ import {useUserStore} from '@/stores/user';
 import { useToast } from '@/composables/useToast'
 import { formatTime } from '@/utils/chatFormat'
 import { renderMarkdown } from '@/utils/markdown'
+import BookIcon from '@/components/character/icons/BookIcon.vue'
 
 const props = defineProps({
   message: { type: Object, required: true },
@@ -118,7 +119,8 @@ watch(
                      cursor-pointer transition-colors max-w-48"
               :aria-label="`查看参考来源：《${c.title || '系统知识库'}》 第${c.chunk_index + 1}段`"
               @click="emits('openCitation', c)">
-        <span class="truncate min-w-0">📖 {{ c.title || '系统知识库' }}</span>
+        <BookIcon class="shrink-0"/>
+        <span class="truncate min-w-0">{{ c.title || '系统知识库' }}</span>
         <span class="shrink-0 chat-text-3">第{{ c.chunk_index + 1 }}段</span>
       </button>
     </div>

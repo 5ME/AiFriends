@@ -2,6 +2,8 @@
 import CharacterPhotoField from '@/components/character/chat_field/character_photo_field/CharacterPhotoField.vue'
 import VoiceToggle from '@/components/character/chat_field/VoiceToggle.vue'
 import GearIcon from '@/components/character/icons/GearIcon.vue'
+import CloseIcon from '@/components/character/icons/CloseIcon.vue'
+import MenuIcon from '@/components/character/icons/MenuIcon.vue'
 import { nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import { useChatSettings } from '@/composables/useChatSettings.js'
 
@@ -59,7 +61,7 @@ onBeforeUnmount(() => {
               aria-label="打开会话列表"
               data-tip="会话"
               @click="emits('openDrawer')">
-        ☰
+        <MenuIcon/>
       </button>
       <VoiceToggle />
       <div ref="settings-ref" class="relative">
@@ -106,7 +108,7 @@ onBeforeUnmount(() => {
               aria-label="关闭对话"
               data-tip="关闭"
               @click="emits('close')">
-        ✕
+        <CloseIcon/>
       </button>
     </div>
   </div>
