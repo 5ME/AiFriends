@@ -29,8 +29,9 @@ let isUpdating = false;        // Buffer 是否正在写入
 const { voiceEnabled } = useVoiceToggle()
 const { autoSendVoice } = useChatSettings()
 
-// 语音自动发送（LD §4.6/§4.7/§6）：confirm 回填后 800ms 自动发送；
-// 用户编辑 / 重录 / 取消 / 手动发送 / 组件卸载均取消计时
+// 语音自动发送（LD §4.6/§4.7/§6）：confirm 回填后 800ms 自动发送（留一个「看一眼再撤」的窗口）；
+// 编辑 / 重录（handleMicClick）/ 手动发送 / 组件卸载均取消计时。
+// 注：cancelMic 不需要清理——✕ 与 Esc 在 confirm 态下均不可达（isTextMode 隐藏波形区、Esc 监听只在 listening/transcribing 注册）
 const AUTO_SEND_DELAY = 800
 let autoSendTimer = null
 
