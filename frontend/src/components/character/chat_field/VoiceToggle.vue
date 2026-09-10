@@ -6,13 +6,16 @@ const { voiceEnabled, toggle } = useVoiceToggle()
 </script>
 
 <template>
-  <div class="h-10 w-10 rounded-full bg-black/50
-              flex items-center justify-center cursor-pointer
-              hover:bg-black/60 transition-colors shrink-0"
-       :title="voiceEnabled ? '语音已开启' : '语音已关闭'"
-       @click="toggle">
+  <button type="button"
+          class="h-10 w-10 rounded-full glass-panel
+                 flex items-center justify-center cursor-pointer
+                 hover:bg-black/60 transition-colors shrink-0 chat-ring"
+          :aria-label="voiceEnabled ? '语音已开启，点击关闭' : '语音已关闭，点击开启'"
+          :aria-pressed="voiceEnabled ? 'true' : 'false'"
+          :title="voiceEnabled ? '语音已开启' : '语音已关闭'"
+          @click="toggle">
     <SpeakerIcon :enabled="voiceEnabled" />
-  </div>
+  </button>
 </template>
 
 <style scoped>

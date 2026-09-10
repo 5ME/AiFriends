@@ -12,17 +12,19 @@ function handleAvatarClick() {
 </script>
 
 <template>
-  <div class="h-10 w-fit rounded-full bg-black/50 flex items-center gap-2 px-2 cursor-pointer"
-       @click="handleAvatarClick">
+  <button type="button"
+          class="h-10 w-fit rounded-full glass-panel flex items-center gap-2 px-2 cursor-pointer chat-ring"
+          :aria-label="`查看${character.name}的详情`"
+          @click="handleAvatarClick">
     <div class="avatar">
       <div class="w-8 rounded-full">
         <img :src="character.photo" alt="">
       </div>
     </div>
-    <div class="text-white text-sm line-clamp-1 break-all">
+    <div class="chat-text text-sm line-clamp-1 break-all">
       {{ character.name }}
     </div>
-  </div>
+  </button>
 
   <CharacterDetail ref="character-detail-ref" :character="character" mode="chat"/>
 </template>
