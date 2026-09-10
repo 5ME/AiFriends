@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import CharacterPhotoField from '@/components/character/chat_field/character_photo_field/CharacterPhotoField.vue'
 import VoiceToggle from '@/components/character/chat_field/VoiceToggle.vue'
-import { onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import { useChatSettings } from '@/composables/useChatSettings.js'
 
 defineProps(['character'])
@@ -12,6 +12,8 @@ const { simpleBackground, autoSendVoice, toggleSimple, toggleAutoSend } = useCha
 // ⚙ 设置弹层（Q6）：简约背景 + 语音自动发送；点外部 / Esc 关闭
 const settingsOpen = ref(false)
 const settingsRef = useTemplateRef('settings-ref')
+const settingsPanelRef = useTemplateRef('settings-panel-ref')
+const settingsTriggerRef = useTemplateRef('settings-trigger-ref')
 
 function onDocPointerDown(e) {
   if (!settingsRef.value?.contains(e.target)) settingsOpen.value = false
@@ -21,13 +23,19 @@ function onKeydown(e) {
   if (e.key === 'Escape') settingsOpen.value = false
 }
 
+// 焦点管理（Task 6 评审 M2）：打开时把焦点移入弹层（role=dialog 的语义与行为对齐），
+// 关闭时仅当焦点仍在弹层内才归还给 ⚙ 触发按钮——点外部关闭不得抢焦点
 watch(settingsOpen, (open) => {
   if (open) {
     document.addEventListener('pointerdown', onDocPointerDown)
     window.addEventListener('keydown', onKeydown)
+    nextTick(() => settingsPanelRef.value?.focus())
   } else {
     document.removeEventListener('pointerdown', onDocPointerDown)
     window.removeEventListener('keydown', onKeydown)
+    if (settingsRef.value?.contains(document.activeElement)) {
+      settingsTriggerRef.value?.focus()
+    }
   }
 })
 
@@ -54,7 +62,8 @@ onBeforeUnmount(() => {
       </button>
       <VoiceToggle />
       <div ref="settings-ref" class="relative">
-        <button type="button"
+        <button ref="settings-trigger-ref"
+                type="button"
                 class="btn btn-sm btn-circle btn-ghost chat-icon-btn"
                 aria-label="聊天设置"
                 :aria-expanded="settingsOpen ? 'true' : 'false'"
@@ -65,9 +74,11 @@ onBeforeUnmount(() => {
         </button>
 
         <div v-if="settingsOpen"
+             ref="settings-panel-ref"
              role="dialog"
+             tabindex="-1"
              aria-label="聊天设置"
-             class="absolute right-0 top-full mt-2 z-30 w-60 rounded-xl bg-base-100 text-base-content p-3 shadow-xl">
+             class="absolute right-0 top-full mt-2 z-30 w-60 rounded-xl bg-base-100 text-base-content p-3 shadow-xl outline-none">
           <label class="flex items-center justify-between gap-3 py-1.5 cursor-pointer">
             <span class="text-sm">简约背景</span>
             <input type="checkbox"

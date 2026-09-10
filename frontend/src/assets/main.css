@@ -51,9 +51,10 @@
   background: var(--chat-chip-hover);
 }
 
-/* 图标按钮的悬停底衬（模式自适应：沉浸=加深黑，简约=浅灰） */
+/* 图标按钮的悬停底衬（模式自适应。不复用 --chat-chip-hover：它在沉浸模式只比玻璃底深 0.05，
+   悬停几乎不可见——Task 6 评审 M1） */
 .chat-icon-hover:hover {
-  background: var(--chat-chip-hover);
+  background: var(--chat-icon-hover);
 }
 
 /* 焦点环（Phase 4 a11y：统一 outline，避免 Tailwind ring 与 daisyUI 冲突） */
@@ -84,6 +85,7 @@
   --chat-glass-border: transparent;
   --chat-chip: rgba(0, 0, 0, 0.25);
   --chat-chip-hover: rgba(0, 0, 0, 0.40);
+  --chat-icon-hover: rgba(0, 0, 0, 0.55);
   --chat-code-bg: rgba(0, 0, 0, 0.45);
   --chat-code-inline-bg: rgba(0, 0, 0, 0.40);
   --chat-hairline: rgba(255, 255, 255, 0.30);
@@ -119,6 +121,7 @@
   --chat-glass-border: var(--color-base-300);
   --chat-chip: color-mix(in srgb, var(--color-base-content) 8%, transparent);
   --chat-chip-hover: color-mix(in srgb, var(--color-base-content) 16%, transparent);
+  --chat-icon-hover: color-mix(in srgb, var(--color-base-content) 16%, transparent);
   --chat-code-bg: color-mix(in srgb, var(--color-base-content) 8%, transparent);
   --chat-code-inline-bg: color-mix(in srgb, var(--color-base-content) 8%, transparent);
   --chat-hairline: color-mix(in srgb, var(--color-base-content) 25%, transparent);
