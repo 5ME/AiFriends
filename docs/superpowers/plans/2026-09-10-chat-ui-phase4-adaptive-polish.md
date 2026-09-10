@@ -1565,6 +1565,21 @@ git commit -m "docs(chat): Phase 4 拍板回写（简约模式配色/⚙ 唯一�
 **Files:**
 - 无（仅验证与交付操作）
 
+> **交付记录（2026-09-10 实测，PR #37）**
+>
+> | 项 | 证据 |
+> |---|---|
+> | 自动化 | 前端 `112 passed`（7 文件）；`npm run build` exit 0；后端 `232 passed, 3 deselected` |
+> | CI | PR #37 `test` ✅ pass；`mergeable=MERGEABLE` |
+> | 镜像 | `crpi-2ltqkeifvac3nlun.cn-shanghai.personal.cr.aliyuncs.com/gqyin-sh/gqyin-docker:latest` → digest `sha256:81e2d4a331b6bc4d4cb6302b0317da3192656653d5019d2af3be866c8bf1653b`（服务器 `docker inspect` 一致） |
+> | 容器 | 5 个容器全 Up，`ai-friends-web` healthy；`curl -sk https://127.0.0.1/api/health/` → `{"status":"ok","db":"ok","redis":"ok","celery":"ok"}` |
+> | 前端产物 | 线上 `index.html` 引用 `assets/index-CYqhndab.css` + `assets/index-BME94hpr.js`；CSS 含 `chat-simple`/`chat-icon-hover:hover`；JS 含 `chatSimpleBg`/`chatAutoSendVoice`/`背景采样失败`/`overlay-k` |
+> | 媒体同源 | 页面与媒体同为 `https://8.153.201.12` → `crossOrigin='anonymous'` 可用；实测 `https://127.0.0.1/media/character/background_images/2_fced1450b4.png` → 200 image/png 318923B |
+> | 实图链路验证 | 对线上唯一角色的真实背景图（300×500 PNG，观音菩萨 id=2）用**仓库内真实纯函数**跑完整条链路：16×16 采样 → avg=0.6225 → `overlayK≈0.8206`（scrim 0.205→0.492、stage 0.287）→ dominant `#abcae9` → accent `#abcae9`（亮度在 [0.15,0.85] 内不回落）→ 己方气泡 `#566575`（**70% 与 60% 档白字对比度 3.42/4.49 均 <4.5，阶梯下沉到 50% 档 → 5.98**，证明阶梯寻档在真实数据上按设计工作） |
+> | 待用户 | 云上 6 项手工验收（断言 1~4 + 语音自动发送 + Phase 1~3 回归），通过后合并（分支保留） |
+>
+> 注：计划文本 Step 4 中的「至少 3 个不同亮度的角色背景图」受线上数据限制（当前库中仅 1 个角色有背景图），验收时若需对比，可临时换图或由用户新增角色。
+
 - [ ] **Step 1：全量自动化验证**
 
 Run:
