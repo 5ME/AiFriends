@@ -12,8 +12,9 @@
 }
 
 /* 角色之窗：3:5 竖版容器，纯 CSS 尺寸公式（LD §8.1，无需 JS resize） */
+/* 注意：这里**不得**声明 --overlay-k/--user-bubble-bg——自定义属性在元素上声明会遮蔽
+   祖先注入值，窗口内的自适应蒙层将永远读到默认 1。默认值一律由使用处的 var(x, 1) 兜底。 */
 .chat-window {
-  --overlay-k: 1;   /* JS 注入前的确定值：桌面舞台与窗口子树都能读到 */
   width: min(420px, calc((100vh - 64px - 48px) * 0.6));
   aspect-ratio: 3 / 5;
   max-height: calc(100vh - 64px - 48px);
