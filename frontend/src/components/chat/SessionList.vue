@@ -3,7 +3,7 @@ import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import api from '@/js/http/api'
 import SessionItem from '@/components/chat/SessionItem.vue'
 
-const props = defineProps(['activeId'])
+const props = defineProps(['activeId', 'accent'])
 const emits = defineEmits(['select', 'closeDrawer'])
 
 const listRef = useTemplateRef('list-ref')
@@ -57,7 +57,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full" :style="{ '--accent': props.accent }">
     <!-- 搜索区（56px） -->
     <div class="h-14 shrink-0 px-3 flex items-center">
       <input v-model="keyword"

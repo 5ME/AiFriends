@@ -26,6 +26,10 @@ const autoSendVoice = ref(readFlag(KEY_AUTO_SEND))
 watch(simpleBackground, (v) => writeFlag(KEY_SIMPLE_BG, v))
 watch(autoSendVoice, (v) => writeFlag(KEY_AUTO_SEND, v))
 
+/**
+ * 用户级聊天设置（LD §3.11 / D-L7）：模块级单例，无参调用，返回共享 ref 与两个切换函数。
+ * 消费方：WindowHeader 设置弹层（简约背景）、InputField 语音自动发送。
+ */
 export function useChatSettings() {
   function toggleSimple() {
     simpleBackground.value = !simpleBackground.value

@@ -13,6 +13,7 @@
 
 /* 角色之窗：3:5 竖版容器，纯 CSS 尺寸公式（LD §8.1，无需 JS resize） */
 .chat-window {
+  --overlay-k: 1;   /* JS 注入前的确定值：桌面舞台与窗口子树都能读到 */
   width: min(420px, calc((100vh - 64px - 48px) * 0.6));
   aspect-ratio: 3 / 5;
   max-height: calc(100vh - 64px - 48px);
@@ -30,9 +31,32 @@
   }
 }
 
-/* 窗口内渐变蒙层（Phase 1 固定 K=1；Phase 4 换 --overlay-k 变量） */
+/* 窗口内渐变蒙层（Phase 1 固定 K=1；Phase 4 双层交叉淡入：基础层即时可读，自适应层 ready 后接棒） */
 .window-scrim {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.6) 100%);
+  transition: opacity 300ms ease;
+}
+.window-scrim-hidden {
+  opacity: 0;
+}
+
+/* 自适应蒙层：停点 = 0.25K / 0.60K，K 由 ChatWindow 根节点 --overlay-k 驱动（spec §6.3） */
+.window-scrim-adaptive {
+  background: linear-gradient(180deg,
+    rgba(0, 0, 0, calc(0.25 * var(--overlay-k, 1))) 0%,
+    rgba(0, 0, 0, calc(0.60 * var(--overlay-k, 1))) 100%);
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+.window-scrim-shown {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .window-scrim,
+  .window-scrim-adaptive {
+    transition: none;
+  }
 }
 
 /* 舞台背景延展（桌面端；Phase 4 换 --overlay-k）。
@@ -43,7 +67,7 @@
   transform: scale(1.1);
 }
 .stage-dim {
-  background: rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, calc(0.35 * var(--overlay-k, 1)));
 }
 
 /* 会话选中态（spec D10）：accent 40% 打底 + 4px 左侧竖条 */
@@ -73,7 +97,7 @@
   border-top-left-radius: 4px;
 }
 .msg-bubble-user {
-  background: color-mix(in srgb, #10b981 70%, black);
+  background: var(--user-bubble-bg, color-mix(in srgb, #10b981 70%, black));
   color: #ffffff;
   border-top-right-radius: 4px;
 }

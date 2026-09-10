@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import api from '@/js/http/api'
 import { useMediaQuery } from '@/composables/useMediaQuery.js'
 import { useToast } from '@/composables/useToast.js'
+import { useBackgroundAdaptive } from '@/composables/useBackgroundAdaptive.js'
 import SessionList from '@/components/chat/SessionList.vue'
 import ChatWindow from '@/components/chat/chat_window/ChatWindow.vue'
 
@@ -23,6 +24,11 @@ const friend = ref(null)
 const friendLoading = ref(false)
 const friendError = ref('')
 const drawerOpen = ref(false)
+
+// 背景自适应（Phase 4）：ChatIndex 单次采样 → 根节点注入 --accent（会话栏选中态与窗口内保持一致，
+// 见 main.css 顶部 Phase 1 注释）；K/气泡色透传给 ChatWindow，避免重复采样
+const backgroundUrl = computed(() => friend.value?.character?.background_image || '')
+const { overlayK, accent, userBubbleBg, ready } = useBackgroundAdaptive(backgroundUrl)
 
 // 异步竞态守卫（PR review 硬性 #1）：loadFriend 与 handleSelect 共享同一序号，
 // 迟到响应（如 A 在途时切到 B，A 后返回）一律弃用，防止 URL 与窗口/高亮错位
@@ -106,10 +112,10 @@ function handleClose() {
 </script>
 
 <template>
-  <div class="flex h-[calc(100dvh-64px)]">
+  <div class="flex h-[calc(100dvh-64px)]" :style="{ '--accent': accent }">
     <!-- 桌面端：会话栏常驻 -->
     <aside v-if="!isMobile" class="w-70 shrink-0 border-r border-base-300 bg-base-200">
-      <SessionList :active-id="activeCharacterId" @select="handleSelect" />
+      <SessionList :active-id="activeCharacterId" :accent="accent" @select="handleSelect" />
     </aside>
 
     <!-- 移动端：会话抽屉（z-60 高于 NavBar z-50，spec §4.2「覆盖 NavBar 层」） -->
@@ -119,6 +125,7 @@ function handleClose() {
           <div class="absolute inset-0 bg-black/50" @click="drawerOpen = false"></div>
           <div class="absolute left-0 top-0 h-full w-70 bg-base-200 border-r border-base-300 shadow-xl">
             <SessionList :active-id="activeCharacterId"
+                         :accent="accent"
                          @select="handleSelect"
                          @closeDrawer="drawerOpen = false" />
           </div>
@@ -150,6 +157,9 @@ function handleClose() {
       <!-- 会话（:key 重建 = 资源释放时序 D-L4） -->
       <ChatWindow v-else :key="friend.character.id"
                   :friend="friend"
+                  :overlay-k="overlayK"
+                  :user-bubble-bg="userBubbleBg"
+                  :ready="ready"
                   @closed="handleClose"
                   @openDrawer="drawerOpen = true" />
     </main>

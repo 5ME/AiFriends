@@ -56,4 +56,16 @@ describe('useChatSettings（LD §3.11 / D-L7）', () => {
     expect(useChatSettings().simpleBackground.value).toBe(false)
     spy.mockRestore()
   })
+
+  it('写入失败（setItem 抛错）→ 不崩，内存状态仍翻转', async () => {
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError')
+    })
+    const { useChatSettings } = await load()
+    const s = useChatSettings()
+    expect(() => s.toggleSimple()).not.toThrow()
+    await nextTick()
+    expect(s.simpleBackground.value).toBe(true)
+    spy.mockRestore()
+  })
 })
