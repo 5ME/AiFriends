@@ -51,6 +51,11 @@
   background: var(--chat-chip-hover);
 }
 
+/* 图标按钮的悬停底衬（模式自适应：沉浸=加深黑，简约=浅灰） */
+.chat-icon-hover:hover {
+  background: var(--chat-chip-hover);
+}
+
 /* 焦点环（Phase 4 a11y：统一 outline，避免 Tailwind ring 与 daisyUI 冲突） */
 .chat-ring:focus-visible {
   outline: 2px solid var(--chat-ring);

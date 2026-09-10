@@ -11,7 +11,7 @@
       stroke-width="2"
       stroke-linecap="round"
       stroke-linejoin="round"
-      class="w-5 h-5 text-white">
+      class="w-5 h-5">
 
     <rect x="2" y="6" width="20" height="12" rx="2" ry="2"/>
 

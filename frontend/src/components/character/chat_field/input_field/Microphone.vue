@@ -290,16 +290,13 @@ defineExpose({start, pause, destroy, retry})
             :style="{ animationDelay: '0.4s' }"></span>
       <span class="chat-text-5 text-sm ml-2">识别中...</span>
     </div>
-    <!--取消（✕ 语义，沿用 KeyboardIcon；role=button + 键盘可达）-->
-    <div @click="emits('cancel')"
-         role="button"
-         tabindex="0"
-         @keydown.enter.prevent="emits('cancel')"
-         @keydown.space.prevent="emits('cancel')"
-         class="absolute right-2 w-8 h-8 flex justify-center items-center cursor-pointer"
-         aria-label="取消语音输入">
+    <!--取消（✕ 语义，沿用 KeyboardIcon；原生 button 自带 Enter/Space 可达）-->
+    <button type="button"
+            class="absolute right-2 w-8 h-8 flex justify-center items-center cursor-pointer chat-text chat-ring"
+            aria-label="取消语音输入"
+            @click="emits('cancel')">
       <KeyboardIcon/>
-    </div>
+    </button>
   </div>
 </template>
 
