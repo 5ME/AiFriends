@@ -162,7 +162,7 @@ defineExpose({
 
     <!-- 加载失败（错误态 + 重试） -->
     <div v-if="loadError" class="flex flex-col items-center justify-center gap-3 py-8">
-      <p class="text-center text-sm text-red-300">{{ loadError }}</p>
+      <p class="text-center text-sm chat-error">{{ loadError }}</p>
       <button type="button" class="btn btn-sm btn-neutral" @click="retry">点击重试</button>
     </div>
 
@@ -183,15 +183,15 @@ defineExpose({
          与错误态互斥（LD §5:300/301）：loadMore 失败时只显示「加载失败+重试」，不同屏双态 -->
     <div v-if="!initialLoading && !hasMessages && history.length === 0 && !loadError"
          class="h-full flex flex-col items-center justify-center gap-5 px-6 text-center">
-      <p v-if="character?.introduction" class="text-white/90 text-lg leading-relaxed">
+      <p v-if="character?.introduction" class="chat-text text-lg leading-relaxed">
         {{ character.introduction }}
       </p>
       <div class="flex flex-col items-stretch gap-2.5 w-full max-w-60">
         <button v-for="q in quickQuestions" :key="q"
                 type="button"
-                class="bg-black/25 backdrop-blur text-white/90 rounded-full px-4 py-2 text-sm
-                       cursor-pointer hover:bg-black/40 transition-colors
-                       focus-visible:ring-2 ring-white/40"
+                class="chat-chip-btn chat-text rounded-full px-4 py-2 text-sm
+                       cursor-pointer transition-colors
+                       chat-ring"
                 :aria-label="`发送示例问题：${q}`"
                 @click="emits('quickSend', q)">
           {{ q }}

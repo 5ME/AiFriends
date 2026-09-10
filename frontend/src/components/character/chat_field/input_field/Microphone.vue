@@ -259,8 +259,8 @@ defineExpose({start, pause, destroy, retry})
 
 <template>
   <!-- 波形区（受控：仅渲染视觉，状态由 InputField 决定显隐）。
-       h-12/rounded-xl/bg-black/35 与文字输入框一致，容器内切换无跳变 -->
-  <div class="relative w-full h-12 flex items-center bg-black/35 backdrop-blur rounded-xl">
+       h-12/rounded-xl/glass-panel 与文字输入框一致，容器内切换无跳变 -->
+  <div class="relative w-full h-12 flex items-center glass-panel rounded-xl">
     <!--初始化中-->
     <div v-if="!vadReady" class="flex items-center justify-center gap-1.5 flex-1">
       <span :class="['w-1 h-1 bg-blue-400 rounded-full', { 'animate-pulse-dot': !preferReduced }]"
@@ -269,7 +269,7 @@ defineExpose({start, pause, destroy, retry})
             :style="{ animationDelay: '0.2s' }"></span>
       <span :class="['w-1 h-1 bg-blue-400 rounded-full', { 'animate-pulse-dot': !preferReduced }]"
             :style="{ animationDelay: '0.4s' }"></span>
-      <span class="text-white/40 text-sm ml-2">语音初始化中...</span>
+      <span class="chat-text-5 text-sm ml-2">语音初始化中...</span>
     </div>
     <!--音浪（AnalyserNode 实时音量驱动）+「正在聆听…」文案（spec §9）-->
     <div v-else-if="mode === 'wave'" class="flex flex-col items-center justify-center gap-0.5 flex-1" aria-hidden="true">
@@ -278,7 +278,7 @@ defineExpose({start, pause, destroy, retry})
              class="w-0.5 bg-blue-400 rounded-full"
              :style="{ height: h + 'px' }"></div>
       </div>
-      <span class="text-white/40 text-[11px] leading-none">正在聆听…</span>
+      <span class="chat-text-5 text-[11px] leading-none">正在聆听…</span>
     </div>
     <!--识别中（transcribing）-->
     <div v-else class="flex items-center justify-center gap-1.5 flex-1">
@@ -288,7 +288,7 @@ defineExpose({start, pause, destroy, retry})
             :style="{ animationDelay: '0.2s' }"></span>
       <span :class="['w-1 h-1 bg-blue-400 rounded-full', { 'animate-pulse-dot': !preferReduced }]"
             :style="{ animationDelay: '0.4s' }"></span>
-      <span class="text-white/40 text-sm ml-2">识别中...</span>
+      <span class="chat-text-5 text-sm ml-2">识别中...</span>
     </div>
     <!--取消（✕ 语义，沿用 KeyboardIcon；role=button + 键盘可达）-->
     <div @click="emits('cancel')"

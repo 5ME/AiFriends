@@ -11,6 +11,50 @@
   --accent: #10b981;
 }
 
+/* ===== 聊天主题 token（Phase 4）=====
+   沉浸模式（默认）：深色玻璃 + 白色系文字，压在角色背景图之上。
+   简约模式（.chat-window.chat-simple，spec §6.6 C3 降级）：纯色窗口 + daisyUI 对比色。
+   工具类保持「未分层」（不写进 @layer），从而稳定覆盖 Tailwind 同名 utility。
+   ⚠️ 不得在 .chat-window 上声明 --overlay-k/--user-bubble-bg（会遮蔽祖先注入值，见下方注释）。 */
+
+/* 文字层级 */
+.chat-text    { color: var(--chat-text); }
+.chat-text-2  { color: var(--chat-text-2); }
+.chat-text-3  { color: var(--chat-text-3); }
+.chat-text-4  { color: var(--chat-text-4); }
+.chat-text-5  { color: var(--chat-text-5); }
+.chat-error   { color: var(--chat-error); }
+
+/* 图标按钮：自身在 accent 底上时用 .is-active 提权（两 class 胜一 class） */
+.chat-icon-btn           { color: var(--chat-text); }
+.chat-icon-btn.is-active { color: #ffffff; }
+
+/* 玻璃面板（头部条 / 输入栏 / 波形区） */
+.glass-panel {
+  background: var(--chat-glass);
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 0 0 1px var(--chat-glass-border, transparent);
+}
+.glass-bar {
+  background: var(--chat-glass);
+  backdrop-filter: blur(12px);
+}
+
+/* 胶囊按钮（引用 chip / 示例问题） */
+.chat-chip-btn {
+  background: var(--chat-chip);
+  backdrop-filter: blur(8px);
+}
+.chat-chip-btn:hover {
+  background: var(--chat-chip-hover);
+}
+
+/* 焦点环（Phase 4 a11y：统一 outline，避免 Tailwind ring 与 daisyUI 冲突） */
+.chat-ring:focus-visible {
+  outline: 2px solid var(--chat-ring);
+  outline-offset: 2px;
+}
+
 /* 角色之窗：3:5 竖版容器，纯 CSS 尺寸公式（LD §8.1，无需 JS resize） */
 /* 注意：这里**不得**声明 --overlay-k/--user-bubble-bg——自定义属性在元素上声明会遮蔽
    祖先注入值，窗口内的自适应蒙层将永远读到默认 1。默认值一律由使用处的 var(x, 1) 兜底。 */
@@ -21,6 +65,29 @@
   border-radius: 24px;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
   overflow: hidden;
+
+  /* 沉浸模式 token（值 = Phase 1~3 的现网硬编码值，保证零视觉回归） */
+  --chat-text: #ffffff;
+  --chat-text-2: rgba(255, 255, 255, 0.85);
+  --chat-text-3: rgba(255, 255, 255, 0.70);
+  --chat-text-4: rgba(255, 255, 255, 0.60);
+  --chat-text-5: rgba(255, 255, 255, 0.40);
+  --chat-error: #fca5a5;
+  --chat-glass: rgba(0, 0, 0, 0.35);
+  --chat-glass-border: transparent;
+  --chat-chip: rgba(0, 0, 0, 0.25);
+  --chat-chip-hover: rgba(0, 0, 0, 0.40);
+  --chat-code-bg: rgba(0, 0, 0, 0.45);
+  --chat-code-inline-bg: rgba(0, 0, 0, 0.40);
+  --chat-hairline: rgba(255, 255, 255, 0.30);
+  --chat-link: #7dd3fc;
+  --chat-ring: rgba(255, 255, 255, 0.40);
+  --chat-shimmer: rgba(255, 255, 255, 0.08);
+  --chat-shimmer-hi: rgba(255, 255, 255, 0.18);
+  --bubble-ai-bg: rgba(0, 0, 0, 0.35);
+  --bubble-ai-text: #ffffff;
+  --bubble-ai-border: transparent;
+  --chat-bg: transparent;
 }
 @media (max-width: 1023px) {
   .chat-window {
@@ -30,6 +97,32 @@
     border-radius: 0;
     box-shadow: none;
   }
+}
+
+/* 简约背景模式（spec §6.6；2026-09-10 拍板：窗口 base-200、AI 气泡白色卡片、常亮浅色不跟随系统深色） */
+.chat-window.chat-simple {
+  --chat-text: var(--color-base-content);
+  --chat-text-2: color-mix(in srgb, var(--color-base-content) 85%, transparent);
+  --chat-text-3: color-mix(in srgb, var(--color-base-content) 70%, transparent);
+  --chat-text-4: color-mix(in srgb, var(--color-base-content) 60%, transparent);
+  --chat-text-5: color-mix(in srgb, var(--color-base-content) 45%, transparent);
+  --chat-error: #b91c1c;
+  --chat-glass: var(--color-base-200);
+  --chat-glass-border: var(--color-base-300);
+  --chat-chip: color-mix(in srgb, var(--color-base-content) 8%, transparent);
+  --chat-chip-hover: color-mix(in srgb, var(--color-base-content) 16%, transparent);
+  --chat-code-bg: color-mix(in srgb, var(--color-base-content) 8%, transparent);
+  --chat-code-inline-bg: color-mix(in srgb, var(--color-base-content) 8%, transparent);
+  --chat-hairline: color-mix(in srgb, var(--color-base-content) 25%, transparent);
+  --chat-link: #0369a1;
+  --chat-ring: color-mix(in srgb, var(--color-base-content) 35%, transparent);
+  --chat-shimmer: color-mix(in srgb, var(--color-base-content) 6%, transparent);
+  --chat-shimmer-hi: color-mix(in srgb, var(--color-base-content) 14%, transparent);
+  --bubble-ai-bg: var(--color-base-100);
+  --bubble-ai-text: var(--color-base-content);
+  --bubble-ai-border: var(--color-base-300);
+  --chat-bg: var(--color-base-200);
+  background: var(--chat-bg);
 }
 
 /* 窗口内渐变蒙层（Phase 1 固定 K=1；Phase 4 单层蒙层 + --overlay-k 平滑过渡，spec §6.3）。
@@ -94,9 +187,10 @@
   padding: 8px 12px;
 }
 .msg-bubble-ai {
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--bubble-ai-bg);
   backdrop-filter: blur(8px);
-  color: #ffffff;
+  color: var(--bubble-ai-text);
+  box-shadow: inset 0 0 0 1px var(--bubble-ai-border);
   border-top-left-radius: 4px;
 }
 .msg-bubble-user {
@@ -107,17 +201,17 @@
 
 /* 组首名字 pill 底衬（N1） */
 .msg-name-pill {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--chat-chip);
   border-radius: 9999px;
   padding: 1px 8px;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--chat-text-3);
 }
 
 /* 日期分隔胶囊（N1 深色玻璃方向） */
 .date-capsule {
-  background: rgba(0, 0, 0, 0.25);
-  color: rgba(255, 255, 255, 0.6);
+  background: var(--chat-chip);
+  color: var(--chat-text-4);
   font-size: 12px;
   border-radius: 9999px;
   padding: 2px 12px;
@@ -134,11 +228,19 @@
 
 /* 骨架 shimmer */
 .skeleton-shimmer {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08) 25%, rgba(255, 255, 255, 0.18) 50%, rgba(255, 255, 255, 0.08) 75%);
+  background: linear-gradient(90deg, var(--chat-shimmer, color-mix(in srgb, var(--color-base-content) 6%, transparent)) 25%, var(--chat-shimmer-hi, color-mix(in srgb, var(--color-base-content) 14%, transparent)) 50%, var(--chat-shimmer, color-mix(in srgb, var(--color-base-content) 6%, transparent)) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
 }
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* Phase 4 断言 4：reduced-motion 下静止自家装饰动画。
+   daisyUI 的 loading spinner/dots 不在此列——它是「进行中」的唯一反馈，静止会丢失语义。 */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none;
+  }
 }

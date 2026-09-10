@@ -89,7 +89,7 @@ watch(
     <div class="group flex items-end gap-1.5"
          :class="message.role === 'user' ? 'justify-end' : 'justify-start'">
       <span v-if="message.time && message.role === 'user'"
-            class="opacity-0 group-hover:opacity-100 transition-opacity text-white/60 text-[11px] shrink-0 pb-0.5">
+            class="opacity-0 group-hover:opacity-100 transition-opacity chat-text-4 text-[11px] shrink-0 pb-0.5">
         {{ formatTime(message.time) }}
       </span>
 
@@ -104,7 +104,7 @@ watch(
       </div>
 
       <span v-if="message.time && message.role === 'ai'"
-            class="opacity-0 group-hover:opacity-100 transition-opacity text-white/60 text-[11px] shrink-0 pb-0.5">
+            class="opacity-0 group-hover:opacity-100 transition-opacity chat-text-4 text-[11px] shrink-0 pb-0.5">
         {{ formatTime(message.time) }}
       </span>
     </div>
@@ -114,12 +114,12 @@ watch(
          class="flex flex-wrap gap-1.5 mt-1.5">
       <button v-for="c in message.citations" :key="c.index"
               type="button"
-              class="flex items-center gap-1 bg-black/25 backdrop-blur text-white/90 rounded-full px-2.5 py-1 text-xs
-                     cursor-pointer hover:bg-black/40 transition-colors max-w-48"
+              class="flex items-center gap-1 chat-chip-btn chat-text rounded-full px-2.5 py-1 text-xs
+                     cursor-pointer transition-colors max-w-48"
               :aria-label="`查看参考来源：《${c.title || '系统知识库'}》 第${c.chunk_index + 1}段`"
               @click="emits('openCitation', c)">
         <span class="truncate min-w-0">📖 {{ c.title || '系统知识库' }}</span>
-        <span class="shrink-0 text-white/75">第{{ c.chunk_index + 1 }}段</span>
+        <span class="shrink-0 chat-text-3">第{{ c.chunk_index + 1 }}段</span>
       </button>
     </div>
   </div>
@@ -148,19 +148,19 @@ watch(
 .msg-markdown :deep(h2) { font-size: 1.18em; }
 .msg-markdown :deep(h3) { font-size: 1.1em; }
 .msg-markdown :deep(h4) { font-size: 1.05em; }
-.msg-markdown :deep(code) { background: rgba(0, 0, 0, 0.4); border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.85em; }
-.msg-markdown :deep(pre) { position: relative; background: rgba(0, 0, 0, 0.45); border-radius: 8px; padding: 0.6em 0.8em; margin: 0.5em 0; overflow-x: auto; }
+.msg-markdown :deep(code) { background: var(--chat-code-inline-bg); border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.85em; }
+.msg-markdown :deep(pre) { position: relative; background: var(--chat-code-bg); border-radius: 8px; padding: 0.6em 0.8em; margin: 0.5em 0; overflow-x: auto; }
 .msg-markdown :deep(pre code) { background: transparent; padding: 0; }
-.msg-markdown :deep(blockquote) { border-left: 3px solid rgba(255, 255, 255, 0.3); padding-left: 0.7em; margin: 0.4em 0; color: rgba(255, 255, 255, 0.85); }
-.msg-markdown :deep(a) { color: #7dd3fc; text-decoration: underline; word-break: break-all; }
+.msg-markdown :deep(blockquote) { border-left: 3px solid var(--chat-hairline); padding-left: 0.7em; margin: 0.4em 0; color: var(--chat-text-2); }
+.msg-markdown :deep(a) { color: var(--chat-link); text-decoration: underline; word-break: break-all; }
 
 /* 代码块复制按钮（动态注入 DOM，样式经 .msg-markdown 下钻以享受 scoped 隔离） */
 .msg-markdown :deep(pre .code-copy-btn) {
   position: absolute;
   top: 4px;
   right: 4px;
-  background: rgba(0, 0, 0, 0.5);
-  color: rgba(255, 255, 255, 0.85);
+  background: var(--chat-code-bg);
+  color: var(--chat-text);
   font-size: 11px;
   line-height: 1;
   padding: 3px 8px;
