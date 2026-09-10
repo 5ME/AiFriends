@@ -514,6 +514,7 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 | 蒙层过渡抖动（双层交叉淡入在 K≥1 时合成 alpha 先降后升） | 改单层 `.window-scrim` + `@property --overlay-k` 过渡（spec §6.3 已回写） |
 | 移动端双抽屉并存（全局导航抽屉 + 会话抽屉）易混淆 | 触发位置/图标区分（全局=NavBar 汉堡，会话=页面内按钮）；会话抽屉加遮罩与标题"会话"；留待 Phase 1 手工验收确认 |
 | dev 模式背景采样跨域（`127.0.0.1:5173` 不在 CORS 白名单）→ 自适应恒为 fallback | 约定：dev 经 `http://localhost:5173` 访问；确需 127.0.0.1 则在 backend/.env 的 `DJANGO_CORS_ORIGINS` 增加 `http://127.0.0.1:5173`（review P2-2；生产 docker 同源无此问题） |
+| **dev 模式语音不可用**（2026-09-10 实测）：默认 `django` platform 下 `CONFIG_API.VAD_URL = http://127.0.0.1:8000/static/frontend/vad/`，而页面在 `localhost:5173` → 拉 onnx/wasm 属跨域；`runserver` 的 `StaticFilesHandler` 在中间件链之前短路静态请求 → 不带 ACAO → `MicVAD.new()` 失败，麦克风恒停在「语音初始化失败，请重试」（错误态本身工作正常） | 语音相关验收一律在云端（nginx 同源）执行；如需本地调语音，改走 `VITE_PLATFORM=vue` 并让其 `VAD_URL` 指向 `http://localhost:5173/static/frontend/vad/`（注意 `frontend/public/vad/` 是 Docker build 时生成且在 .gitignore 中，需先跑一次拷贝步骤）。**生产不受影响** |
 
 ---
 
