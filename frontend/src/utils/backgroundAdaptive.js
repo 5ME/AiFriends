@@ -90,15 +90,19 @@ export function averageLuminance(pixels) {
 }
 
 /**
- * 主色提取（spec §6.5 步骤 2 的 dominant）：每通道 32 阶直方图取像素数最大的桶，
+ * 主色提取（spec §6.5 步骤 2 的 dominant）：直方图分桶取像素数最大的桶，
  * 返回该桶内像素的颜色均值（纯色图 → 原色）。无有效像素 → null。
+ *
+ * 桶宽 64 阶（每通道 4 桶、共 64 桶），非 spec §6.5 字面的「每桶 32 阶」：
+ * 采样仅 16×16=256 像素，512 桶时平均 0.5 像素/桶 → 主导色退化为「首个单像素色」噪声；
+ * 64 桶时约 4 像素/桶，桶内均值才具备「主导色」语义（2026-09-10 实现拍板，spec 已回写）。
  */
 export function extractDominantColor(pixels) {
   if (!pixels || pixels.length === 0) return null
   const buckets = new Map()
   for (let i = 0; i + 3 < pixels.length; i += 4) {
     if (pixels[i + 3] < 8) continue
-    const key = ((pixels[i] >> 5) << 10) | ((pixels[i + 1] >> 5) << 5) | (pixels[i + 2] >> 5)
+    const key = ((pixels[i] >> 6) << 12) | ((pixels[i + 1] >> 6) << 6) | (pixels[i + 2] >> 6)
     const acc = buckets.get(key) || [0, 0, 0, 0]
     acc[0] += pixels[i]
     acc[1] += pixels[i + 1]

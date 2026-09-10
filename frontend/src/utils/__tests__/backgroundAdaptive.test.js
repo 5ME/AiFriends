@@ -156,6 +156,14 @@ describe('extractDominantColor（LD §9.2 直方图分桶）', () => {
     expect(extractDominantColor(solidPixels(16, 185, 129))).toBe('#10b981')
   })
 
+  it('桶宽 64 阶：90 与 100 同桶 → 取均值 95', () => {
+    const pixels = new Uint8ClampedArray([
+      ...solidPixels(90, 90, 90, 2),
+      ...solidPixels(100, 100, 100, 2),
+    ])
+    expect(extractDominantColor(pixels)).toBe('#5f5f5f')
+  })
+
   it('多数色胜出', () => {
     const pixels = new Uint8ClampedArray([
       ...solidPixels(200, 30, 30, 3),
