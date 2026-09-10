@@ -31,7 +31,7 @@ async function handleLogout() {
 
 <template>
   <div class="dropdown dropdown-end">
-    <div tabindex="0" role="button" class="avatar btn btn-circle w-10 h-10 mr-6">
+    <div tabindex="0" role="button" aria-label="用户菜单" class="avatar btn btn-circle w-10 h-10 mr-6">
       <div class="w-10 rounded-full">
         <img :src="user.photo" alt="avatar"/>
       </div>
