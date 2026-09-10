@@ -104,6 +104,10 @@ describe('resolveUserBubble（LD §9.2 阶梯寻档）', () => {
       expect(contrastRatio(resolveUserBubble(c), '#ffffff')).toBeGreaterThanOrEqual(4.5)
     }
   })
+
+  it('三档全不达标 → 兜底 #10b981@70%（#ffffff 白图场景）', () => {
+    expect(resolveUserBubble('#ffffff')).toBe('#0b825a')
+  })
 })
 
 describe('computeOverlayK（spec §6.5 步骤 3 / LD §9.2）', () => {
@@ -131,6 +135,11 @@ describe('computeOverlayK（spec §6.5 步骤 3 / LD §9.2）', () => {
       expect(k).toBeGreaterThanOrEqual(prev)
       prev = k
     }
+  })
+
+  it('非有限 avg → 回落下限 0.6（NaN 防御）', () => {
+    expect(computeOverlayK(NaN)).toBe(0.6)
+    expect(computeOverlayK(undefined)).toBe(0.6)
   })
 })
 

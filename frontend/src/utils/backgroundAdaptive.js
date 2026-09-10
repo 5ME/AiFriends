@@ -66,8 +66,9 @@ export function resolveUserBubble(accent) {
   return mixWithBlack(ACCENT_FALLBACK, 70)
 }
 
-/** 蒙层系数（spec §6.5 步骤 3）：K 随 avg 单调递增，clamp [0.6, 1.5] */
+/** 蒙层系数（spec §6.5 步骤 3）：K 随 avg 单调递增，clamp [0.6, 1.5]；非有限值防御性回落下限 */
 export function computeOverlayK(avg) {
+  if (!Number.isFinite(avg)) return MIN_K
   const k = MIN_K + (avg - 0.5) * 1.8
   return Math.min(MAX_K, Math.max(MIN_K, k))
 }
@@ -102,7 +103,7 @@ export function extractDominantColor(pixels) {
   const buckets = new Map()
   for (let i = 0; i + 3 < pixels.length; i += 4) {
     if (pixels[i + 3] < 8) continue
-    const key = ((pixels[i] >> 6) << 12) | ((pixels[i + 1] >> 6) << 6) | (pixels[i + 2] >> 6)
+    const key = ((pixels[i] >> 6) << 4) | ((pixels[i + 1] >> 6) << 2) | (pixels[i + 2] >> 6)
     const acc = buckets.get(key) || [0, 0, 0, 0]
     acc[0] += pixels[i]
     acc[1] += pixels[i + 1]
