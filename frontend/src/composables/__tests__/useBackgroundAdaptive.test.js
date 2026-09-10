@@ -1,6 +1,6 @@
 // frontend/src/composables/__tests__/useBackgroundAdaptive.test.js
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, nextTick, ref } from 'vue'
 
 /** 采样像素可由用例改写（模块级可变） */
@@ -41,6 +41,11 @@ beforeEach(() => {
       }),
     }
   })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 async function composable(url) {

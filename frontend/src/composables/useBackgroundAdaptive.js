@@ -52,7 +52,8 @@ export function useBackgroundAdaptive(imageUrl) {
         accent.value = accentFallback(extractDominantColor(data))
         userBubbleBg.value = resolveUserBubble(accent.value)
       } catch (e) {
-        // 跨域被拦 / canvas 不可用：保持默认值，不阻塞渲染
+        // 跨域被拦 / canvas 不可用：保持默认值，不阻塞渲染（Task 4 现场诊断依赖此告警）
+        console.warn('背景采样失败，回退默认蒙层与主色', e)
         overlayK.value = DEFAULT_OVERLAY_K
         accent.value = ACCENT_FALLBACK
         userBubbleBg.value = resolveUserBubble(ACCENT_FALLBACK)
