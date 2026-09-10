@@ -7,6 +7,7 @@ import streamApi from "@/js/http/streamApi";
 import {computed, nextTick, onUnmounted, ref, useTemplateRef, watch} from "vue";
 import Microphone from "@/components/character/chat_field/input_field/Microphone.vue";
 import {useVoiceToggle} from "@/composables/useVoiceToggle.js";
+import { useChatSettings } from "@/composables/useChatSettings.js";
 import {shouldSendOnEnter} from "@/utils/inputKey";
 import { voiceReducer, VOICE_STATES, VOICE_EVENTS, acceptTranscript, acceptMicError } from "@/utils/voiceState";
 
@@ -26,6 +27,19 @@ let audioQueue = [];           // 待写入 Buffer 的二进制队列
 let isUpdating = false;        // Buffer 是否正在写入
 
 const { voiceEnabled } = useVoiceToggle()
+const { autoSendVoice } = useChatSettings()
+
+// 语音自动发送（LD §4.6/§4.7/§6）：confirm 回填后 800ms 自动发送；
+// 用户编辑 / 重录 / 取消 / 手动发送 / 组件卸载均取消计时
+const AUTO_SEND_DELAY = 800
+let autoSendTimer = null
+
+function clearAutoSendTimer() {
+  if (autoSendTimer) {
+    clearTimeout(autoSendTimer)
+    autoSendTimer = null
+  }
+}
 
 // 流式状态（thinking：发送后首 content 前；streaming：content 到达后）
 const thinking = ref(false)
@@ -81,6 +95,7 @@ function interruptTts() {
 // 🎤 按钮：idle → 开麦；confirm → 覆盖重录（清空回填文本）；listening → 取消；
 // transcribing → 禁用（E6 防并发 ASR）；错误态 → 重试
 function handleMicClick() {
+  clearAutoSendTimer()
   if (micState.value === VOICE_STATES.IDLE) {
     micErrorKind.value = ''
     // 用户拍板：点击 🎤 即打断——AI 播报/流式期间进入聆听立即停 TTS + 冻结文字流
@@ -123,6 +138,13 @@ function onMicTranscript(text, seq) {
   if (!acceptTranscript(micState.value, seq, activeMicSeq.value)) return
   message.value = text       // 回填 textarea（D6：不再识别即发送；watch(message) 自动 autoGrow）
   transition(VOICE_EVENTS.TRANSCRIPT_TEXT)
+  if (autoSendVoice.value) {
+    clearAutoSendTimer()
+    autoSendTimer = setTimeout(() => {
+      autoSendTimer = null
+      handleSend()
+    }, AUTO_SEND_DELAY)
+  }
 }
 
 function onMicError(kind, seq) {
@@ -250,6 +272,7 @@ const handleAudioChunk = (base64Data) => {  // 将语音片段添加到播放器
 };
 
 onUnmounted(() => {
+  clearAutoSendTimer()
   if (abortController) {
     abortController.abort()  // 通知后端客户端已断开，停止 TTS
     abortController = null
@@ -287,6 +310,7 @@ function handleKeydown(e) {
 }
 
 async function handleSend(eventOrMsg?: Event | string, audioMsg?: string) {
+  clearAutoSendTimer()
   let content = ""
 
   // 逻辑优化：判断第一个参数是字符串（语音消息）还是事件对象
@@ -410,7 +434,7 @@ defineExpose({focus, handleSend})
               ref="input-ref" v-model="message"
               rows="1"
               style="height: 48px; overflow: hidden;"
-              @input="transition(VOICE_EVENTS.EDIT_TEXT)"
+              @input="clearAutoSendTimer(); transition(VOICE_EVENTS.EDIT_TEXT)"
               @keydown="handleKeydown"></textarea>
 
     <!-- 波形区（常驻挂载，v-show 切换——VAD 实例随 InputField 生命周期，KeepAlive 已移除） -->
