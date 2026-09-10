@@ -91,23 +91,26 @@
 - **props**：`friend`
 - **emits**：`closed`（✕ → ChatIndex 执行 router.back()）
 - **state**：`history = ref([])`（D-L1 所有权）；`isStreaming = ref(false)`；`thinking = ref(false)`（发送后、首 content 前）
-- **持有**：`chatHistoryRef`、`inputFieldRef`、`headerRef`；`useBackgroundAdaptive(friend.character.background_image)` 与 `useChatSettings()`
+- **持有**：`chatHistoryRef`、`inputFieldRef`、`headerRef`；`useChatSettings()`
+  - **2026-09-10 修订**：`useBackgroundAdaptive` 的调用点**上移到 ChatIndex**（§3.4 原方案由 ChatWindow 持有）。理由：`--accent` 必须同时作用于窗口内与**会话栏选中态**，而 SessionList 是 ChatWindow 的兄弟节点；且移动端会话抽屉经 `<Teleport to="body">` 脱离 ChatIndex DOM 子树，故 SessionList 另接 `accent` prop 在自身根节点注入。收益：一次采样、两处一致、无重复 Image 加载。
+  - ChatWindow 因此接 props：`overlayK`、`userBubbleBg`（`ready` 保留在组合式契约中，单层蒙层方案下 UI 不消费）
 - **方法**：
   - `pushBackMessage(msg)` / `appendToLastMessage(delta)` / `pushFrontMessage(msg)`：现 ChatField 同名逻辑迁移（append 支持 `{citations}` 对象与 string delta 两种）
   - `sendMessage(text)`：`isStreaming=false && text.trim()` 时 `inputFieldRef.handleSend(text)`（D-L3）
   - `handleStreamState({streaming, thinking})`：InputField 上抛，驱动"■ 停止"显示与窗口级 isStreaming
   - `scrollToBottom`（rAF 节流版，LD §7）
 - **模板**：3:5 窗口容器（LD §8.1）+ flex column：WindowHeader（56px shrink-0）→ ChatHistory（flex-1 min-h-0）→ InputField（shrink-0）
-- **样式职责**：窗口背景图 + 渐变蒙层（`--overlay-k` 变量）+ 舞台背景（桌面）；`--accent`/`--overlay-k` 经 `useBackgroundAdaptive` 绑定到窗口根节点 style
+- **样式职责**：窗口背景图 + 渐变蒙层（`--overlay-k` 变量）+ 舞台背景（桌面）；根节点 `.chat-stage-root` 绑定 `--overlay-k`/`--user-bubble-bg`（**不得在 `.chat-window` 上再次声明同名变量**——元素上声明会遮蔽祖先注入值，2026-09-10 实测缺陷）
 
 ### 3.5 `components/chat/chat_window/WindowHeader.vue`【新】
 
-- **props**：`character`、`simpleBackground`（useChatSettings 注入）
-- **emits**：`close`、`toggleSimple`、`toggleAutoSend`
-- **结构**：`[CharacterPhotoField(复用)] [VoiceToggle(复用)] [⚙设置] [简约背景切换] [✕关闭]`，56px `bg-black/40 backdrop-blur`，`shrink-0`
-- **⚙ 设置弹层**（Q6 已拍板落点；点击展开，点击外部关闭）：两个开关项——"简约背景"、"语音自动发送"
+- **props**：`character`
+- **emits**：`close`、`openDrawer`
+- **结构**（2026-09-10 定稿）：`[CharacterPhotoField(复用)] [VoiceToggle(复用)] [⚙设置] [✕关闭]`（移动端另有 `☰`），56px `glass-bar`（= `var(--chat-glass)` + blur 12px + 1px 描边），`shrink-0`；**删除独立的「简约背景切换」按钮**——同一设置不宜双入口，且 420px 头部宽度预算不足以再加一个圆钮
+- **⚙ 设置弹层**（Q6 已拍板落点；点击展开，点击外部/Esc 关闭）：两个开关项——"简约背景"、"语音自动发送"；打开时把焦点移入弹层（`tabindex="-1"` + `focus()`），关闭时仅当焦点仍在弹层内才归还给 ⚙ 触发按钮（点外部关闭不抢焦点）
 - **关闭**：`emit('close')`；ChatIndex 内：`router.replace({name:'chat-hub'})` 会话中心（2026-09-09 拍板，替代原 S §7「返回来源页」；浏览器后退仍回来源页）
-- **无障碍**：所有按钮 `aria-label` + `data-tip`
+- **无障碍**：所有按钮 `aria-label` + `data-tip`；`VoiceToggle` 与 `CharacterPhotoField` 由 `<div @click>` 改为原生 `<button type="button">`，带 `aria-label`/`aria-pressed`
+- **图标配色**（2026-09-10）：chat 内的 SVG 图标（Mic/Send/Stop/Keyboard/Speaker）**不再自带 `text-white`**，改为继承按钮的 `color`（`.chat-icon-btn` / `.chat-text`），否则简约模式下会是浅底白图标不可见；`RemoveIcon`/`UpdateIcon` 用于窗口外的角色卡片浮层，保持 `text-white` 不变
 
 ### 3.6 `ChatHistory.vue`【改造】
 
@@ -169,8 +172,13 @@
   4. `overlayK = clamp(0.6 + (avg - 0.5) * 1.8, 0.6, 1.5)`（K 随 avg 单调递增——白字需要：白图深蒙层、黑图浅蒙层，review P0-1，最终数值以 spec §6.5 为准）；accent 亮度不在 [0.15, 0.85] → fallback `#10b981`
   5. onerror/跨域：`overlayK=1, accent=#10b981, ready=true`（E2，不阻塞渲染）
   6. 空 imageUrl（无背景图）：同失败分支
-- **消费**：ChatWindow 根节点 `:style="{'--overlay-k': overlayK, '--accent': accent, '--user-bubble-bg': userBubbleBg}"`（R5：三变量齐注入）
+- **消费**（2026-09-10 修订）：`--accent` 由 **ChatIndex 根节点**注入（会话栏 + 窗口共用），SessionList 另接 `accent` prop 自注入（Teleport 抽屉脱离子树）；ChatWindow 根节点 `.chat-stage-root` 注入 `--overlay-k` + `--user-bubble-bg`（R5 三变量齐注入，但分两处）
 - **单元可测**：核心计算抽纯函数 `frontend/src/utils/backgroundAdaptive.js`（LD §9）
+- **实现细节（2026-09-10）**：
+  - `averageLuminance` = 每像素 `(0.2126R + 0.7152G + 0.0722B)/255` 的均值（**不做 gamma 线性化**，否则中灰会得到 0.22 而非 0.5，K 语义崩坏）；alpha < 8 的像素跳过
+  - `extractDominantColor` = 桶宽 64 阶（每通道 4 桶、共 64 桶）取最大桶的**桶内均值**（spec §6.5 同步修订：256 像素样本下 32 阶桶会退化为单像素噪声）
+  - 三层降级：空 URL（不创建 Image）→ `onerror` → canvas `getImageData` 抛错（跨域/CORS），均回落默认值并 `ready=true`，采样失败 `console.warn` 便于现场诊断
+  - `computeOverlayK` 对非有限值（NaN/undefined）防御性回落下限 0.6
 
 ### 3.11 `useChatSettings.js`【新】
 
@@ -377,9 +385,16 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
   --color-bubble-user: var(--user-bubble-bg);   /* JS 解析值：resolveUserBubble(accent)，保证白字 ≥4.5:1 */
 }
 ```
-- 运行时动态值（accent/overlay/user-bubble-bg）经 ChatWindow 根节点 `:style` 注入同名 CSS 变量覆盖（CSS 变量级联天然生效于子树）。
+- 运行时动态值经注入的 CSS 变量覆盖（CSS 变量级联天然生效于子树）：`--accent` 注入在 **ChatIndex 根节点**，`--overlay-k`/`--user-bubble-bg` 注入在 ChatWindow 根节点 `.chat-stage-root`。
+- **实现定稿（2026-09-10）：token 家族改为 `--chat-*`，且工具类不进 `@layer`。** 理由：Tailwind 4 把 utilities 放进 `@layer utilities`，而未分层规则恒胜 → `main.css` 里的 `.chat-text` 能稳定覆盖模板上的 `text-white`，无需 `!important` 或 inline style。清单：
+  - 文字：`--chat-text`（1.00）/`-2`（0.85）/`-3`（0.70）/`-4`（0.60）/`-5`（0.40~0.55）；`--chat-error`、`--chat-link`
+  - 面：`--chat-glass`（+`--chat-glass-border`）、`--chat-chip`、`--chat-chip-hover`、`--chat-icon-hover`、`--chat-code-bg`、`--chat-code-inline-bg`、`--chat-hairline`、`--bubble-ai-bg`/`-text`/`-border`、`--chat-bg`、`--chat-shimmer`/`-hi`
+  - 类：`.chat-text(-2..-5)`、`.chat-error`、`.chat-icon-btn(.is-active)`、`.glass-panel`、`.glass-bar`、`.chat-chip-btn`、`.chat-icon-hover`、`.chat-ring`
+  - 沉浸默认声明在 `.chat-window`，简约覆盖在 `.chat-window.chat-simple`（值 = daisyUI light：`base-content` 各 alpha、`base-100` 气泡、`base-200` 面、`base-300` 描边）
+  - ⚠️ `.chat-window` 上**不得**声明 `--overlay-k`/`--user-bubble-bg`：元素级声明会遮蔽 ChatWindow 根节点的注入值（2026-09-10 实测 Critical 缺陷，已修）；默认值一律由使用处 `var(x, 1)` 兜底。
+  - `#10b981`@70% = `#0b825a`，白字对比度实测 4.82。
 - 己方气泡背景由纯函数 `resolveUserBubble(accent)` 解析（review P0-2 改良方案）：mix 70%→60%→50% 三档取首个白字对比度 ≥4.5:1 的档位，全部不达标 → `#10b981`@70%（对比度 ≈4.85）。固定 mix 无法覆盖任意亮色 accent（如黄色 @70% 仅 ≈3.2:1），故必须阶梯寻档。
-- `--overlay-k` 用于两个渐变停点 `rgba(0,0,0,0.25*K) 0%, rgba(0,0,0,0.60*K) 100%` → 直接写 `linear-gradient(180deg, rgba(0,0,0,calc(0.25 * var(--overlay-k))) 0%, rgba(0,0,0,calc(0.60 * var(--overlay-k))) 100%)`（CSS calc 支持）。
+- `--overlay-k` 用于两个渐变停点 `rgba(0,0,0,0.25*K) 0%, rgba(0,0,0,0.60*K) 100%` → 单层 `.window-scrim` 写 `linear-gradient(180deg, rgba(0,0,0,calc(0.25 * var(--overlay-k,1))) 0%, rgba(0,0,0,calc(0.60 * var(--overlay-k,1))) 100%)`；`--overlay-k` 经 `@property` 注册 + 在 `.chat-stage-root` 上 `transition-property: --overlay-k`（300ms，reduced-motion 关闭）实现平滑过渡。
 - 舞台层：`filter: blur(24px) saturate(1.35); transform: scale(1.1);` + 叠加 `rgba(0,0,0,0.35)`（2026-09-07 实机调优值；Phase 4 自适应时以 0.35 为基准系数）。
 - 复杂度评估：全部为既有 CSS 能力（color-mix/calc/自定义属性），无需新依赖；Tailwind 4 与任意值类（`w-[min(420px,...)]`）均支持，或按 8.1 用少量自定义 class 落 `main.css`（推荐后者，可读性高）。
 
@@ -462,16 +477,21 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 | 修改 | `Microphone.vue`（受控化：start/pause/destroy/retry + 音量波形 + 错误 emits；移除 KeepAlive 依赖） |
 | 验收 | spec Phase 3 断言 1~6 |
 
-### Phase 4 — 自适应与质感
+### Phase 4 — 自适应与质感（4A 已完成 2026-09-10；4B 延后）
 
-| 动作 | 文件 |
-|------|------|
-| 新增 | `frontend/src/composables/useBackgroundAdaptive.js`、`src/utils/backgroundAdaptive.js`、`src/composables/useChatSettings.js` |
-| 修改 | `ChatWindow.vue`（蒙层/accent 变量绑定、简约模式分支） |
-| 修改 | `WindowHeader.vue`（设置弹层：简约背景 + 语音自动发送） |
-| 修改 | `VoiceToggle.vue`、`CharacterPhotoField.vue`（aria-label） |
-| 修改（可选） | `views/create/character/components/BackgroundImage.vue`（聊天效果预览 + 亮度提示） |
-| 验收 | spec Phase 4 断言 1~4 |
+| 动作 | 文件 | 状态 |
+|------|------|------|
+| 新增 | `frontend/src/composables/useBackgroundAdaptive.js`、`src/utils/backgroundAdaptive.js`、`src/composables/useChatSettings.js` | ✅ |
+| 修改 | `ChatIndex.vue`（采样 + `--accent` 注入 + props 透传）、`ChatWindow.vue`（`--overlay-k`/`--user-bubble-bg` 注入、简约模式分支、单层蒙层） | ✅ |
+| 修改 | `WindowHeader.vue`（⚙ 设置弹层：简约背景 + 语音自动发送；焦点管理） | ✅ |
+| 修改 | `main.css`（`--chat-*` token 家族 + `.chat-simple` 覆盖 + `.glass-*`/`.chat-*` 工具类 + `@property --overlay-k`） | ✅ |
+| 修改 | `Message.vue`、`ChatHistory.vue`、`InputField.vue`、`Microphone.vue`（硬编码色 → token 类） | ✅ |
+| 修改 | `VoiceToggle.vue`、`CharacterPhotoField.vue`（原生 button + aria）、`icons/{Mic,Send,Stop,Keyboard,Speaker}Icon.vue`（去掉自带 `text-white`，改为继承） | ✅ |
+| 修改 | `InputField.vue`（语音自动发送 800ms 接线） | ✅ |
+| 修改（可选） | `views/create/character/components/BackgroundImage.vue`（聊天效果预览 + 亮度提示） | ⏸ **4B 延后**：LD 表中标注为「可选」，需在创建/编辑两条流程验证 Croppie 裁剪与预览的交互，独立批次交付 |
+| 验收 | spec Phase 4 断言 1/2/4（断言 3 随 4B 延后） | ✅ |
+
+配套测试：`src/utils/__tests__/backgroundAdaptive.test.js`（32 例）、`src/composables/__tests__/useBackgroundAdaptive.test.js`（9 例）、`src/composables/__tests__/useChatSettings.test.js`（6 例）→ 前端合计 **112 passed**。
 
 ### 全局
 
@@ -488,6 +508,10 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 | ChatField 下线导致漏改引用 | grep 已核实仅 2 处；Phase 1 验收含 Vue DevTools 单实例断言 |
 | 会话切换竞态（旧会话 SSE 回调晚到污染新会话 history） | `:key` 重建 + `processId` 双重防护：旧 InputField 已卸载，其闭包回调不会再触发 emits（组件实例已销毁）；新实例 processId 从 1 起 |
 | 背景采样竞态（切会话后旧图 onload 覆盖新值） | useBackgroundAdaptive `seq` 令牌（3.10） |
+| **CSS 变量遮蔽**（在 `.chat-window` 声明 `--overlay-k` 会覆盖祖先注入值 → 自适应蒙层恒为 K=1） | 元素级不得声明注入型变量；默认值只由使用处 `var(x, 1)` 兜底（2026-09-10 实测 Critical，已加注释 + 修正） |
+| **Teleport 抽屉脱离 ChatIndex 子树** → 会话栏选中态拿不到 `--accent` | SessionList 接 `accent` prop 在自身根节点注入（§3.4 修订） |
+| **图标自带 `text-white`** → 简约模式下浅底白图标不可见 | chat 内 5 个图标去掉颜色类改为继承按钮 `color`；窗口外的 Remove/UpdateIcon 保持不变 |
+| 蒙层过渡抖动（双层交叉淡入在 K≥1 时合成 alpha 先降后升） | 改单层 `.window-scrim` + `@property --overlay-k` 过渡（spec §6.3 已回写） |
 | 移动端双抽屉并存（全局导航抽屉 + 会话抽屉）易混淆 | 触发位置/图标区分（全局=NavBar 汉堡，会话=页面内按钮）；会话抽屉加遮罩与标题"会话"；留待 Phase 1 手工验收确认 |
 | dev 模式背景采样跨域（`127.0.0.1:5173` 不在 CORS 白名单）→ 自适应恒为 fallback | 约定：dev 经 `http://localhost:5173` 访问；确需 127.0.0.1 则在 backend/.env 的 `DJANGO_CORS_ORIGINS` 增加 `http://127.0.0.1:5173`（review P2-2；生产 docker 同源无此问题） |
 

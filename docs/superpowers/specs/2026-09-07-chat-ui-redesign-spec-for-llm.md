@@ -200,7 +200,10 @@ views/chat/ChatIndex.vue                     （页面壳：布局 + 会话状�
 | `--glass` | `rgba(0,0,0,0.35) + backdrop-blur 12px` | 头部条/输入栏 |
 | `--bubble-user` | JS 解析结果变量 `--user-bubble-bg`：`resolveUserBubble(accent)` 在 mix 70%→60%→50% 三档中取首个白字对比度 ≥4.5:1 的档位，全部不达标则回退 `#10b981`@70%（≈4.8，理论兜底——accentFallback 已保证 L∈[0.15,0.85]，50% 档数学上恒达标，该分支防御性保留，R6）；CSS 直接引用该变量 | 己方气泡（任意 accent 下白字达标） |
 | `--bubble-ai` | `rgba(0,0,0,0.35) + backdrop-blur 8px` | AI 气泡（**深色玻璃**：白字在亮图上叠蒙层后仍 ≥4.5:1，R2） |
-| `--chat-bg`（简约模式） | `#f5f5f4`（浅色）/ `#1c1917`（深色，跟随系统） | 用户切换的降级背景 |
+| `--chat-bg`（简约模式） | `var(--color-base-200)`（≈#f7f7f7，替代早期 `#f5f5f4`；**不跟随系统深色**，2026-09-10 拍板见 §6.6） | 用户切换的降级背景 |
+| `--chat-icon-hover` | `rgba(0,0,0,0.55)`（沉浸）/ `base-content 16%`（简约） | 图标按钮悬停底衬（不复用 `--chat-chip-hover`：后者在沉浸模式只比玻璃底深 0.05，悬停不可见） |
+
+实现确认（2026-09-10）：`mix` 的混合基色为**黑**，`#10b981`@70% = `#0b825a`，白字对比度实测 **4.82**（≥4.5）。
 
 ### 6.2 舞台背景（桌面端）
 
@@ -210,6 +213,8 @@ views/chat/ChatIndex.vue                     （页面壳：布局 + 会话状�
 ### 6.3 窗口渐变蒙层
 
 `linear-gradient(180deg, rgba(0,0,0,0.25*K) 0%, rgba(0,0,0,0.60*K) 100%)`，K = 亮度系数（§6.5），K∈[0.6, 1.5]。
+
+实现定稿（2026-09-10）：**单层**蒙层元素，`--overlay-k` 经 `@property { syntax:'<number>'; inherits:true; initial-value:1 }` 注册后做 300ms 过渡（`transition-property: --overlay-k`，声明在注入该变量的 `.chat-stage-root` 上；`prefers-reduced-motion` 下关闭）。早期「K=1 基础层 + 自适应层交叉淡入」方案已弃用：两层半透明黑叠加时合成 alpha `E = 1-(1-(1-t)b)(1-tKb)` 在 K≥1 会先变亮再变暗（K=1 时底部 0.60→0.51→0.60）。不支持 `@property` 的浏览器不做过渡、直接跳变（可接受降级）。
 
 ### 6.4 字体
 
@@ -224,8 +229,11 @@ views/chat/ChatIndex.vue                     （页面壳：布局 + 会话状�
 流程：
 1. 创建 Image 对象，src = URL；`crossOrigin = 'anonymous'`（同源媒体无碍，失败不阻塞）。
 2. onload：drawImage 至 16×16 canvas → getImageData → 计算：
-   - avg  = 全像素均值亮度（0~1）
-   - dominant = 简单直方图分桶（每桶 32 阶）取最大桶的中心色
+   - avg  = 全像素均值亮度（0~1，sRGB 加权均值，不做 gamma 线性化）
+   - dominant = 直方图分桶取像素数最大的桶，返回**桶内像素颜色均值**
+     （2026-09-10 实现拍板：桶宽 64 阶 = 每通道 4 桶/共 64 桶，替代本文早期「每桶 32 阶」——
+      16×16 采样仅 256 像素，32 阶桶时平均 0.5 像素/桶，主导色会退化为「首个单像素色」噪声；
+      64 阶桶约 4 像素/桶，桶内均值才具备主导色语义。纯色图仍返回原色）
 3. overlayK = clamp(0.6 + (avg - 0.5) * 1.8, 0.6, 1.5)
    （K 随 avg 单调递增——窗口文字为白色系，图越亮蒙层必须越深：白图 avg≈0.9 → K≈1.32 深蒙层；黑图 avg≈0.1 → K≈0.6 浅蒙层）
 4. accent 取 dominant，若饱和度/亮度不满足可读性下限（如亮度过高或过低），回退 #10b981。
@@ -234,8 +242,13 @@ views/chat/ChatIndex.vue                     （页面壳：布局 + 会话状�
 
 ### 6.6 "简约背景"模式（C3 用户降级，用户设置，localStorage 持久化）
 
-- 切换入口：WindowHeader 内（图标：减淡/月亮按钮，带 tooltip"简约背景"）。
-- 效果：窗口背景 → `var(--chat-bg)` 纯色；消息气泡 → 常规 daisyUI 对比色（AI=base-200，用户=`--user-bubble-bg` 同沉浸模式解析结果，保证白字对比度）；舞台 → `base-200`；仍显示头像与布局不变。
+- 切换入口（2026-09-10 拍板）：WindowHeader **⚙ 设置弹层**内的「简约背景」开关（与「语音自动发送」并列）；不设独立月亮按钮——420px 窗口头部已有 ☰(移动端)/语音/⚙/✕，再加会挤压名字 pill，且同一设置不宜双入口。
+- 效果：窗口背景 → `var(--chat-bg)` 纯色；消息气泡 → 常规 daisyUI 对比色（AI=`base-100` 白色卡片 + 1px `base-300` 内描边，用户=`--user-bubble-bg` 同沉浸模式解析结果，保证白字对比度）；舞台 → `base-200`；仍显示头像与布局不变。
+- 配色定稿（2026-09-10 偏离记录）：
+  - 窗口底色用 `var(--color-base-200)`（≈#f7f7f7）替代本文早期写死的 `#f5f5f4`——两者仅差 2 个色阶，且能与 daisyUI token 同源。
+  - AI 气泡由早期「base-200」改为 `base-100` + `base-300` 内描边：daisyUI 5 light 下 base-200 与窗口底色几乎同色，气泡会「看不见」。
+  - **不跟随系统深色**：全站只有一套 light daisyUI 主题（`index.html` 无 `data-theme`），窗口若跟系统变深而气泡仍为浅色会出现「深底深字」不可读。
+- 实现：`--chat-*` token 家族在 `.chat-window`（沉浸默认，值 = Phase 1~3 现网硬编码值，零视觉回归）与 `.chat-window.chat-simple`（简约覆盖）两处声明；工具类写在 `main.css` 且**不进 `@layer`**（Tailwind 4 的 utilities 在 `@layer utilities` 内，未分层规则恒胜，故无需 `!important`）。
 
 ---
 
@@ -404,13 +417,18 @@ views/chat/ChatIndex.vue                     （页面壳：布局 + 会话状�
 6. ASR 空文本 → "未听清，请重试"。
 
 ### Phase 4 —— 自适应与质感
-改动：useBackgroundAdaptive 全量接入（蒙层系数 + accent）；简约背景开关；创建页聊天预览 + 亮度提示；无障碍细节。
+改动：useBackgroundAdaptive 全量接入（蒙层系数 + accent + 己方气泡色）；WindowHeader ⚙ 设置弹层（简约背景 + 语音自动发送两个开关）；无障碍细节；创建页聊天预览 + 亮度提示（**延后**，见断言 3）。
+
+实现补充（2026-09-10 拍板，均已回写 LD）：
+- 蒙层：单层 `.window-scrim`，停点 `0.25K / 0.60K`；`--overlay-k` 经 `@property` 注册为可动画数值属性并做 300ms 过渡（早期「双层交叉淡入」在 K≥1 时会出现短暂变亮抖动，已弃用）。
+- 采样归属：`useBackgroundAdaptive` 由 **ChatIndex** 单次调用（不是 ChatWindow），根节点注入 `--accent`；`overlayK`/`userBubbleBg` 经 props 下发 ChatWindow；移动端会话抽屉 `<Teleport to="body">` 脱离子树 → SessionList 接 `accent` prop 自注入。
+- 主题化：新增 `--chat-*` token 家族（`.chat-window` 沉浸默认 / `.chat-window.chat-simple` 简约覆盖），图标组件不再自带 `text-white`，改为继承按钮的 `color`。
 
 验收断言：
 1. 白图（avg≈0.9）→ overlayK≈1.32（深蒙层）；黑图（avg≈0.1）→ overlayK≈0.6（浅蒙层）；K 随亮度单调递增（公式值，自动化单测）。
 2. 简约模式切换后窗口背景为纯色、气泡高对比；刷新后保持（localStorage）。
-3. 创建/编辑角色页可看到"聊天效果预览"。
-4. 全部图标按钮存在 aria-label；reduced-motion 下动画静止。
+3. 创建/编辑角色页可看到"聊天效果预览"。**（2026-09-10 拍板延后**：属 LD §10 标注的「修改（可选）」，需在创建/编辑两条流程里验证 Croppie 裁剪与预览的交互，独立批次交付；本批交付断言 1/2/4）
+4. 全部图标按钮存在 aria-label；reduced-motion 下动画静止（daisyUI 的 loading spinner/dots 除外——它是「进行中」的唯一反馈）。
 
 ---
 
