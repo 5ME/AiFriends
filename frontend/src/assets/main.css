@@ -28,6 +28,13 @@
 /* 图标按钮：自身在 accent 底上时用 .is-active 提权（两 class 胜一 class） */
 .chat-icon-btn           { color: var(--chat-text); }
 .chat-icon-btn.is-active { color: #ffffff; }
+/* 禁用态（如空输入的发送键）：不能用「深灰 + opacity」——浅色背景下会变成发亮的圆钮、
+   白图标反而看不清（实机验收暴露），改为模式自适应的淡淡底衬 + 压暗图标 */
+.chat-icon-btn.is-disabled {
+  background: var(--chat-chip);
+  color: var(--chat-text-5);
+  cursor: not-allowed;
+}
 
 /* 玻璃面板（头部条 / 输入栏 / 波形区） */
 .glass-panel {
@@ -177,10 +184,12 @@
   background: rgba(0, 0, 0, calc(0.35 * var(--overlay-k, 1)));
 }
 
-/* 会话选中态（spec D10）：accent 40% 打底 + 4px 左侧竖条 */
+/* 会话选中态（spec D10）：accent 打底 + 4px 左侧竖条。
+   打底用原始主色（柔和），竖条用 --accent-strong（压深后仍清晰可见）——
+   浅色主色（如浅蓝 #abcae9）下若竖条也用原始主色，整条选中态会淡成「白框」（实机验收暴露） */
 .session-active {
   background: color-mix(in srgb, var(--accent) 40%, transparent);
-  border-left: 4px solid var(--accent);
+  border-left: 4px solid var(--accent-strong, var(--accent));
 }
 .session-inactive {
   border-left: 4px solid transparent;

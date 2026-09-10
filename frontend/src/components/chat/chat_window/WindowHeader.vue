@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import CharacterPhotoField from '@/components/character/chat_field/character_photo_field/CharacterPhotoField.vue'
 import VoiceToggle from '@/components/character/chat_field/VoiceToggle.vue'
+import GearIcon from '@/components/character/icons/GearIcon.vue'
 import { nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import { useChatSettings } from '@/composables/useChatSettings.js'
 
@@ -46,7 +47,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="h-14 shrink-0 px-3 flex items-center justify-between gap-2
+  <div class="relative z-30 h-14 shrink-0 px-3 flex items-center justify-between gap-2
               glass-bar">
     <!-- 头像 + 名字 pill（点击开详情，复用现有能力） -->
     <CharacterPhotoField :character="character" />
@@ -70,7 +71,7 @@ onBeforeUnmount(() => {
                 aria-haspopup="dialog"
                 data-tip="设置"
                 @click="settingsOpen = !settingsOpen">
-          ⚙
+          <GearIcon/>
         </button>
 
         <div v-if="settingsOpen"

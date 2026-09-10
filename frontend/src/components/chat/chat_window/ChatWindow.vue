@@ -128,9 +128,10 @@ function scheduleScroll() {
     </div>
   </div>
 
-    <!-- RAG 引用原文浮层：覆盖舞台根、flex 居中面板 → 与角色之窗同轴，盖在其上方 -->
+    <!-- RAG 引用原文浮层：覆盖舞台根、flex 居中面板 → 与角色之窗同轴，盖在其上方。
+         z-40 > 头部 z-30（设置弹层）> 内容列 z-10：浮层必须盖住窗口内一切（含设置弹层） -->
     <div v-if="activeCitation"
-         class="absolute inset-0 z-20 flex items-center justify-center p-4"
+         class="absolute inset-0 z-40 flex items-center justify-center p-4"
          role="dialog" aria-modal="true" aria-label="引用原文"
          @click="closeCitation">
       <div class="flex flex-col overflow-hidden rounded-xl border border-white/10

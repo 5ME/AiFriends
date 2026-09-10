@@ -13,12 +13,15 @@ export const DEFAULT_OVERLAY_K = 1
 
 /**
  * 背景亮度/主色自适应（spec §6.5 / LD §3.10）。
- * 返回 { overlayK, accent, userBubbleBg, ready }：默认值先渲染，采样完成后热更新。
+ * 返回 { overlayK, accent, accentStrong, userBubbleBg, ready }：默认值先渲染，采样完成后热更新。
  * 竞态防护：每次采样自增 loadSeq，迟到的 onload 一律丢弃（切换会话场景）。
  */
 export function useBackgroundAdaptive(imageUrl) {
   const overlayK = ref(DEFAULT_OVERLAY_K)
   const accent = ref(ACCENT_FALLBACK)
+  // accentStrong：把主色按对比度阶梯压深，保证充当地色时白字/白图标 ≥4.5:1
+  // （原始主色可能很浅——如浅蓝 #abcae9 上白图标只有 1.6:1，实机验收暴露的缺陷）
+  const accentStrong = ref(resolveUserBubble(ACCENT_FALLBACK))
   const userBubbleBg = ref(resolveUserBubble(ACCENT_FALLBACK))
   const ready = ref(false)
   let loadSeq = 0
@@ -26,6 +29,7 @@ export function useBackgroundAdaptive(imageUrl) {
   function applyDefaults() {
     overlayK.value = DEFAULT_OVERLAY_K
     accent.value = ACCENT_FALLBACK
+    accentStrong.value = resolveUserBubble(ACCENT_FALLBACK)
     userBubbleBg.value = resolveUserBubble(ACCENT_FALLBACK)
     ready.value = true
   }
@@ -50,12 +54,14 @@ export function useBackgroundAdaptive(imageUrl) {
         const { data } = ctx.getImageData(0, 0, SAMPLE_SIZE, SAMPLE_SIZE)
         overlayK.value = computeOverlayK(averageLuminance(data))
         accent.value = accentFallback(extractDominantColor(data))
+        accentStrong.value = resolveUserBubble(accent.value)
         userBubbleBg.value = resolveUserBubble(accent.value)
       } catch (e) {
         // 跨域被拦 / canvas 不可用：保持默认值，不阻塞渲染（Task 4 现场诊断依赖此告警）
         console.warn('背景采样失败，回退默认蒙层与主色', e)
         overlayK.value = DEFAULT_OVERLAY_K
         accent.value = ACCENT_FALLBACK
+        accentStrong.value = resolveUserBubble(ACCENT_FALLBACK)
         userBubbleBg.value = resolveUserBubble(ACCENT_FALLBACK)
       }
       ready.value = true
@@ -69,5 +75,5 @@ export function useBackgroundAdaptive(imageUrl) {
 
   watch(() => toValue(imageUrl), sample, { immediate: true })
 
-  return { overlayK, accent, userBubbleBg, ready }
+  return { overlayK, accent, accentStrong, userBubbleBg, ready }
 }

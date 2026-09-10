@@ -2,6 +2,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, nextTick, ref } from 'vue'
+import { contrastRatio } from '@/utils/backgroundAdaptive.js'
 
 /** 采样像素可由用例改写（模块级可变） */
 const pixels = { value: new Uint8ClampedArray([255, 255, 255, 255]) }
@@ -76,6 +77,17 @@ describe('useBackgroundAdaptive（LD §3.10）', () => {
     const a = await composable('/media/light.png')
     imageInstances[0].onload()
     expect(a.overlayK.value).toBeCloseTo(1.32, 2)
+  })
+
+  it('浅色主色 → accentStrong 压深到白字 ≥4.5:1（实机验收缺陷回归锁）', async () => {
+    // 线上观音菩萨背景图主色 #abcae9：原始主色当按钮底色时白图标只有 ≈1.6:1
+    pixels.value = solid(171, 202, 233)
+    const a = await composable('/media/light-blue.png')
+    imageInstances[0].onload()
+    expect(a.accent.value).toBe('#abcae9')
+    expect(a.accentStrong.value).not.toBe(a.accent.value)
+    expect(contrastRatio(a.accentStrong.value, '#ffffff')).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(a.accent.value, '#ffffff')).toBeLessThan(2)
   })
 
   it('可读主色 → accent 采用该色，userBubbleBg 随之重算', async () => {

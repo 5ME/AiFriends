@@ -29,7 +29,7 @@ const drawerOpen = ref(false)
 // 见 main.css 顶部 Phase 1 注释）；K/气泡色透传给 ChatWindow，避免重复采样
 // （`ready` 属 LD §3.10 的组合式契约，当前 UI 用 --overlay-k 过渡即可，无需消费）
 const backgroundUrl = computed(() => friend.value?.character?.background_image || '')
-const { overlayK, accent, userBubbleBg } = useBackgroundAdaptive(backgroundUrl)
+const { overlayK, accent, accentStrong, userBubbleBg } = useBackgroundAdaptive(backgroundUrl)
 
 // 异步竞态守卫（PR review 硬性 #1）：loadFriend 与 handleSelect 共享同一序号，
 // 迟到响应（如 A 在途时切到 B，A 后返回）一律弃用，防止 URL 与窗口/高亮错位
@@ -113,7 +113,7 @@ function handleClose() {
 </script>
 
 <template>
-  <div class="flex h-[calc(100dvh-64px)]" :style="{ '--accent': accent }">
+  <div class="flex h-[calc(100dvh-64px)]" :style="{ '--accent': accent, '--accent-strong': accentStrong }">
     <!-- 桌面端：会话栏常驻 -->
     <aside v-if="!isMobile" class="w-70 shrink-0 border-r border-base-300 bg-base-200">
       <SessionList :active-id="activeCharacterId" :accent="accent" @select="handleSelect" />

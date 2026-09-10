@@ -417,7 +417,7 @@ defineExpose({focus, handleSend})
             class="w-12 h-12 shrink-0 rounded-full flex items-center justify-center chat-icon-btn cursor-pointer
                    hover:bg-black/20 transition-colors chat-ring
                    tooltip tooltip-top"
-            :class="[VOICE_STATES.LISTENING, VOICE_STATES.TRANSCRIBING].includes(micState) ? 'bg-[var(--accent)] is-active' : ''"
+            :class="[VOICE_STATES.LISTENING, VOICE_STATES.TRANSCRIBING].includes(micState) ? 'bg-[var(--accent-strong)] is-active' : ''"
             :disabled="micState === VOICE_STATES.TRANSCRIBING"
             :aria-label="micState === VOICE_STATES.LISTENING || micState === VOICE_STATES.TRANSCRIBING ? '取消语音输入' : '语音输入'"
             :data-tip="micState === VOICE_STATES.LISTENING || micState === VOICE_STATES.TRANSCRIBING ? '取消' : '语音输入'"
@@ -452,7 +452,7 @@ defineExpose({focus, handleSend})
     <button v-if="streaming"
             type="button"
             class="w-12 h-12 shrink-0 rounded-full flex items-center justify-center chat-icon-btn is-active cursor-pointer
-                   bg-[var(--accent)] chat-ring tooltip tooltip-top"
+                   bg-[var(--accent-strong)] chat-ring tooltip tooltip-top"
             aria-label="停止生成"
             data-tip="停止"
             @click="stopGenerate">
@@ -460,9 +460,11 @@ defineExpose({focus, handleSend})
     </button>
     <button v-else
             type="submit"
-            class="w-12 h-12 shrink-0 rounded-full flex items-center justify-center chat-icon-btn is-active cursor-pointer
+            class="w-12 h-12 shrink-0 rounded-full flex items-center justify-center chat-icon-btn cursor-pointer
                    transition-opacity chat-ring tooltip tooltip-top"
-            :class="message.trim() ? 'bg-[var(--accent)]' : 'bg-neutral-700 opacity-50'"
+            :class="message.trim()
+              ? 'bg-[var(--accent-strong)] is-active'
+              : 'is-disabled'"
             :disabled="!message.trim() || micState === VOICE_STATES.LISTENING || micState === VOICE_STATES.TRANSCRIBING"
             aria-label="发送消息"
             data-tip="发送">
