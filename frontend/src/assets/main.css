@@ -32,30 +32,32 @@
   }
 }
 
-/* 窗口内渐变蒙层（Phase 1 固定 K=1；Phase 4 双层交叉淡入：基础层即时可读，自适应层 ready 后接棒） */
+/* 窗口内渐变蒙层（Phase 1 固定 K=1；Phase 4 单层蒙层 + --overlay-k 平滑过渡，spec §6.3）。
+   停点 = 0.25K / 0.60K，K 由 ChatWindow 根节点（.chat-stage-root）注入。
+   早期实现用「双层交叉淡入」，实测在 K≥1 时两层半透明黑叠加会出现短暂变亮抖动
+   （E = 1-(1-(1-t)b)(1-tKb) 在 t∈(0,1) 低于两端值），故改为单层 + 变量过渡。 */
 .window-scrim {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.25) 0%, rgba(0, 0, 0, 0.6) 100%);
-  transition: opacity 300ms ease;
-}
-.window-scrim-hidden {
-  opacity: 0;
-}
-
-/* 自适应蒙层：停点 = 0.25K / 0.60K，K 由 ChatWindow 根节点 --overlay-k 驱动（spec §6.3） */
-.window-scrim-adaptive {
   background: linear-gradient(180deg,
     rgba(0, 0, 0, calc(0.25 * var(--overlay-k, 1))) 0%,
     rgba(0, 0, 0, calc(0.60 * var(--overlay-k, 1))) 100%);
-  opacity: 0;
-  transition: opacity 300ms ease;
 }
-.window-scrim-shown {
-  opacity: 1;
+
+/* --overlay-k 注册为可动画数值属性：注册后浏览器才能对自定义属性做过渡（PR #36 review 建议方案）。
+   渐变停点是 K 的线性函数 → 过渡期间 alpha 单调变化，无抖动。
+   不支持 @property 的浏览器：属性不注册 → 过渡不生效，直接跳变（可接受的降级）。 */
+@property --overlay-k {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+.chat-stage-root {
+  transition-property: --overlay-k;
+  transition-duration: 300ms;
+  transition-timing-function: ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .window-scrim,
-  .window-scrim-adaptive {
+  .chat-stage-root {
     transition: none;
   }
 }

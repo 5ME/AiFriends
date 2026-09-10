@@ -27,8 +27,9 @@ const drawerOpen = ref(false)
 
 // 背景自适应（Phase 4）：ChatIndex 单次采样 → 根节点注入 --accent（会话栏选中态与窗口内保持一致，
 // 见 main.css 顶部 Phase 1 注释）；K/气泡色透传给 ChatWindow，避免重复采样
+// （`ready` 属 LD §3.10 的组合式契约，当前 UI 用 --overlay-k 过渡即可，无需消费）
 const backgroundUrl = computed(() => friend.value?.character?.background_image || '')
-const { overlayK, accent, userBubbleBg, ready } = useBackgroundAdaptive(backgroundUrl)
+const { overlayK, accent, userBubbleBg } = useBackgroundAdaptive(backgroundUrl)
 
 // 异步竞态守卫（PR review 硬性 #1）：loadFriend 与 handleSelect 共享同一序号，
 // 迟到响应（如 A 在途时切到 B，A 后返回）一律弃用，防止 URL 与窗口/高亮错位
@@ -159,7 +160,6 @@ function handleClose() {
                   :friend="friend"
                   :overlay-k="overlayK"
                   :user-bubble-bg="userBubbleBg"
-                  :ready="ready"
                   @closed="handleClose"
                   @openDrawer="drawerOpen = true" />
     </main>

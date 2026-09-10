@@ -5,7 +5,7 @@ import ChatHistory from '@/components/character/chat_field/chat_history/ChatHist
 import InputField from '@/components/character/chat_field/input_field/InputField.vue'
 import { useChatSettings } from '@/composables/useChatSettings.js'
 
-const props = defineProps(['friend', 'overlayK', 'userBubbleBg', 'ready'])
+const props = defineProps(['friend', 'overlayK', 'userBubbleBg'])
 const { simpleBackground } = useChatSettings()
 const emits = defineEmits(['closed', 'openDrawer'])
 
@@ -88,7 +88,7 @@ function scheduleScroll() {
 <template>
   <!-- 单根容器：absolute 铺满舞台，内部 flex 居中窗口
        （修复：原多根组件导致窗口在 main 的 flex 布局中未真正居中） -->
-  <div class="absolute inset-0 flex items-center justify-center"
+  <div class="chat-stage-root absolute inset-0 flex items-center justify-center"
        :style="{ '--overlay-k': overlayK, '--user-bubble-bg': userBubbleBg }">
     <!-- 舞台（桌面端：同图模糊压暗延展；移动端无舞台；简约模式 → base-200 纯色） -->
     <div class="absolute inset-0 overflow-hidden hidden lg:block">
@@ -102,13 +102,11 @@ function scheduleScroll() {
 
     <!-- 角色之窗（3:5，桌面居中 / 移动端全屏，纯 CSS 尺寸公式） -->
     <div class="chat-window relative flex flex-col" :class="{ 'chat-simple': simpleBackground }">
-    <!-- 窗口背景 + 双层渐变蒙层：
-         基础层（K=1）保证首帧可读；自适应层（K 由背景图亮度算出）ready 后交叉接棒（spec §6.5） -->
+    <!-- 窗口背景 + 渐变蒙层（单层，停点随 --overlay-k 过渡；spec §6.3/§6.5） -->
     <template v-if="!simpleBackground">
       <div class="absolute inset-0 bg-cover bg-center"
            :style="{ backgroundImage: `url(${friend.character.background_image})` }"></div>
-      <div class="absolute inset-0 window-scrim" :class="{ 'window-scrim-hidden': ready }"></div>
-      <div class="absolute inset-0 window-scrim-adaptive" :class="{ 'window-scrim-shown': ready }"></div>
+      <div class="absolute inset-0 window-scrim"></div>
     </template>
 
     <!-- 内容列（flex column，杜绝 absolute 堆叠） -->
