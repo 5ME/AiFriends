@@ -1,6 +1,6 @@
 # 聊天界面改版 Phase 4 — 可读性修复与无障碍（2026-09-11）
 
-> 状态：**已评审通过（门 1）**，待门 2 出实施计划
+> 状态：**门 1 已通过**；实施计划已出（`docs/superpowers/plans/2026-09-11-chat-ui-phase4-readability-a11y.md`），**待门 3 用户评审**
 > 上游：`2026-09-07-chat-ui-redesign-spec-for-llm.md`（spec）、`2026-09-07-chat-ui-redesign-logic-design.md`（LD）
 > 前置：Phase 1（PR #34）/ Phase 2 + 后端批次（PR #35）/ Phase 3（PR #36）均已合并 master
 > 本文档产出：Phase 4 的最终范围、三项用户决策、可读性修复方案与实测依据、明确砍掉项及理由、文件清单
