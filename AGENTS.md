@@ -4,15 +4,13 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## 开发流程（必读，优先于本文件其他内容）
 
-**开工前先读 `docs/superpowers/WORKFLOW.md`** —— 那是本仓库的强制开发流程契约。
+**开工前先读 `docs/superpowers/WORKFLOW.md`** —— 那是本仓库的强制开发流程契约，含分级、四门、汇报格式与文档约定。**本文件不重复其内容**，只留三条红线：
 
-三条铁律：
+- **不在 master 上写代码。** 一切改动走 `feature/gqyin/<topic>` → PR → 合并。
+- **不自己批自己。** 每个门必须用户**明确回复**才算通过。沉默、未回复、"看起来没问题"都不算。
+- **没跑过的验证不许说"通过"。** 结论必须附真实命令与真实输出。
 
-1. **不在 master 上写代码。** 一切改动走 `feature/gqyin/<topic>` → PR → 合并。
-2. **不自己批自己。** 需求确认、方案批准、review 结论、云端验收这四个门，必须用户**明确回复**才算通过。不许把沉默当同意，不许跨门连做。
-3. **没跑过的验证不许说"通过"。** 结论必须附真实命令与真实输出。
-
-改动先定档 S/M/L；M 档以上每个阶段开始时显式报名 `Using [skill] to [purpose]`。机制层用已安装的 superpowers skills（`C:\Users\YGQ\.dsh\skills\`）：`brainstorming`（澄清需求）→ `writing-plans`（出方案）→ `using-git-worktrees` + `test-driven-development`（实施）→ **用户人工 PR review**（门 3：Agent 提 PR，用户在 GitHub 上审）→ `verification-before-completion`（门 4 证据）→ `finishing-a-development-branch`（收尾）。
+> 改动定档 S/M/L 后按契约走对应门禁。机制层用本机已安装的 superpowers skills（会话中可发现，不写死路径）。
 
 ## Project Overview
 
