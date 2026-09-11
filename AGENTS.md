@@ -2,6 +2,16 @@
 
 This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
+## 开发流程（必读，优先于本文件其他内容）
+
+**开工前先读 `docs/superpowers/WORKFLOW.md`** —— 那是本仓库的强制开发流程契约，含分级、四门、汇报格式与文档约定。**本文件不重复其内容**，只留三条红线：
+
+- **不在 master 上写代码。** 一切改动走 `feature/gqyin/<topic>` → PR → 合并。
+- **不自己批自己。** 每个门必须用户**明确回复**才算通过。沉默、未回复、"看起来没问题"都不算。
+- **没跑过的验证不许说"通过"。** 结论必须附真实命令与真实输出。
+
+> 改动定档 S/M/L 后按契约走对应门禁。机制层用本机已安装的 superpowers skills（会话中可发现，不写死路径）。
+
 ## Project Overview
 
 AI Friends — a full-stack web app where users create AI characters ("friends") and chat with them. Supports text + voice input/output, long-term memory summarization, and RAG-based knowledge retrieval.
