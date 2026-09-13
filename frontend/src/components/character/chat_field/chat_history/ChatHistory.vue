@@ -199,10 +199,17 @@ defineExpose({
       </div>
     </div>
 
-    <!-- 思考中指示（首 token 前） -->
+    <!-- 思考中指示（首 token 前）：自绘三点——daisyUI loading-dots 是 SMIL，停不掉（4A 设计 §1-F4）。
+         内层 h-5（20px）定尺盒是**几何约束**：daisyUI 的 loading-sm 是 20×20（aspect-ratio:1 +
+         width:calc(--size-selector*5)=20px），去掉后气泡高度会从约 44px 塌到约 20px，
+         破坏"零视觉变更"（评审 R-3 实测）。三点排在 20px 盒内 → 外尺寸逐像素守住。 -->
     <div v-if="thinking" class="flex justify-start my-2">
-      <div class="msg-bubble msg-bubble-ai flex items-center gap-1">
-        <span class="loading loading-dots loading-sm"></span>
+      <div class="msg-bubble msg-bubble-ai">
+        <div class="h-5 flex items-center gap-1">
+          <span class="thinking-dot"></span>
+          <span class="thinking-dot"></span>
+          <span class="thinking-dot"></span>
+        </div>
       </div>
     </div>
   </div>
