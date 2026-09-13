@@ -66,7 +66,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 | D4A-3 | reduced-motion 只覆盖**我们自己可控**的动画。daisyUI 内部 SMIL 不试图用 CSS 关闭，改为**替换实现**（F4 → `loading-dots` 换成自绘三点） | 同上 |
 | D4A-4 | 本批**零视觉变更**：改 `div`→`button` 必须保持原尺寸/间距/圆角/悬停观感逐像素一致 | 用户 2026-09-13：「拆两批，4A 无障碍 → 4B 简约背景」 |
 | D4A-5 | 不引入依赖（不装 `axe-core`、不装 `eslint-plugin-vuejs-accessibility`）；验证靠真实浏览器键盘走查 + 产物核对 | YAGNI；项目当前无前端 lint 链 |
-| D4A-6 | 焦点环来源**不叠加**：非 daisyUI 按钮（`VoiceToggle`、`CharacterPhotoField`）用项目既有写法 `focus-visible:ring-2 ring-white/40`；daisyUI `.btn`（⚙/☰/✕/麦克风/发送）**已有**自带 `:focus-visible` 样式，**不再加**自定义环——否则同一次聚焦出现两个环 | 评审发现 + **用户裁决（2026-09-13）**：允许本批新增键盘焦点环（只在键盘操作时出现、默认渲染不变，spec §12 明确要求"焦点可见"） |
+| D4A-6 | 焦点环来源**不叠加**，判据是**元素实际持有的类名**（不是"哪个区域的按钮"）：<br>**① 非 daisyUI `.btn` 的按钮** → 用项目既有写法 `focus-visible:ring-2 ring-white/40`。含：`VoiceToggle`、`CharacterPhotoField`、`InputField` 的麦克风/发送/停止三个圆钮（**实测这三个无 `.btn` 类**）、`ChatHistory` 的示例问题胶囊、`Message` 的引用 chip。<br>**② 真正带 daisyUI `.btn` 的按钮** → **不加**自定义环。含：头部件 ⚙/☰/✕、`InputField` 的错误重试（`btn btn-xs btn-neutral`，`InputField.vue:454`）。daisyUI 给这类元素的是 `outline-width: 2px` + `outline-color: var(--color-base-content)`，与 `ring`（box-shadow）是两套视觉语言，叠加会出双环 | 评审发现（第 1、2 轮）+ **用户裁决（2026-09-13）**：允许本批新增键盘焦点环（只在键盘操作时出现、默认渲染不变，spec §12 明确要求"焦点可见"） |
 
 ### 2.1 已否决的替代方案
 
@@ -233,7 +233,9 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 | 修改 | `frontend/src/components/navbar/UserMenu.vue` | 触发器 `aria-label`（§3.3，一行） |
 | 修改 | `frontend/src/components/character/chat_field/chat_history/ChatHistory.vue` | 思考指示器换自绘三点（§3.4） |
 | 修改 | `frontend/src/assets/main.css` | `.thinking-dot` + `thinking-bounce` + reduce 块（§3.4） |
-| 新增 | `frontend/src/utils/__tests__/a11yMarkers.test.js` | 产物级断言：模板/样式的关键标记存在（见 §6 断言 A1~A5 的可自动化部分） |
+| 新增 | `frontend/src/components/character/chat_field/__tests__/VoiceToggle.test.js` | 真按钮语义 + `aria-pressed` + 点击切换（2 条） |
+| 新增 | `frontend/src/components/character/chat_field/character_photo_field/__tests__/CharacterPhotoField.test.js` | 真按钮语义 + 可访问名称 + 头像 alt（3 条） |
+| 新增 | `frontend/src/utils/__tests__/thinkingDots.test.js` | `.thinking-dot` 取色/关键帧/reduce 块/shimmer 兜底（3 条，源码级断言） |
 
 **不改动**：`InputField.vue`、`WindowHeader.vue`、`SessionList.vue`、`SessionItem.vue`、`ChatWindow.vue`、`Microphone.vue`（均已达标或属 4B）。
 
@@ -247,10 +249,12 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 
 | 命令 | 期望 |
 |------|------|
-| `cd frontend && npx vitest run` | 现有 **65 passed** 不回归；新增 `a11yMarkers.test.js` 全绿 |
+| `cd frontend && npx vitest run` | 现有 **65 passed** 不回归；本批新增 9 条全绿（`VoiceToggle` 2 + `CharacterPhotoField` 3 + `thinkingDots` 3），合计 **74** |
 | `cd frontend && npm run build` | exit 0；产物含 `thinking-dot`，**不含** `loading-dots` |
 
-`a11yMarkers.test.js` 的定位说明：本批改动多为**模板语义**，用 jsdom 挂载整树成本高且易脆。因此该测试文件锁定的是**可静态断言的事实**——例如"三个 `.thinking-dot` 元素渲染"（此条值得真挂载）、"`thinking-bounce` 与 `prefers-reduced-motion` 同时出现在 main.css"。**键盘可达性无法自动化**（见 5.2），不得用该测试冒充。
+三个测试文件的定位：`VoiceToggle`/`CharacterPhotoField` 走 **jsdom 真挂载**（`@vitest-environment jsdom` + `createApp`，不引入 `@vue/test-utils`），验证"根元素是原生 `button`""可访问名称""`aria-pressed`"等可断言事实；`thinkingDots.test.js` 走**源码级断言**（读 `main.css` 校验 `.thinking-dot` 用 `currentColor`、reduce 块内含 shimmer 兜底）。
+
+**键盘可达性无法自动化**——Enter/空格触发 click 是浏览器对原生 `<button>` 的内置行为，jsdom 不会模拟合成点击；伪造事件只会测到自己的代码。该条**只能由门 4 的真人键盘走查覆盖**（见 §6 断言 A1）。
 
 ### 5.2 手工（必须做，云端；本机不起服务）
 

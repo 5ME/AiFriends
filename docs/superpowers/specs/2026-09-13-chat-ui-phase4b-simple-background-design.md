@@ -156,6 +156,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 表面底（头部/输入/弹层） | `--cbg-surface` | `#ffffff` | 头部条、输入栏、设置弹层 |
 | 表面描边 | `--cbg-surface-border` | `#e7e5e4` | 同上（浅色下必需，见 §3.5） |
 | 浮层底（chip/pill/胶囊） | `--cbg-float` | `#f5f5f4` | 引用 chip、示例问题、日期胶囊 |
+| 代码块 hover | `--cbg-code-block-hover` | `rgba(28,25,23,0.14)` | 代码块复制按钮 hover（浅底上压深） |
 | 浮层底（强调，名字 pill） | `--cbg-float-strong` | `#e7e5e4` | 名字 pill 底衬 |
 | 主文字 | `--cbg-text` | `#1c1917` | 正文、名字、消息 |
 | 次要文字 | `--cbg-text-2` | `#57534e` | 时间戳、日期胶囊、引用 chip、空态 introduction |
@@ -254,6 +255,12 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 
 > 这是本批唯一需要动几何值的地方，**必须用截图逐项确认**，不得凭推理认为"应该没问题"。
 
+**覆盖口径（R-4 机制性修复）**：本设计的"逐元素清单"（§3.5）按**文件**枚举，而不是按 token 正则统计。
+
+原因：初稿用「Tailwind 工具类正则」统计硬编码，`Message.vue` 命中 6 处；但该文件 scoped `<style>` 里还有 4 处 `rgba()`/十六进制字面量（`第N段` span、`blockquote`、复制按钮、链接）**正则匹配不到，全部漏检**（评审 R-4 实测）。教训：**颜色字面量有两类写法，统计时必须双查**。
+
+故 4B 计划新增一条机制性断言：对 6 个聊天窗口相关文件，扫描 **工具类 + CSS 颜色字面量** 双模式，任何未 token 化的残留即失败（白名单仅 `text-white`——己方气泡绿底白字两模式通用）。该断言把"漏检"从人工纪律变成自动化门禁。
+
 ### 3.5 组件级规格（浅色模式的逐项反转）
 
 下表是"深玻璃 + 白字"→"浅面 + 深字"的完整清单。**沉浸列的现有实现不动**（走 §3.4 的默认 token）。
@@ -275,7 +282,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 引用 chip | `bg-black/25` + `white/90` | `--cbg-float` + `--cbg-text-2` | 浮层底上 **6.99:1**（`#57534e` on `#f5f5f4`，实算） |
 | markdown 行内 code | `bg-black/.4` + 白字 | `rgba(28,25,23,0.06)` + `--cbg-text` | 浅底上"更深一点" |
 | markdown `pre` | `bg-black/.45` | `rgba(28,25,23,0.08)` | 代码块底 |
-| markdown 链接 | `#7dd3fc` | `#0f766e` | 浅底上深青（对比 4.5+） |
+| markdown 链接 | `#7dd3fc` | `#0f766e` | 深青，浅底上可读（与"深色底上亮青"同源的明度反转） |
 | 输入栏 | `bg-black/35 backdrop-blur` + 白字 | `--cbg-surface` + `1px` 描边 + `--cbg-text` | |
 | 输入占位符 | `white/40`（未显式设） | `--cbg-text-3`（4.80:1） | |
 | 麦克风/发送键 | 白图标，未激活 `bg-black/20`→`bg-neutral-700` | 图标 `--cbg-text`；未激活 `--cbg-float` | 语音聆听/发送激活态仍用 `--accent` |
@@ -321,8 +328,8 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | # | 场景 | 处理 |
 |---|------|------|
 | E1 | `localStorage` 不可用（隐私模式/被禁用） | `try/catch` 包裹读写，失败则退化为"内存态 + 默认关闭"，不抛错、不影响聊天 |
-| E2 | `character.background_image` 为空 | **沉浸模式**：现状会渲染 `url(undefined)`（F12）→ 本批顺手修正为"无图时用深色兜底 `#1c1917` + 不渲染蒙层"（属沉浸模式的可见缺陷修复，**需你确认是否纳入本批**，见 §9-Q-4B-2）。**简约模式**：本就无图，不受影响 |
-| E3 | 图片加载失败（URL 有效但 404/超时） | 同上兜底；`<img>`/背景图 `@error` 标记 → 走深色兜底，不显示破图 |
+| E2 | `character.background_image` 为空 | **沉浸模式**：现状渲染 `url(undefined)`（F12）→ 改为 **`.no-bg` 兜底**：不渲染背景图与 `.window-scrim`，改用**深色底 + 白色文字**（即 `.no-bg` 覆盖 `--cbg-window: #1c1917` **且**把该子树内的 `--cbg-text/-2/-3` 一并覆写为白系——**否则沿用沉浸模式的 token 会在深底上得到深字**）。**简约模式**：本就无图，不受影响 |
+| E3 | 图片加载失败（URL 有效但 404/超时） | 同 E2 走 `.no-bg` 兜底；`@error` 置 `bgFailed` → 不显示破图。**注意**：`.no-bg` 与 `.chat-simple` 可能同时存在（无图 + 简约），此时以 `.chat-simple` 的浅色为准（CSS 顺序让 `.chat-simple` 在后）——实施时需明确验证这一组合 |
 | E4 | 切换角色 | `:key` 重建 → 新实例按新 `character_id` 读设置；**不会**继承上一个角色的状态 |
 | E5 | 移动端 | 无舞台；窗口本身按简约 token 渲染（F7），其余逻辑一致 |
 | E6 | 弹层打开时切换角色 | `:key` 重建会卸载弹层与其状态（关闭）——可接受，不需额外处理 |
@@ -387,7 +394,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 
 | 命令 | 期望 |
 |------|------|
-| `cd frontend && npx vitest run` | 现有 65 与 4A 新增 9 不回归；`useChatBg.test.js`（7 条）与 `chatBgTokens.test.js`（7 条）全绿；合计 97 |
+| `cd frontend && npx vitest run` | 现有 65 与 4A 新增 9 不回归；`useChatBg.test.js`（7 条）、`chatBgTokens.test.js`（8 条）、`ChatWindow.test.js`（5 条）、`WindowHeader.test.js`（4 条）全绿；合计 **98** |
 | `cd frontend && npm run build` | exit 0 |
 | 产物核对 | 构建产物 CSS 含 `--cbg-window` / `.chat-simple` / `.stage-simple` / `#fafaf9` / `#e7e5e4`；沉浸模式原有值（`rgba(0,0,0,.35)`、`blur(24px)`）**仍在** |
 

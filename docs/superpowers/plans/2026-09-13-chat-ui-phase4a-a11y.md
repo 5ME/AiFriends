@@ -18,6 +18,10 @@
 - reduced-motion 下三点**静止但可见**（`opacity: 0.6`），不得隐藏。
 - 不引入任何依赖（不装 `@vue/test-utils`、不装 eslint a11y 插件）。
 - 分支：`feature/gqyin/chat-ui-phase4a-a11y`；提交信息中文 `type(scope): 摘要`。
+- **焦点环规则（D4A-6）**：按**元素实际持有的类名**判定，不按文件/区域。
+  - 无 `btn` 类 → 加 `focus-visible:ring-2 ring-white/40`。含 `VoiceToggle`、`CharacterPhotoField`、`InputField` 的麦克风/发送/停止三个圆钮（实测 `:392/429/438` 无 `.btn`）、`ChatHistory` 示例问题胶囊、`Message` 引用 chip。
+  - 有 `btn` 类 → **不加**自定义环（daisyUI 用 `outline-width:2px` + `outline-color:var(--color-base-content)`，与 `ring` 叠加会双环）。含头部件 ⚙/☰/✕、`InputField:454` 的重试按钮。
+  - ⚠️ 同一文件里可能两类并存（`InputField` 即是），判断方式是看该元素的 class 串里有没有 `btn`，不要按文件推断。
 
 ---
 
@@ -130,7 +134,7 @@ Expected: FAIL —— `querySelector('button')` 返回 `null`（当前根元素�
 </template>
 ```
 
-> 说明：类名与改动前**完全一致**，仅追加 `focus-visible:ring-2 ring-white/40 outline-none`（D4A-6：本组件是 `div`→`button`，此前完全不可聚焦，故必须有焦点环；头部件那些 daisyUI `.btn` 由 daisyUI 自带，不重复加）。`SpeakerIcon` 不动（其 `text-white` 归 4B 的浅色模式处理）。
+> 说明：类名与改动前**完全一致**，仅追加 `focus-visible:ring-2 ring-white/40 outline-none`（D4A-6：本组件**无** `btn` 类，且此前是 `div` 完全不可聚焦，故必须有焦点环）。`SpeakerIcon` 不动（其 `text-white` 归 4B 的浅色模式处理）。
 
 - [ ] **Step 4: 跑测试确认通过**
 

@@ -216,7 +216,7 @@ export function useChatBg(characterId) {
 - [ ] **Step 4: 跑测试确认通过**
 
 Run: `cd frontend && npx vitest run src/composables/__tests__/useChatBg.test.js`
-Expected: PASS（6 个用例）
+Expected: PASS（7 个用例）
 
 - [ ] **Step 5: 提交**
 
@@ -307,6 +307,36 @@ describe('4B token 家族（设计 §3.4）', () => {
     expect(css).not.toMatch(/--overlay-k\s*:/)
     expect(css).not.toMatch(/--user-bubble-bg\s*:/)
     expect(css).not.toMatch(/--msg-text-shadow\s*:/)
+  })
+
+  it('聊天窗口相关文件里不得残留未 token 化的颜色字面量（评审 R-4 的机制性修复）', () => {
+    // 覆盖两类：Tailwind 工具类（text-white / bg-black 等）与 CSS 颜色字面量（rgba(...) / #hex）
+    // 这条断言的意义：原计划用工具类正则统计硬编码，漏掉了 scoped <style> 里的 rgba()/hex，
+    // 导致 Message.vue 的 4 处（第N段 span / blockquote / 复制按钮 / 链接）被漏检。
+    const TARGETS = [
+      'chat_history/message/Message.vue',
+      'chat_history/ChatHistory.vue',
+      'input_field/InputField.vue',
+      'input_field/Microphone.vue',
+      'character_photo_field/CharacterPhotoField.vue',
+      'VoiceToggle.vue',
+    ]
+    const UTIL_RE = /(text|bg|ring|border)-white(\/\d+)?|bg-black(\/\d+)?/g
+    const CSS_COLOR_RE = /rgba?\(|#[0-9a-fA-F]{3,6}\b/g
+    const offenders = []
+    for (const rel of TARGETS) {
+      const src = readFileSync(
+        fileURLToPath(new URL('../../components/character/chat_field/' + rel, import.meta.url)),
+        'utf8',
+      )
+      // 排除注释行（本批允许在注释里说明历史原因）
+      const code = src.split('\n').filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('/*')).join('\n')
+      const hits = [...(code.match(UTIL_RE) ?? []), ...(code.match(CSS_COLOR_RE) ?? [])]
+      // 允许白名单：纯白文字/图标在两模式下都成立（己方气泡绿底上的白字）
+      const allowed = hits.filter((h) => h !== 'text-white')
+      if (allowed.length) offenders.push(rel + ': ' + [...new Set(allowed)].join(', '))
+    }
+    expect(offenders).toEqual([])
   })
 
   it('新增的 token 与语义类不得落进 @layer（否则被 utilities 压过，浅色静默失效）', () => {
@@ -541,6 +571,7 @@ git commit -m "feat(chat): 4B token 家族 + 语义类（沉浸默认值逐字�
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createApp, h, nextTick } from 'vue'
+import { __resetChatBgState } from '@/composables/useChatBg.js'
 
 vi.mock('@/components/character/chat_field/chat_history/ChatHistory.vue', () => ({
   default: { name: 'ChatHistory', render: () => h('div') },
@@ -548,12 +579,20 @@ vi.mock('@/components/character/chat_field/chat_history/ChatHistory.vue', () => 
 vi.mock('@/components/character/chat_field/input_field/InputField.vue', () => ({
   default: { name: 'InputField', render: () => h('div') },
 }))
+// stub 渲染一个真按钮：点击即 emit，测试用真实点击驱动（比 __vueParentComponent 稳，
+// 后者只在 Vue 的 dev 构建下存在）
 vi.mock('@/components/chat/chat_window/WindowHeader.vue', () => ({
   default: {
     name: 'WindowHeader',
     props: ['character', 'simpleBg'],
     emits: ['close', 'openDrawer', 'toggleSimpleBg'],
-    render: () => h('div', { class: 'stub-header' }),
+    setup(props, { emit }) {
+      return () => h('button', {
+        class: 'stub-header',
+        type: 'button',
+        onClick: () => emit('toggleSimpleBg'),
+      })
+    },
   },
 }))
 
@@ -573,7 +612,12 @@ function mount(friend = FRIEND) {
 }
 
 describe('ChatWindow 简约模式接线（4B T3）', () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => {
+    localStorage.clear()
+    __resetChatBgState()   // ⚠️ 必须：模块单例的初值只在首次读存储时取一次。
+                           // 只清 localStorage 而不重置内存态 → 种子写不进 state（评审 R-1 实测：
+                           // 用例 2 必红、用例 3 假通过）
+  })
 
   it('默认沉浸：窗口根无 chat-simple，舞台无 stage-simple', () => {
     const host = mount()
@@ -583,6 +627,7 @@ describe('ChatWindow 简约模式接线（4B T3）', () => {
 
   it('开关为真时，窗口与舞台同时加类（同色调，D4B-2）', async () => {
     localStorage.setItem('chatSimpleBg', JSON.stringify({ 12: true }))
+    __resetChatBgState()      // 种子写入存储后必须同步进内存态
     const host = mount()
     await nextTick()
     expect(host.querySelector('.chat-window')?.className).toContain('chat-simple')
@@ -591,6 +636,7 @@ describe('ChatWindow 简约模式接线（4B T3）', () => {
 
   it('切换仅影响当前角色（每角色独立，D4B-3）', async () => {
     localStorage.setItem('chatSimpleBg', JSON.stringify({ 99: true }))
+    __resetChatBgState()
     const host = mount()
     await nextTick()
     expect(host.querySelector('.chat-window')?.className).not.toContain('chat-simple')
@@ -603,8 +649,8 @@ describe('ChatWindow 简约模式接线（4B T3）', () => {
     await nextTick()
     expect(host.querySelector('.chat-window')?.className).not.toContain('chat-simple')
 
-    // WindowHeader 在本测试中被 stub；其根元素即 stub 组件实例，可直接触发事件
-    host.querySelector('.stub-header').__vueParentComponent.emit('toggleSimpleBg')
+    // WindowHeader 在本测试中被 stub 成一个真按钮：直接点击（真实交互路径）
+    host.querySelector('.stub-header').click()
     await nextTick()
     expect(host.querySelector('.chat-window')?.className).toContain('chat-simple')
     expect(host.querySelector('.chat-stage-root')?.className).toContain('stage-simple')
@@ -939,14 +985,14 @@ git commit -m "feat(chat): ⚙ 设置弹层（简约背景开关 + 生效范围�
 
 | 文件 | 替换 |
 |------|------|
-| `Message.vue` | 时间戳 `text-white/60` → `chat-text-2`；名字 pill 用既有 `.msg-name-pill`（已在 main.css token 化）；引用 chip 的 `bg-black/25 text-white/90` → `chat-float chat-float-hover chat-focus`；scoped 样式里 `rgba(0,0,0,.4)` → `var(--cbg-code)`，`rgba(0,0,0,.45)` → `var(--cbg-code-block)`，`blockquote` 边框 → `var(--cbg-text-2)`，链接 → `var(--cbg-link)`，复制按钮底色 → `var(--cbg-code-block)` |
+| `Message.vue`（**逐处，勿漏**） | ① 时间戳 ×2 处 `text-white/60` → `chat-text-2`（`:92` `:107`）<br>② 引用 chip 按钮（`:117-118`）`bg-black/25 backdrop-blur text-white/90 hover:bg-black/40` → `chat-float chat-float-hover chat-focus`<br>③ **chip 内的「第N段」span（`:122`）`text-white/75` → `chat-text-2`**<br>④ 名字 pill：用既有 `.msg-name-pill`（已在 main.css token 化，无需改模板）<br>⑤ scoped 样式 `:deep(code)`（`:151`）`rgba(0,0,0,0.4)` → `var(--cbg-code)`<br>⑥ scoped 样式 `:deep(pre)`（`:152`）`rgba(0,0,0,0.45)` → `var(--cbg-code-block)`<br>⑦ **scoped 样式 `:deep(blockquote)`（`:154`）`border-left: 3px solid rgba(255,255,255,0.3)` → `var(--cbg-text-2)`；`color: rgba(255,255,255,0.85)` → `var(--cbg-text-2)`**<br>⑧ **scoped 样式 `:deep(a)`（`:155`）`color: #7dd3fc` → `var(--cbg-link)`**<br>⑨ **`.code-copy-btn`（`:162-163`）`background: rgba(0,0,0,0.5)` → `var(--cbg-code-block)`；`color: rgba(255,255,255,0.85)` → `var(--cbg-text-2)`；`:hover`（`:171`）`background: rgba(0,0,0,0.75)` → `var(--cbg-code-block-hover)`**<br>⚠️ ③⑦⑧⑨ 四处**原计划漏列**（评审 R-4 实测发现）：根因是计划用「Tailwind 工具类正则」统计硬编码，而 `Message.vue` 的 scoped 样式里是 `rgba()`/十六进制字面量，正则匹配不到。**本表按文件逐处重数列出** |
 | `ChatHistory.vue` | 骨架块 `skeleton-shimmer` 保留（颜色已由 main.css 按模式反转）；错误文字 `text-red-300` → `chat-danger`；空态 `text-white/90` → `chat-text-2`；示例问题 `bg-black/25 text-white/90` → `chat-float chat-float-hover chat-focus`；思考中气泡保留 `.msg-bubble-ai`；`ring-white/40` → `chat-focus` |
-| `InputField.vue` | 麦克风/发送/停止按钮 `text-white` + `hover:bg-black/20` → `chat-icon-btn`（**不加** `chat-focus`：daisyUI `.btn` 自带 `:focus-visible`，再加会出现双焦点环）（激活态仍 `bg-[var(--accent)]` 且 `text-white` 不变——绿底白字两模式通用）；未激活发送键 `bg-neutral-700` → `chat-btn-idle`；textarea `bg-black/35 text-white` → `chat-surface-2 chat-text`，加 `placeholder:text-[var(--cbg-text-3)]`；错误横幅 `text-red-300` → `chat-danger` + 保留字号 |
+| `InputField.vue` | 麦克风/发送/停止按钮 `text-white` + `hover:bg-black/20` → `chat-icon-btn chat-focus`（**加**环：实测这三个圆钮**没有** `.btn` 类，`:392/429/438` 只有 Tailwind 工具类；它们现有的 `focus-visible:ring-2 ring-white/40` 需保留）（激活态仍 `bg-[var(--accent)]` 且 `text-white` 不变——绿底白字两模式通用）；未激活发送键 `bg-neutral-700` → `chat-btn-idle`；textarea `bg-black/35 text-white` → `chat-surface-2 chat-text`，加 `placeholder:text-[var(--cbg-text-3)]`；错误横幅 `text-red-300` → `chat-danger` + 保留字号 |
 | `Microphone.vue` | 语音栏容器 `bg-black/35 backdrop-blur` → `chat-surface-2`；"语音初始化中…"/"识别中…" 的 `text-white/40` → `chat-text-3`；聆听条 `bg-white/30` → `var(--cbg-text-2)`（用内联 style 或语义类）；小点 `bg-blue-400` 保留（品牌色，两模式均可见） |
 | `VoiceToggle.vue` | `bg-black/50` + `hover:bg-black/60` → `chat-float`（非 `.btn`，**保留** `focus-visible:ring-2 ring-white/40` 焦点环） |
 | `CharacterPhotoField.vue` | `bg-black/50` → `chat-float`；名字 `text-white` → `chat-text`；加 `focus-visible:ring-2 ring-white/40`（非 `.btn`） |
 | `SpeakerIcon.vue` | 两处 `text-white` / `text-white/40` → `text-current` / `opacity-40` |
-| （说明） | 凡带 daisyUI `.btn` 类的元素（⚙/☰/✕/麦克风/发送）：**只加 `chat-icon-btn`，不加 `chat-focus`**——`.btn` 已自带 `:focus-visible` 样式（实测 `node_modules/daisyui/components/button.css`），叠加会出现双焦点环 |
+| （说明） | 焦点环按**元素实际持有的类名**判定，不按文件/区域：**有 `btn` 类**（⚙/☰/✕、`InputField:454` 重试）→ 只加 `chat-icon-btn`，**不加** `chat-focus`（daisyUI 用 `outline-width:2px` + `outline-color:var(--color-base-content)`，与 `ring` 叠加会双环）；**无 `btn` 类**（麦克风/发送/停止三个圆钮、`VoiceToggle`、`CharacterPhotoField`、示例问题、引用 chip）→ `chat-focus` **必须加**，否则抹掉 4A 挣来的焦点可见性（评审 R-2 实测） |
 
 - [ ] **Step 2: 构建并核对产物（正反两向）**
 
@@ -964,7 +1010,7 @@ grep -c "overlay-k" *.css         # 0（砍掉项未引入）
 - [ ] **Step 3: 全量单测**
 
 Run: `cd frontend && npx vitest run`
-Expected: 4A 后基线 74 + 本批新增 23（T1 7 + T2 7 + T3 5 + T4 4）= **97 passed**，0 failed
+Expected: 4A 后基线 74 + 本批新增 24（T1 7 + T2 8 + T3 5 + T4 4）= **98 passed**，0 failed
 
 - [ ] **Step 4: 提交**
 
