@@ -1,0 +1,444 @@
+# 聊天界面改版 Phase 4B —— 简约背景重做 · 设计文档
+
+> 状态：**待门 1/门 2 批准**（2026-09-13 起草）
+> 分级：**L**（跨 12 个前端文件 + 全局 token 家族；纯前端，后端零改动）
+> 上游事实源：`2026-09-07-chat-ui-redesign-spec-for-llm.md` §2-C3 / §6.1 / §6.6 / §13-Phase 4；`2026-09-07-chat-ui-redesign-logic-design.md` §3.4 / §3.5 / §8.2 / §10
+> 关联批次：`2026-09-13-chat-ui-phase4a-a11y-design.md`（4A 先交付；4B 依赖 4A 已合并，但**不依赖其代码**，仅依赖同一批文件不被并发修改）
+> ⚠️ 本主题已被否决两次：**PR #37**（自适应蒙层 + 浅色简约）、**PR #40**（深色简约 + 文字描边）。本文件为第三次起草，**不延续任何被判否的方案**。
+
+---
+
+## 0. 为什么重做，以及这一版改了什么
+
+### 0.1 两次被否的共同点（owner 2026-09-13 于 PR #40 的结论）
+
+> "「简约背景」该是什么样，两次都是 Agent 自己拍的，两次都没拍对。"
+
+具体到观感：
+
+| 轮次 | 方案 | 被否的直接原因 |
+|------|------|----------------|
+| PR #37 | 窗口浅色 `#f5f5f4` + 自适应蒙层 + 舞台压暗 | 整体「做得不好」；实测暴露亮图下浮层文字仅 1.59~2.43:1 |
+| PR #40 | 窗口深色 `#1c1917` + 舞台压到近黑 | 「深色简约背景造成'把舞台变黑'的观感，**与'简约背景'这个名字不符**」 |
+
+### 0.2 本版与前两版的根本区别
+
+**设计决策由用户拍板，不再由 Agent 拍。** 2026-09-13 澄清阶段已确认四项：
+
+| # | 决策 | 用户原话/选择 |
+|---|------|--------------|
+| ① | 舞台与窗口**必须同色调** | 「我理解窗口和舞台色调应该一致吧」（否掉了 Agent 提出的"舞台不动、只换窗口"方案——那会让窗口像贴在暗色板上的一块板） |
+| ② | 底色方向 **浅色（暖石白）** | 「浅色（暖石白，推荐）」 |
+| ③ | 范围 **每角色独立** | 「每角色独立（推荐）」——不再出现"开一个角色、所有角色都变，界面又没说明" |
+| ④ | 层次：**舞台略深、窗口纯白** | 「同色阶：舞台略深、窗口纯白（推荐）」 |
+
+**本版不做的事**（防蔓延，均为前两版被判否或额外引入的复杂度）：
+
+| 砍掉项 | 理由 |
+|--------|------|
+| 亮度自适应蒙层 / canvas 采样 / `--overlay-k` | 简约模式下没有图，**不需要**自适应；沉浸模式的固定蒙层已在 Phase 1~3 实测可用 |
+| 主色提取 `accent` | 悬浮在"提取出来的颜色好不好看"上，不可控；**沿用全局 `--accent`** |
+| 文字描边 `--msg-text-shadow` | 随 PR #40 一并作废；浅色模式下无图，不需要承托 |
+| 创建页聊天效果预览 | 独立价值，属另一主题（创建流程），不在本批 |
+| 跟随系统深色 | 与全站单一 light 主题矛盾；用户已选"浅色" |
+| 舞台提亮 `brightness(1.3)`、压暗 0.35→0.22 | 那是对深色方案的补偿；本版不改沉浸模式一个像素 |
+
+### 0.3 为什么"浅色简约"能同时满足可读性与 C3
+
+沉浸模式的可读性上限由**背景图内容**决定。最坏情况（纯白背景图）下，实测（WCAG 口径，sRGB 分量空间合成）：
+
+| 位置 | 现状（master，固定蒙层 K=1） | 是否达标 |
+|------|------------------------------|----------|
+| 顶部浮层文字（名字 pill，白 70%） | **2.63:1** | ✗（正文需 ≥4.5:1） |
+| 顶部 AI 气泡白字（`bg-black/35` 叠 α=0.25 蒙层） | **4.17:1** | △ 接近 |
+| 中部白字 | 3.07:1 | ✗ |
+| 底部白字 | 5.74:1 | ✓（仅底部） |
+
+而浅色简约模式**全部 ≥ 4.59:1**（§3.3 逐项列出）。这正是 spec §2-C3「背景非用户所设，用户须能降级」存在的意义：**沉浸模式有视觉风险但氛围好，简约模式牺牲氛围换取确定性**。两者都由用户在**每个角色**上自行取舍。
+
+---
+
+## 1. 事实核查（实施前基线，本机 master `7279335` 已核实）
+
+| # | 事实 | 证据 | 影响 |
+|---|------|------|------|
+| F1 | 窗口与舞台的背景图都来自 `friend.character.background_image`，直接写在 `:style` 内联 | `ChatWindow.vue:69-71,88-90` | 简约模式必须同时接管两处 |
+| F2 | `.window-scrim`（渐变蒙层）、`.stage-blur`/`.stage-dim`、`.msg-bubble-*`、`.date-capsule`、`.msg-name-pill`、`.session-active`、`.skeleton-shimmer` 全部定义在 `assets/main.css`，**值写死** | `main.css:26-114` | 需要 token 化；但**默认值必须逐字保留**，否则沉浸模式回归 |
+| F3 | 硬编码白/黑玻璃类共 **34 处**，分布在 8 个文件 | `VoiceToggle(2) / ChatHistory(4) / CharacterPhotoField(2) / ChatIndex(1) / WindowHeader(3) / InputField(7) / ChatWindow(5) / Microphone(5)` | 这是"浅色化"的真实工作量；**逐处替换为 token，不重写模板结构** |
+| F4 | `--accent` 定义在全局 `:root`（`#10b981`），无任何地方按角色覆盖 | `main.css:9-11` | 简约与沉浸两模式**共用同一个 accent**，本批不引入提取 |
+| F5 | 用户气泡底色 `color-mix(in srgb, #10b981 70%, black)` = `#0b825a`，白字对比 **4.82:1** | `main.css:60-63`；对比度实算 | 两模式下均已达标。**但**它硬编码了 `#10b981`，若日后 accent 可变就会失效 → 本批改为引用 `var(--accent)` |
+| F6 | 会话栏（`SessionList`/`SessionItem`）与 NavBar **已是浅色**（daisyUI 默认主题：`bg-base-200`/`bg-base-100` + 深字），`session-active` 用 accent 40% 打底 | `SessionList.vue:60`、`SessionItem.vue`、`main.css:44-49` | 简约模式窗口变浅后，**全页色调反而统一**；会话栏不改 |
+| F7 | 移动端（<1024px）窗口铺满，**无舞台** | `main.css:23-31`（媒体查询）、`ChatWindow.vue:86`（`hidden lg:block`） | 简约模式在移动端只影响窗口自身；逻辑天然兼容 |
+| F8 | `--user-bubble-bg` / `--overlay-k` 在 master **不存在** | `grep -rn "overlay-k\|user-bubble-bg" frontend/src` → 空 | 本版不引入（砍掉项） |
+| F9 | 头部条（`.h-14 bg-black/40 backdrop-blur`）、输入栏（`bg-black/35 backdrop-blur`）、思考中气泡、引用 chip、示例问题、日期胶囊、名字 pill 都是"深玻璃 + 白字"族 | `WindowHeader.vue:8`、`InputField.vue:406`、`ChatHistory.vue:192,204`、`Message.vue:117`、`main.css` | **浅色模式 = 这一族的整体反转**（不是个别调色） |
+| F10 | `SpeakerIcon` 内部写死 `text-white` / `text-white/40`；`MicIcon`/`SendIcon`/`StopIcon` 继承 `currentColor` | `SpeakerIcon.vue:12,26`；`InputField.vue:392-445`（按钮类名给 `text-white`） | 浅色下需把这两个来源都改为 token |
+| F11 | `localStorage` 在本项目已有先例：`useVoiceToggle`（全局布尔） | `composables/useVoiceToggle.js` | 本批新增 key，**不改** `useVoiceToggle` |
+| F12 | `Character.background_image` 为空时，`ChatWindow` 仍会渲染 `url(undefined)` | `ChatWindow.vue:69`（无 `v-if`） | 空背景图场景本批必须显式处理（§3.6 E2） |
+
+---
+
+## 2. 决策记录
+
+| # | 决策 | 来源 |
+|---|------|------|
+| D4B-1 | 简约模式底色为**浅色**：舞台 `#e7e5e4`、窗口 `#fafaf9`、AI 气泡 `#ffffff`、文字 `#1c1917` | 用户 2026-09-13 选择「浅色（暖石白）」 |
+| D4B-2 | **舞台与窗口同色调**，舞台略深一档，形成"舞台 → 窗口"两级层次 | 用户 2026-09-13：「窗口和舞台色调应该一致」+「舞台略深、窗口纯白」 |
+| D4B-3 | 开关**每角色独立**（按 `character_id` 记忆） | 用户 2026-09-13：「每角色独立」 |
+| D4B-4 | 开关落在 WindowHeader 的 **⚙ 设置弹层**内（不设独立月亮按钮） | LD §3.5 + Q6（已拍板） |
+| D4B-5 | 沉浸模式**零视觉回归**：所有类名/数值改动必须产出与当前**逐字相同**的 CSS 结果 | 契约门 4 + 前两轮教训 |
+| D4B-6 | 会话栏与 NavBar **不改**（它们本就是浅色） | 本设计 §1-F6；见 §9 待决 Q-4B-1 |
+| D4B-7 | 用户气泡底色改为引用 `var(--accent)`（原先硬编码 `#10b981`），行为等价、为将来留口 | §1-F5 |
+| D4B-8 | 切换**不做过渡动画**（避免再引入 `@property` 注册那类复杂度） | 砍掉项，见 §0.2 |
+
+### 2.1 已否决的替代方案
+
+| 方案 | 否决理由 |
+|------|----------|
+| 舞台不动、只换窗口（Agent 初版提案） | 用户当场否掉：窗口会像贴在暗色板上的一块板，**色调不一致** |
+| 深色简约（PR #40） | 用户：「把舞台变黑，与'简约背景'这个名字不符」 |
+| 自适应蒙层 + 主色提取（PR #37） | 简约模式无图可采样；主色提取不可控。已在 §0.2 列为砍掉项 |
+| 全局用户偏好（PR #37/#40 的实现） | 语义与直觉不符；用户已选「每角色独立」 |
+| 舞台=窗口同色（无明度差） | 窗口边界只能靠描边/阴影，偏弱；用户已选"舞台略深" |
+| 复用 `useChatSettings`（PR #40 的单例） | 该实现是"一个布尔给全站"，与"每角色独立"直接冲突；本批新写，不继承 |
+
+---
+
+## 3. 详细设计
+
+### 3.1 状态模型
+
+**存储**（localStorage，key 与结构）：
+
+```jsonc
+// key: "chatSimpleBg"   value: { "<character_id>": true, ... }
+{
+  "12": true,     // 角色 12 开了简约背景
+  "37": false     // 显式关闭（与"从未设置过"等价，但保留写入便于将来做"重置"）
+}
+```
+
+**为什么不用 PR #40 的 `useChatSettings` 单例**：那个实现把两个开关（简约背景、语音自动发送）合并进一个模块级单例，语义是"全局用户偏好"。本批只需**一个**按角色区分的布尔，写一个职责单一的 composable 更清楚（`useChatBg(characterId)`），也避免把"语音自动发送"这个与本主题无关的开关一起拖进来。
+
+> **登记**：`useChatSettings` 单例与"语音自动发送"（Phase 3 spec §9 的 D6 已拍板默认关、作为设置项）**不在本批**。若日后要做，另行立项。
+
+**读**：`ChatWindow` 挂载时按 `character_id` 读一次；**写**：切换时写回。跨标签页同步不做（YAGNI）。
+
+### 3.2 组件与数据流
+
+```
+ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一个实例，:key 重建）
+├── 计算 stageClass / windowClass   → "chat-simple" 开关
+├── 舞台（桌面）  .stage-blur / .stage-dim   → token 化后受 .chat-stage-root.chat-simple 作用
+├── .chat-window  → 加 .chat-simple 类 + 注入 --cbg-* token
+│   ├── WindowHeader.vue            ← 新增 ⚙ 弹层（开关落点）
+│   │   ├── CharacterPhotoField.vue ← token 化（浅色下变深字）
+│   │   ├── VoiceToggle.vue         ← token 化（+ SpeakerIcon 改 currentColor）
+│   │   └── 收纳 ☰ / ✕ 的 token 化
+│   ├── ChatHistory.vue             ← 示例问题、骨架、思考中气泡 token 化
+│   │   └── Message.vue             ← 气泡、名字 pill、时间戳、日期胶囊、引用 chip、markdown token 化
+│   └── InputField.vue              ← 输入区、麦克风/发送/停止、错误横幅 token 化
+│       └── Microphone.vue          ← 语音栏容器 token 化
+```
+
+**所有权**：`simpleBg` 状态在 `ChatWindow`（唯一需要它的地方），**不**提到 `ChatIndex`。理由：`:key="friend.character.id"` 已保证切角色即重建，状态自然隔离；提到上层反而要处理"切换时旧值残留"。
+
+### 3.3 色板与对比度（**全部数值已实算**，非估算）
+
+浅色族（暖石白 `stone` 系）：
+
+| 语义 | token | 值 | 用途 |
+|------|-------|-----|------|
+| 舞台底 | `--cbg-stage` | `#e7e5e4` | 舞台纯色（替代模糊图 + 压暗） |
+| 窗口底 | `--cbg-window` | `#fafaf9` | 角色之窗背景 |
+| 气泡底（AI） | `--cbg-bubble-ai` | `#ffffff` | AI 消息气泡 |
+| 气泡描边（AI） | `--cbg-bubble-ai-border` | `#e7e5e4` | 与窗口底区分（白底白窗时唯一分界） |
+| 表面底（头部/输入/弹层） | `--cbg-surface` | `#ffffff` | 头部条、输入栏、设置弹层 |
+| 表面描边 | `--cbg-surface-border` | `#e7e5e4` | 同上（浅色下必需，见 §3.5） |
+| 浮层底（chip/pill/胶囊） | `--cbg-float` | `#f5f5f4` | 引用 chip、示例问题、日期胶囊 |
+| 浮层底（强调，名字 pill） | `--cbg-float-strong` | `#e7e5e4` | 名字 pill 底衬 |
+| 主文字 | `--cbg-text` | `#1c1917` | 正文、名字、消息 |
+| 次要文字 | `--cbg-text-2` | `#57534e` | 时间戳、日期胶囊、引用 chip、空态 introduction |
+| 三级文字 | `--cbg-text-3` | `#78716c` | 占位符（`#ffffff` 底上 4.80:1 达标） |
+| 悬停底 | `--cbg-hover` | `rgba(28,25,23,0.06)` | 图标按钮 hover（浅底上压深） |
+| 骨架 | `--cbg-skeleton` | `rgba(28,25,23,0.08)` → `0.14` | shimmer 渐变（浅底上压深） |
+| 分隔/焦点环 | `--cbg-ring` | `rgba(28,25,23,0.30)` | `focus-visible:ring` |
+
+**对比度实算结果**（WCAG 2.x，sRGB 分量空间合成）：
+
+| 文字 | 底色 | 比值 | 要求 | 结论 |
+|------|------|------|------|------|
+| `#1c1917` 正文 | `#fafaf9` 窗口 | **16.74:1** | ≥4.5 | ✓ |
+| `#1c1917` AI 正文 | `#ffffff` 气泡 | **17.49:1** | ≥4.5 | ✓ |
+| `#57534e` 次要 | `#fafaf9` 窗口 | **7.30:1** | ≥3（次要）/ ≥4.5（正文） | ✓ 均满足 |
+| `#78716c` 三级/占位 | `#ffffff` 输入底 | **4.80:1** | ≥3 | ✓ |
+| `#1c1917` 名字 | `#e7e5e4` pill 底 | **13.93:1** | ≥4.5 | ✓ |
+| `#44403c` 引用 chip 文字 | `#f5f5f4` chip 底 | **9.42:1** | ≥4.5 | ✓ |
+| `#57534e` 时间戳 | `#fafaf9` 窗口 | **7.30:1** | ≥3 | ✓ |
+| `#57534e` 引用 chip | `#f5f5f4` chip 底 | **7.30:1** | ≥4.5 | ✓（无需 `#44403c`） |
+| `#0b825a`（accent 70% + 黑）白字 | 用户气泡 | **4.82:1** | ≥4.5 | ✓（沿用现状，D4B-7） |
+
+**最坏档 = 4.80:1（占位符）**，全部达标。**无需任何"档位阶梯"或运行时解析**——这是与前两版最大的复杂度差异：浅色下底色确定，色值可写死。
+
+> **一处曾被写错的地方（留档）**：本设计草稿第一版把引用 chip 的对比度写成「9.42:1，用 `#44403c` 档」。但 `9.42:1` 是 `#44403c` 在 `#f5f5f4` 上的值，而设计选定的 token 是 `--cbg-text-2 = #57534e`（在 `#f5f5f4` 上是 **7.30:1**）。两者都达标，但**引用的数字必须与选定的 token 同源**——上一轮两次翻车的根因正是"数字与口径不同源"。**故保留 `#57534e`，不使用 `#44403c`。**
+
+> **口径声明**（吸取教训）：以上数值由 WCAG 相对亮度公式实算，alpha 合成为 **sRGB 分量空间线性混合**（CSS 语义）。**不是**线性亮度空间混合。上一轮曾两次搞错这个口径，本批所有数值均以公式输出为准。
+
+### 3.4 token 架构（如何做到"零视觉回归"同时让浅色接管）
+
+**做法：在 `.chat-window` 根节点定义一套 `--cbg-*` token，默认值 = 当前沉浸模式的**逐字原值**；`.chat-window.chat-simple` 覆盖为浅色值。** 所有子组件只写 `var(--cbg-*)`，不写死颜色。
+
+```css
+/* 沉浸模式（默认）：值 = 现状 main.css 逐字原值，确保零回归 */
+.chat-window {
+  --cbg-window: transparent;                       /* 现状：图铺满，无纯色底 */
+  --cbg-bubble-ai: rgba(0, 0, 0, 0.35);
+  --cbg-bubble-ai-border: transparent;
+  --cbg-text: #ffffff;
+  --cbg-text-2: rgba(255, 255, 255, 0.70);
+  --cbg-text-3: rgba(255, 255, 255, 0.40);
+  --cbg-surface: rgba(0, 0, 0, 0.40);
+  --cbg-surface-border: transparent;
+  --cbg-float: rgba(0, 0, 0, 0.25);
+  --cbg-float-strong: rgba(0, 0, 0, 0.30);
+  --cbg-hover: rgba(0, 0, 0, 0.20);
+  --cbg-skeleton: rgba(255, 255, 255, 0.08);       /* 渐变三停点见实现 */
+  --cbg-ring: rgba(255, 255, 255, 0.40);
+  --cbg-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+
+/* 简约模式（浅色） */
+.chat-window.chat-simple {
+  --cbg-window: #fafaf9;
+  --cbg-bubble-ai: #ffffff;
+  --cbg-bubble-ai-border: #e7e5e4;
+  --cbg-text: #1c1917;
+  --cbg-text-2: #57534e;
+  --cbg-text-3: #78716c;
+  --cbg-surface: #ffffff;
+  --cbg-surface-border: #e7e5e4;
+  --cbg-float: #f5f5f4;
+  --cbg-float-strong: #e7e5e4;
+  --cbg-hover: rgba(28, 25, 23, 0.06);
+  --cbg-skeleton: rgba(28, 25, 23, 0.08);
+  --cbg-ring: rgba(28, 25, 23, 0.30);
+  --cbg-shadow: 0 24px 64px rgba(28, 25, 23, 0.18);
+}
+```
+
+**舞台**同理，但作用域在窗口的**兄弟**节点上（`ChatWindow.vue:83-92`）：
+
+```css
+.chat-stage-root .stage-blur { /* 保持现状：图 + blur */ }
+.chat-stage-root .stage-dim  { background: rgba(0, 0, 0, 0.35); }
+
+.chat-stage-root.stage-simple .stage-blur { display: none; }        /* 不显示图 */
+.chat-stage-root.stage-simple .stage-dim  { background: #e7e5e4; }  /* 纯色舞台 */
+```
+
+**为什么 CSS 变量能穿透 scoped 样式**：CSS 自定义属性**继承**，Scoped CSS 只加属性选择器、不隔离变量继承。`Message.vue` 等子组件在 scoped 规则里写 `var(--cbg-text)` 即可取到由 `.chat-window` 注入的值。**已验证该机制在本项目生效**：Phase 1 起 `.session-active` 就在用 `var(--accent)`（定义于 `:root`），而 `SessionItem.vue` 是 scoped 组件。
+
+**为什么不用 Tailwind 任意值语法**（如 `text-[var(--cbg-text)]`）：可读性差、且 34 处替换后模板会更吵。统一进 `main.css` 的语义类（`.msg-bubble-ai` 等已存在），改动面更小。
+
+**硬性约束（门 3 评审要点）**：token 化改造后，沉浸模式下的**每个**声明必须与改造前逐字等价。做法是逐个类对照 `git show master:frontend/src/assets/main.css` 校验；构建产物比对见 §6-断言 B8。
+
+**一处必须补偿的盒模型变更**：浅色模式下 AI 气泡需要 `1px` 描边才能与窗口底（`#ffffff` vs `#fafaf9`）区分，而沉浸模式下该描边取 `transparent`。但**加边框会改变盒模型**——`.msg-bubble` 现为 `padding: 8px 12px`（`main.css:59-68`），加 `1px` 边框后气泡外尺寸宽高各 +2px，破坏"零视觉回归"。
+
+**补偿方案**：`.msg-bubble` 统一加 `border: 1px solid transparent`，并把 `padding` 改为 `7px 11px`，使**外尺寸逐像素不变**。验收见 §6-断言 B6（截图对照）与 B8（产物核对）。
+
+> 这是本批唯一需要动几何值的地方，**必须用截图逐项确认**，不得凭推理认为"应该没问题"。
+
+### 3.5 组件级规格（浅色模式的逐项反转）
+
+下表是"深玻璃 + 白字"→"浅面 + 深字"的完整清单。**沉浸列的现有实现不动**（走 §3.4 的默认 token）。
+
+| 元素 | 现状（沉浸） | 简约模式 | 依据 |
+|------|--------------|----------|------|
+| 窗口背景 | 角色图 cover | `#fafaf9` 纯色 | D4B-1 |
+| 窗口蒙层 `.window-scrim` | 渐变 `rgba(0,0,0,0.25→0.60)` | `display: none` | 无图即无承托需求 |
+| 窗口阴影 | `0 24px 64px rgba(0,0,0,.45)` | `0 24px 64px rgba(28,25,23,.18)` | 浅底上重阴影显脏 |
+| 舞台 | 模糊图 + `rgba(0,0,0,.35)` | `#e7e5e4` 纯色 | D4B-2 |
+| 头部条 | `bg-black/40 backdrop-blur`（无边框） | `--cbg-surface` + `1px` `--cbg-surface-border` | 浅底上白条需描边才有边界（PR #37 评审 M3 同一结论） |
+| 头部图标（☰/✕） | `text-white`，hover `bg-black/20` | `--cbg-text`，hover `--cbg-hover` | |
+| 语音开关 | `bg-black/50`，图标白 | `--cbg-float`，图标 `--cbg-text` | `SpeakerIcon` 改 `currentColor`（F10） |
+| 名字 pill | `bg-black/30` + `white/70` | `--cbg-float-strong` + `--cbg-text` | 13.93:1 |
+| AI 气泡 | `bg-black/35` + blur + 白字 | `--cbg-bubble-ai` + `1px` 描边 + `--cbg-text` | 白底白窗，靠描边分界 |
+| 用户气泡 | `#0b825a` + 白字 | **不变**（同色同字） | 4.82:1 已达标；D4B-7 |
+| 时间戳 / hover | `text-white/60` | `--cbg-text-2` | 7.30:1 |
+| 日期胶囊 | `bg-black/25` + `white/60` | `--cbg-float` + `--cbg-text-2` | |
+| 引用 chip | `bg-black/25` + `white/90` | `--cbg-float` + `--cbg-text-2` | 浮层底上 7.30:1（**非** `#f5f5f4` 上的 9.42:1——上一版此处口径写错，以本行为准） |
+| markdown 行内 code | `bg-black/.4` + 白字 | `rgba(28,25,23,0.06)` + `--cbg-text` | 浅底上"更深一点" |
+| markdown `pre` | `bg-black/.45` | `rgba(28,25,23,0.08)` | 代码块底 |
+| markdown 链接 | `#7dd3fc` | `#0f766e` | 浅底上深青（对比 4.5+） |
+| 输入栏 | `bg-black/35 backdrop-blur` + 白字 | `--cbg-surface` + `1px` 描边 + `--cbg-text` | |
+| 输入占位符 | `white/40`（未显式设） | `--cbg-text-3`（4.80:1） | |
+| 麦克风/发送键 | 白图标，未激活 `bg-black/20`→`bg-neutral-700` | 图标 `--cbg-text`；未激活 `--cbg-float` | 语音聆听/发送激活态仍用 `--accent` |
+| 错误横幅（语音） | `text-red-300` | `#b91c1c` | 浅底上红字可读 |
+| 骨架 shimmer | 白 8%→18% 渐变 | 深 8%→14% 渐变 | 浅底上压深 |
+| 空态 introduction | `text-white/90` | `--cbg-text-2` | 7.30:1 |
+| 示例问题胶囊 | `bg-black/25` + `white/90` | `--cbg-float` + `--cbg-text` + 描边 | |
+| 思考中气泡 | 同 AI 气泡（白点） | 同 AI 气泡（深点） | `.thinking-dot` 用 `currentColor`（4A 已引入该类） |
+| 引用浮层（`ChatWindow` 内 modal） | `bg-neutral-900/95` + 白字 | `--cbg-surface` + `--cbg-text`（浅色弹层） | 它是窗口内容的一部分 |
+| `focus-visible` 环 | `ring-white/40` | `--cbg-ring` | |
+
+**显式不改**：会话栏全部、NavBar、消息分组间距/字号/圆角、气泡 `max-width: 75%`、窗口 3:5 几何。
+
+> **例外（唯一一处动几何）**：`.msg-bubble` 的 `padding: 8px 12px` → `7px 11px` + `border: 1px solid transparent`。原因是 AI 气泡在浅色下需要 1px 描边才能与窗口底区分，而加边框会撑大外尺寸。详见 §3.4 的"必须补偿的盒模型变更"。**外尺寸逐像素不变**，但这是本批唯一不能靠"值等价"证明、只能靠截图证明的一处。
+
+### 3.6 设置弹层与异常场景
+
+#### 弹层（D4B-4）
+
+```
+┌─ 头部条 ────────────────────────────────┐
+│ [头像 名字]        ⚙  🔊  ✕             │   ⚙ = 新增入口
+└──────────────────────────────────────────┘
+                     ↓ 点击 ⚙
+        ┌───────────────────────────────┐
+        │  简约背景            ●───○     │   ← toggle switch
+        │  仅对「龙安洋」生效             │   ← 每角色范围说明（D4B-3 的界面交代）
+        ├───────────────────────────────┤
+        │  （后续设置项的位置）           │   ← 占位说明，本期无第二项
+        └───────────────────────────────┘
+```
+
+**要点：**
+
+1. **「仅对『X』生效」这行是硬性要求** —— 上次被否的原因之一正是"全局偏好但界面未说明"。范围说明必须在界面上，不能只写在文档里。
+2. 开关是原生 `<button role="switch" aria-checked>` 或 daisyUI `<input type="checkbox" class="toggle">`（实现时二选一，倾向后者：语义与键盘行为由原生提供）。若用 `<input>`，其外必须包 `<label>` 提供可访问名称。
+3. 键盘：`Esc` 关闭；焦点进入弹层后 `Esc` 后焦点回到 ⚙。点击外部关闭。
+4. 位置：`absolute` 定位于头部条下方右对齐，`z-40`（高于气泡与头部，低于引用浮层 `z-20`? —— **实现时统一层序并记入计划**：引用浮层当前是 `z-20`，弹层需在其下或上取决于是否可能同时出现；结论：弹层 `z-30`，点开弹层时若引用浮层正打开则先关引用浮层）。
+5. 图标：`⚙` 用**内联 SVG**（不用 emoji 字形——PR #40 验收反馈：emoji 各平台形状不一）。
+
+#### 异常与边界
+
+| # | 场景 | 处理 |
+|---|------|------|
+| E1 | `localStorage` 不可用（隐私模式/被禁用） | `try/catch` 包裹读写，失败则退化为"内存态 + 默认关闭"，不抛错、不影响聊天 |
+| E2 | `character.background_image` 为空 | **沉浸模式**：现状会渲染 `url(undefined)`（F12）→ 本批顺手修正为"无图时用深色兜底 `#1c1917` + 不渲染蒙层"（属沉浸模式的可见缺陷修复，**需你确认是否纳入本批**，见 §9-Q-4B-2）。**简约模式**：本就无图，不受影响 |
+| E3 | 图片加载失败（URL 有效但 404/超时） | 同上兜底；`<img>`/背景图 `@error` 标记 → 走深色兜底，不显示破图 |
+| E4 | 切换角色 | `:key` 重建 → 新实例按新 `character_id` 读设置；**不会**继承上一个角色的状态 |
+| E5 | 移动端 | 无舞台；窗口本身按简约 token 渲染（F7），其余逻辑一致 |
+| E6 | 弹层打开时切换角色 | `:key` 重建会卸载弹层与其状态（关闭）——可接受，不需额外处理 |
+| E7 | 简约模式下收到引用/长代码块/markdown | 全部走 §3.5 的 token，无特例 |
+
+---
+
+## 4. 文件清单
+
+| 动作 | 文件 | 职责 |
+|------|------|------|
+| 新增 | `frontend/src/composables/useChatBg.js` | 按 `character_id` 读/写/切换（localStorage，`try/catch`） |
+| 新增 | `frontend/src/utils/__tests__/chatBg.test.js` | 存储读写与容错（E1） |
+| 新增 | `frontend/src/components/character/icons/SettingsIcon.vue` | ⚙ 内联 SVG（替换 emoji 字形） |
+| 修改 | `frontend/src/assets/main.css` | `--cbg-*` token 家族 + `.chat-simple` / `.stage-simple` + `.chat-popover` |
+| 修改 | `frontend/src/components/chat/chat_window/ChatWindow.vue` | 持有 `simpleBg`、渲染 `stage-simple`/`chat-simple`、引用浮层 token 化 |
+| 修改 | `frontend/src/components/chat/chat_window/WindowHeader.vue` | ⚙ 入口 + 设置弹层（含范围说明、Esc/点外关闭、焦点管理）+ token 化 |
+| 修改 | `frontend/src/components/character/chat_field/character_photo_field/CharacterPhotoField.vue` | token 化 |
+| 修改 | `frontend/src/components/character/chat_field/VoiceToggle.vue` | token 化 |
+| 修改 | `frontend/src/components/character/icons/SpeakerIcon.vue` | `text-white` → `currentColor`（F10） |
+| 修改 | `frontend/src/components/character/chat_field/chat_history/ChatHistory.vue` | 骨架/空态/示例问题/思考中 token 化 |
+| 修改 | `frontend/src/components/character/chat_field/chat_history/message/Message.vue` | 气泡/名字/时间戳/日期/引用/markdown token 化 |
+| 修改 | `frontend/src/components/character/chat_field/input_field/InputField.vue` | 输入区/按钮/错误横幅 token 化 |
+| 修改 | `frontend/src/components/character/chat_field/input_field/Microphone.vue` | 语音栏容器 token 化 |
+
+**后端零改动**。**会话栏与 NavBar 不改**（D4B-6）。
+
+---
+
+## 5. 测试与验证方案
+
+### 5.1 自动化（本机）
+
+| 命令 | 期望 |
+|------|------|
+| `cd frontend && npx vitest run` | 现有 65 + 4A 新增 不回归；`chatBg.test.js` 全绿 |
+| `cd frontend && npm run build` | exit 0 |
+| 产物核对 | 构建产物 CSS 含 `--cbg-window` / `.chat-simple` / `.stage-simple` / `#fafaf9` / `#e7e5e4`；沉浸模式原有值（`rgba(0,0,0,.35)`、`blur(24px)`）**仍在** |
+
+### 5.2 手工（云端验收，本机不起服务）
+
+1. 打开 `/chat/:id/` → 默认沉浸模式，**与改动前逐像素一致**（对照 master 截图）
+2. ⚙ → 打开弹层 → 看到「简约背景」与「仅对『角色名』生效」
+3. 开启 → 窗口与舞台同时变浅、同色调；消息、时间戳、引用 chip、日期胶囊、输入框、占位符、空态、示例问题全部可读
+4. **刷新页面 → 仍为简约**；切换到另一个角色 → **该角色仍是沉浸**（每角色独立的核心验证）
+5. 回到第一个角色 → 简约仍开启
+6. 发一条消息 → 流式、引用 chip、代码块、思考中三点在浅色下均正常
+7. 键盘：Tab 到 ⚙ → Enter 打开 → Tab 到开关 → 空格切换 → Esc 关闭 → 焦点回 ⚙
+8. 系统"减少动态效果" → 骨架与三点静止
+9. 移动端（窄视口）：简约模式下窗口铺满且为浅色，无舞台残留
+
+### 5.3 对比度核验（**可选但推荐**）
+
+用浏览器 DevTools 取色器抽查 §3.3 表中 4 组关键组合，确认 ≥ 表中值。数值已在设计阶段实算，此处仅作落地确认。
+
+---
+
+## 6. 验收断言（可勾选）
+
+| # | 断言 | 验证方式 |
+|---|------|----------|
+| B1 | 开启简约后，窗口与舞台**同色调**（浅色），舞台略深于窗口 | 手工 5.2-3 |
+| B2 | 浅色下 §3.3 表中 8 组文字/底色对比度全部达标（最坏 4.80:1） | 设计期实算（§3.3）+ 手工抽查 5.3 |
+| B3 | 开关**每角色独立**：A 角色开启不影响 B 角色；切回 A 仍开启 | 手工 5.2-4/5 |
+| B4 | 刷新后状态保持（localStorage） | 手工 5.2-4 |
+| B5 | 界面明确告知生效范围（「仅对『X』生效」） | 手工 5.2-2 |
+| B6 | **沉浸模式零视觉回归**：与改动前逐像素一致 | 手工 5.2-1 + 产物核对 5.1 |
+| B7 | ⚙ 弹层键盘完全可用（Tab/Enter/空格/Esc/焦点回归），可访问名称与状态齐备 | 手工 5.2-7 |
+| B8 | 沉浸模式关键 CSS 值在构建产物中逐字保留（`rgba(0,0,0,.35)` / `blur(24px)` / `saturate(1.35)` / `.45` 阴影） | 产物核对 5.1 |
+| B9 | 无背景图 / 图片加载失败时不出现破图或亮底白字（E2/E3） | 手工（造一个无背景图角色） |
+| B10 | 现有前端单测不回归 | `npx vitest run` |
+
+---
+
+## 7. 范围边界（明确不做）
+
+| 不做 | 归属 |
+|------|------|
+| 亮度自适应蒙层 / `--overlay-k` / canvas 采样 / 主色提取 | 已否决（§0.2） |
+| 文字描边 `--msg-text-shadow` | 随 PR #40 作废 |
+| 创建/编辑角色页的聊天效果预览、亮度提示 | 另一主题（创建流程） |
+| 会话栏、NavBar 的配色改动 | D4B-6（它们本就是浅色） |
+| 语音自动发送开关、`useChatSettings` 单例 | 与"每角色独立"冲突；另行立项（§3.1 已登记） |
+| 深色简约 / 跟随系统深色 | 用户已选浅色 |
+| 切换过渡动画 | D4B-8 |
+| 会话列表最后消息预览（spec §11 可选项） | 后端增强，另一主题 |
+
+---
+
+## 8. 风险与回滚
+
+| 风险 | 缓解 |
+|------|------|
+| **token 化改造破坏了沉浸模式**（最重的风险） | §3.4 硬性约束 + 断言 B8 产物逐字核对 + 截图对照 B6 |
+| 34 处替换漏改某处，浅色下出现"白字白底" | §3.5 清单逐项对照 + 手工 5.2-3 覆盖全部元素 |
+| 未达"整体观感"预期（第三次被否） | 本轮已把方向决策交给用户（§0.2 四项）；**云端验收时若仍不满意，回滚代价 = 一个分支**，master 不受污染 |
+| `localStorage` 权限异常导致聊天页白屏 | E1 容错 + 单测 |
+| 弹层层序与引用浮层冲突 | §3.6-4 明确层序策略，实现时写入计划并验证 |
+
+**回滚**：纯前端，无迁移/数据/接口。`git revert` 分支或直接弃用分支即可（生产走 master 镜像）。
+
+---
+
+## 9. 待决问题（开工前需要你确认）
+
+| # | 问题 | 我的建议 |
+|---|------|----------|
+| Q-4B-1 | 开启简约后，**会话栏**是否也要跟着变？（现状会话栏已是浅色 daisyUI 主题；简约模式下舞台也变浅，全页看起来会统一。我的判断：**不动**） | **不动**。改它属于跨角色的公共区域，且它本就达标；若你觉得色调不齐，我们单独看 |
+| Q-4B-2 | E2/E3（无背景图 / 图片加载失败）在 **沉浸模式**下是既有缺陷（`url(undefined)` → 渲染异常）。是否纳入本批顺手修？ | **纳入**。它是本批必然会碰到的代码路径（我要在同一处加 `chat-simple` 分支），顺手修成本极低 |
+| Q-4B-3 | 窗口底色用 `#fafaf9`（暖白）还是 `#f5f5f4`（spec 原文）？ | **`#fafaf9`**。你说的是"纯白"，`#fafaf9` 比 `#f5f5f4` 更接近白，同时保留暖调；且与 AI 气泡 `#ffffff` 拉开 2% 明度，气泡靠描边分界更稳 |
+| Q-4B-4 | 弹层里是否现在就把"语音自动发送"开关一起做（Phase 3 spec D6 的遗留项）？ | **不做**。它是全局偏好而简约背景是每角色偏好，混在一个弹层里语义打架；且上次它是与深色方案一起被否的连坐项 |
+| Q-4B-5 | 移动端是否需要"仅窗口浅色、无舞台"之外的额外处理？ | **不需要**。移动端无舞台（F7），逻辑天然兼容 |
+
+---
+
+## 10. 与既有文档的关系（实施时按此清单回写，**动手前先向你确认**）
+
+| 文档 | 拟回写内容 |
+|------|------------|
+| `spec-for-llm.md` §6.1 | `--chat-bg` 行：`#f5f5f4`（浅色）/ `#1c1917`（深色跟随系统）→ 明确为**仅浅色**，删去"跟随系统"（与全站单一 light 主题矛盾） |
+| `spec-for-llm.md` §6.6 | 补：生效范围为**每角色**；舞台由 `base-200` 改为 `#e7e5e4`（与本设计 §3.3 一致） |
+| `spec-for-llm.md` §13-Phase 4 | 断言 1/3（自适应、创建页预览）标注"已砍，见 4B 设计 §0.2"；断言 2 补充"每角色" |
+| `logic-design.md` §3.5 | 弹层内容增补"仅对『X』生效"一行 |
+| `logic-design.md` §10 | Phase 4 表按本设计改写（4A/4B 两批） |
+
+> 以上均为**事实变更回写**。契约 §4 要求：改既有文档前先列出"改哪几处、为什么"并获你同意 —— 故本清单在门 2 提请批准，实施时不擅自扩大。
