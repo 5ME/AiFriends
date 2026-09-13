@@ -25,8 +25,12 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 </script>
 
 <template>
+  <!-- Phase 4 修复（2026-09-13 验收反馈「设置弹层会被虚拟角色的气泡遮挡」）：
+       本容器有 backdrop-blur → **自身即层叠上下文**，其内部弹层的 z-30 只在
+       本上下文内有效，无法越过兄弟节点 ChatHistory 的 z-10。
+       故给头部本身 z-20，使整个头部（含弹层）位于消息列表之上。 -->
   <div class="h-14 shrink-0 px-3 flex items-center justify-between gap-2
-              bg-black/40 backdrop-blur">
+              bg-black/40 backdrop-blur relative z-20">
     <!-- 头像 + 名字 pill（点击开详情，复用现有能力） -->
     <CharacterPhotoField :character="character" />
 
@@ -52,7 +56,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
           <SettingsIcon />
         </button>
         <div v-if="settingsOpen"
-             class="absolute right-0 top-11 z-30 w-52 rounded-xl border border-white/10
+             class="settings-popup absolute right-0 top-11 z-30 w-52 rounded-xl border border-white/10
                     bg-neutral-900/95 backdrop-blur-xl shadow-2xl p-1.5">
           <label class="flex items-center justify-between gap-3 px-2 py-2 rounded-lg
                         hover:bg-white/10 cursor-pointer text-sm text-white/90">

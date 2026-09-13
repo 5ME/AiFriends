@@ -143,6 +143,20 @@
     0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
+/* ===== Phase 4：设置弹层内的开关（2026-09-13 用户验收反馈）=====
+   问题：daisyUI `.toggle` 的轨道色是 `--input-color = base-content 50% 透明`，
+   在 dark 主题的深色弹层上几乎与底同色 → 「开关根本看不清」。
+   处置（用户要求「开启时的颜色改为发送按钮点亮时的颜色」）：
+   - 关闭态：轨道改为浅色半透明白（在深色弹层上明确可见）
+   - 开启态：轨道改为 --accent（= 发送按钮点亮色 #10b981），与主交互色一致
+   说明：`--accent` 定义为 :root 全局，此处在 .settings-popup 作用域内引用即可。 */
+.settings-popup .toggle {
+  --input-color: rgba(255, 255, 255, 0.28);
+}
+.settings-popup .toggle:checked {
+  --input-color: var(--accent);
+}
+
 /* ===== Phase 4：prefers-reduced-motion 兜底（spec §12）=====
    覆盖范围仅限本项目自绘动画：.skeleton-shimmer（会话列表 + 聊天记录骨架共用）
    与 ChatHistory 的思考中三点（在组件 scoped 样式内处理）。
