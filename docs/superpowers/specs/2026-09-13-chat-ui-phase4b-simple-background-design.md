@@ -156,12 +156,16 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 表面底（头部/输入/弹层） | `--cbg-surface` | `#ffffff` | 头部条、输入栏、设置弹层 |
 | 表面描边 | `--cbg-surface-border` | `#e7e5e4` | 同上（浅色下必需，见 §3.5） |
 | 浮层底（chip/pill/胶囊） | `--cbg-float` | `#f5f5f4` | 引用 chip、示例问题、日期胶囊 |
-| 代码块 hover | `--cbg-code-block-hover` | `rgba(28,25,23,0.14)` | 代码块复制按钮 hover（浅底上压深） |
+| 代码块 hover | `--cbg-code-block-hover` | 沉浸 `rgba(0,0,0,0.75)`（= 现状 `Message.vue:171` 原值）/ 简约 `rgba(28,25,23,0.14)` | 代码块复制按钮 hover（浅底上压深） |
 | 浮层底（强调，名字 pill） | `--cbg-float-strong` | `#e7e5e4` | 名字 pill 底衬 |
 | 主文字 | `--cbg-text` | `#1c1917` | 正文、名字、消息 |
 | 次要文字 | `--cbg-text-2` | `#57534e` | 时间戳、日期胶囊、引用 chip、空态 introduction |
 | 三级文字 | `--cbg-text-3` | `#78716c` | 占位符（`#ffffff` 底上 4.80:1 达标） |
 | 悬停底 | `--cbg-hover` | `rgba(28,25,23,0.06)` | 图标按钮 hover（浅底上压深） |
+| 头部胶囊底（0.50 那枚） | `--cbg-glass-btn` | 沉浸 `rgba(0,0,0,0.50)`（= `VoiceToggle`/`CharacterPhotoField` 现状字面量）/ 简约 `#f5f5f4` | 头部两个胶囊（语音开关、头像 pill）——**不得复用 `--cbg-float`(0.25)**，那是引用 chip 的值 |
+| 头部胶囊 hover | `--cbg-glass-btn-hover` | 沉浸 `rgba(0,0,0,0.60)`（= `VoiceToggle` 现状 hover）/ 简约 `#e7e5e4` | 同上（头像 pill 现状无 hover，保持不变） |
+| 引用浮层底 | `--cbg-modal-bg` | 沉浸 `rgba(23,23,23,0.95)`（= 现状 `bg-neutral-900/95`）/ 简约 `#ffffff` | 引用原文浮层面板——**不得复用 `--cbg-surface`(0.40)**，那会让面板从近乎实心变成 40% 玻璃 |
+| 引用浮层描边 | `--cbg-modal-border` | 沉浸 `rgba(255,255,255,0.10)`（= 现状 `border-white/10`）/ 简约 `#e7e5e4` | 同上 |
 | 骨架 | `--cbg-skeleton` | `rgba(28,25,23,0.08)` → `0.14` | shimmer 渐变（浅底上压深） |
 | 分隔/焦点环 | `--cbg-ring` | `rgba(28,25,23,0.30)` | `focus-visible:ring` |
 
@@ -207,7 +211,11 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
   --cbg-float: rgba(0, 0, 0, 0.25);
   --cbg-float-strong: rgba(0, 0, 0, 0.30);
   --cbg-hover: rgba(0, 0, 0, 0.20);
-  --cbg-skeleton: rgba(255, 255, 255, 0.08);       /* 渐变三停点见实现 */
+  --cbg-glass-btn: rgba(0, 0, 0, 0.50);
+  --cbg-glass-btn-hover: rgba(0, 0, 0, 0.60);
+  --cbg-modal-bg: rgba(23, 23, 23, 0.95);
+  --cbg-modal-border: rgba(255, 255, 255, 0.10);
+  --cbg-skeleton: rgba(255, 255, 255, 0.08);       /* 渐变三停点见实现（实施时拆 a/b 两停点，见计划 Task 2） */
   --cbg-ring: rgba(255, 255, 255, 0.40);
   --cbg-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
 }
@@ -225,6 +233,10 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
   --cbg-float: #f5f5f4;
   --cbg-float-strong: #e7e5e4;
   --cbg-hover: rgba(28, 25, 23, 0.06);
+  --cbg-glass-btn: #f5f5f4;
+  --cbg-glass-btn-hover: #e7e5e4;
+  --cbg-modal-bg: #ffffff;
+  --cbg-modal-border: #e7e5e4;
   --cbg-skeleton: rgba(28, 25, 23, 0.08);
   --cbg-ring: rgba(28, 25, 23, 0.30);
   --cbg-shadow: 0 24px 64px rgba(28, 25, 23, 0.18);
@@ -273,13 +285,14 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 舞台 | 模糊图 + `rgba(0,0,0,.35)` | `#e7e5e4` 纯色 | D4B-2 |
 | 头部条 | `bg-black/40 backdrop-blur`（无边框） | `--cbg-surface` + `1px` `--cbg-surface-border` | 浅底上白条需描边才有边界（PR #37 评审 M3 同一结论） |
 | 头部图标（☰/✕） | `text-white`，hover `bg-black/20` | `--cbg-text`，hover `--cbg-hover` | |
-| 语音开关 | `bg-black/50`，图标白 | `--cbg-float`（底）+ `--cbg-text`（图标）| `SpeakerIcon` 改 `currentColor`（F10）；实现用 `.chat-icon-btn-solid` 一个类同时给底与字色——**不要**用 `.chat-float`（其 `color: var(--cbg-text-2)` 会把图标降到白 70%，与右列不符；评审 R-4） |
+| 语音开关 | `bg-black/50`（0.50），图标白，hover `bg-black/60` | `--cbg-glass-btn` + `--cbg-text`；hover `--cbg-glass-btn-hover` | 实现用 `.chat-icon-btn-solid` 一个类同时给底与字色。**不得**用 `--cbg-float`(0.25)：那会让胶囊暗度减半（评审 N5）；`SpeakerIcon` 改 `currentColor`（F10） |
+| 头像 pill（`CharacterPhotoField`） | `bg-black/50`（0.50） | **`--cbg-glass-btn`**（0.50，保真） | **不得**用 `--cbg-float`(0.25)：会让头部件两个 0.50 胶囊同时变浅（评审 N5） |
 | 名字 pill | `bg-black/30` + `white/70` | `--cbg-float-strong` + `--cbg-text` | 13.93:1 |
 | AI 气泡 | `bg-black/35` + blur + 白字 | `--cbg-bubble-ai` + `1px` 描边 + `--cbg-text` | 白底白窗，靠描边分界 |
 | 用户气泡 | `#0b825a` + 白字 | **不变**（同色同字） | 4.82:1 已达标；D4B-7 |
 | 时间戳 / hover | `text-white/60` | `--cbg-text-2` | 7.30:1 |
 | 日期胶囊 | `bg-black/25` + `white/60` | `--cbg-float` + `--cbg-text-2` | |
-| 引用 chip | `bg-black/25` + `white/90` | `--cbg-float` + `--cbg-text-2` | 浮层底上 **6.99:1**（`#57534e` on `#f5f5f4`，实算） |
+| 引用 chip | `bg-black/25` + `white/90` | `--cbg-float` + `--cbg-text-2` | 浮层底上 **6.99:1**（`#57534e` on `#f5f5f4`，实算）；标题的 0.90 → 0.70 属**归并**（见下方归并清单） |
 | markdown 行内 code | `bg-black/.4` + 白字 | `rgba(28,25,23,0.06)` + `--cbg-text` | 浅底上"更深一点" |
 | markdown `pre` | `bg-black/.45` | `rgba(28,25,23,0.08)` | 代码块底 |
 | markdown 链接 | `#7dd3fc` | `#0f766e` | 深青，浅底上可读（与"深色底上亮青"同源的明度反转） |
@@ -291,8 +304,30 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 空态 introduction | `text-white/90` | `--cbg-text-2` | 7.30:1 |
 | 示例问题胶囊 | `bg-black/25` + `white/90` | `--cbg-float` + `--cbg-text` + 描边 | |
 | 思考中气泡 | 同 AI 气泡（白点） | 同 AI 气泡（深点） | `.thinking-dot` 用 `currentColor`（4A 已引入该类） |
-| 引用浮层（`ChatWindow` 内 modal） | `bg-neutral-900/95` + 白字 | `--cbg-surface` + `--cbg-text`（浅色弹层） | 它是窗口内容的一部分 |
+| 引用浮层（`ChatWindow` 内 modal） | `bg-neutral-900/95` + `border-white/10` + 白字 | **`--cbg-modal-bg` + `--cbg-modal-border`** + `--cbg-text`/`--cbg-text-2` | 用专属 token 而**不是** `--cbg-surface`(0.40)：后者会让面板从近乎实心变成 40% 玻璃且失去描边（评审 N5） |
 | `focus-visible` 环 | `ring-white/40`（**四处**：`ChatHistory`/`InputField`，加 4A 新增的 `VoiceToggle`/`CharacterPhotoField`；`.btn` 元素由 daisyUI 自带，不加） | `--cbg-ring`（同样只加在非 `.btn` 元素上；沉浸态 `rgba(255,255,255,0.40)` 与 `ring-white/40` 同色 → 零回归，简约态自动变深可见） | **必须 token 化**：保留字面量会让 4A 的无障碍收益在简约模式静默失效（评审 R3-2） |
+
+#### 3.5.1 允许的观感归并清单（评审 N5 的处置）
+
+`--cbg-*` 的沉浸默认值**大部分取自被替换元素的现状字面量**，因此是逐字等价；但有 **7 处文字不透明度**是"归并到已建立的档位"，**确实会改变沉浸模式的观感**。本版**明确采用归并**并逐条列出，作为门 4 截图对照的约定基线——**不让实施者遇到"文档让我改、验收说这是回归"**：
+
+| 元素 | 现状（沉浸） | 计划值 | 变化 | 归并去向 |
+|------|--------------|--------|------|----------|
+| 时间戳（Message） | `text-white/60` | `--cbg-text-2` = 0.70 | +10% | 次要文字档 |
+| 日期胶囊（`main.css`） | `white/60` | `--cbg-text-2` = 0.70 | +10% | 次要文字档 |
+| chip「第N段」（Message:122） | `text-white/75` | `--cbg-text-2` = 0.70 | −5% | 次要文字档 |
+| 引用浮层 关闭按钮 | `text-white/70` | `--cbg-text-2` = 0.70 | 不变 | 次要文字档 |
+| 引用 chip 标题（Message:121） | `text-white/90` | `--cbg-text-2` = 0.70 | −20% | 次要文字档 |
+| 空态 introduction（ChatHistory:186） | `text-white/90` | `--cbg-text-2` = 0.70 | −20% | 次要文字档 |
+| 示例问题（ChatHistory:192） | `text-white/90` | `--cbg-text` = 1.00 | +10% | 主文字档（它本质是"可点的正文"） |
+| 引用浮层面板（ChatWindow） | `text-white/90`（标题）、`/80`（正文） | `--cbg-text` / `--cbg-text-2` | +10% / −10% | 主/次要档 |
+
+**为什么接受归并、而不是给每处"专属不透明度 token"**：
+1. 7 处归并全部**落在已建立的文字档位**（主 1.00 / 次 0.70），是**语义正确**的——0.90/0.75 本身没有语义，`text-white/90` 与 `text-white/70` 在同一层级里并存是历史遗留；
+2. 替代方案要为 0.90/0.80/0.75/0.60 各立一个 token，token 家族从 20 个膨胀到 26+ 个，且**每个只有一个消费者**，抽象收益为负；
+3. 对比度方向安全：0.70 在现有蒙层上仍 ≥4.5:1（`§3.3` 最坏档 4.80:1 用的是 0.70）。**变暗而非变亮**，不会引入新的可读性风险。
+
+**明确保真、不归并的**（用专属 token，沉浸值 = 原字面量）：`VoiceToggle`/`CharacterPhotoField` 的 0.50 胶囊底（→ `--cbg-glass-btn`）、引用浮层面板的 `rgba(23,23,23,0.95)` 与 `border-white/10`（→ `--cbg-modal-bg`/`--cbg-modal-border`）。这三处是**成对/成块**的视觉构件，整体变浅会很显眼（评审 N5 的对照表里，它们正是"面板从实心变玻璃"那两行）。
 
 **显式不改**：会话栏全部、NavBar、消息分组间距/字号/圆角、气泡 `max-width: 75%`、窗口 3:5 几何。
 

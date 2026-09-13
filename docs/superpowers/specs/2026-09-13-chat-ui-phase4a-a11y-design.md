@@ -81,7 +81,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 | D4A-3 | reduced-motion 只覆盖**我们自己可控**的动画。daisyUI 内部 SMIL 不试图用 CSS 关闭，改为**替换实现**（F4 → `loading-dots` 换成自绘三点） | 同上 |
 | D4A-4 | 本批**零视觉变更**：改 `div`→`button` 必须保持原尺寸/间距/圆角/悬停观感逐像素一致 | 用户 2026-09-13：「拆两批，4A 无障碍 → 4B 简约背景」 |
 | D4A-5 | 不引入依赖（不装 `axe-core`、不装 `eslint-plugin-vuejs-accessibility`）；验证靠真实浏览器键盘走查 + 产物核对 | YAGNI；项目当前无前端 lint 链 |
-| D4A-6 | 焦点环来源**不叠加**，判据是**元素实际持有的类名**（不是"哪个区域的按钮"）：<br>**① 非 daisyUI `.btn` 的按钮** → 用 `chat-focus`（4B 提供的语义类；沉浸态 `--cbg-ring = rgba(255,255,255,0.40)` 与旧字面量同色 → 零回归，简约态自动变深可见）。**不得写 `ring-white/40` 字面量**（白环在简约窗口上不可见，会静默抹掉本批收益；评审 R3-2）。含：`VoiceToggle`、`CharacterPhotoField`、`InputField` 的麦克风/发送/停止三个圆钮（**实测这三个无 `.btn` 类**）、`ChatHistory` 的示例问题胶囊、`Message` 的引用 chip。<br>**② 真正带 daisyUI `.btn` 的按钮** → **不加**自定义环。含：头部件 ⚙/☰/✕、`InputField` 的错误重试（`btn btn-xs btn-neutral`，`InputField.vue:454`）。daisyUI 给这类元素的是 `outline-width: 2px` + `outline-color: var(--color-base-content)`，与 `ring`（box-shadow）是两套视觉语言，叠加会出双环 | 评审发现（第 1、2 轮）+ **用户裁决（2026-09-13）**：允许本批新增键盘焦点环（只在键盘操作时出现、默认渲染不变，spec §12 明确要求"焦点可见"） |
+| D4A-6 | 焦点环来源**不叠加**，判据是**元素实际持有的类名**（不是"哪个区域的按钮"）：<br>**① 非 daisyUI `.btn` 的按钮** → 加 `focus-visible:ring-2 ring-white/40`。**4A 沿用项目现状写法**（评审 N2 采纳选项 ②）：`chat-focus` 由 4B 在其 Task 5 统一接管，4A 不引入尚不存在的类，也不出现"模板带 `outline-none` 但无环规则"的空档。<br>**② 真正带 daisyUI `.btn` 的按钮** → **不加**自定义环。含：头部件 ⚙/☰/✕、`InputField` 的错误重试（`btn btn-xs btn-neutral`，`InputField.vue:454`）。daisyUI 给这类元素的是 `outline-width: 2px` + `outline-color: var(--color-base-content)`，与 `ring`（box-shadow）是两套视觉语言，叠加会出双环 | 评审发现（第 1、2 轮）+ **用户裁决（2026-09-13）**：允许本批新增键盘焦点环（只在键盘操作时出现、默认渲染不变，spec §12 明确要求"焦点可见"） |
 
 ### 2.1 已否决的替代方案
 
@@ -115,7 +115,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 <button type="button"
         class="h-10 w-10 rounded-full bg-black/50 flex items-center justify-center
                cursor-pointer hover:bg-black/60 transition-colors shrink-0
-               chat-focus outline-none"
+               focus-visible:ring-2 ring-white/40 outline-none"
         :title="voiceEnabled ? '语音已开启' : '语音已关闭'"
         :aria-label="voiceEnabled ? '关闭语音播报' : '开启语音播报'"
         :aria-pressed="voiceEnabled"
@@ -128,7 +128,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 
 1. `h-10 w-10` 显式尺寸保留 —— `<button>` 的默认 `box-sizing`/`padding` 会改变布局，显式类名可避免（D4A-4）。
 2. `:aria-pressed` 暴露开关状态：这是**切换按钮**（toggle），`aria-pressed` 是正确语义，胜过把状态塞进 label。label 保持"动作导向"（"开启/关闭语音播报"）而非状态导向。
-3. `chat-focus outline-none`：焦点环走 4B 的语义 token（沉浸态与旧 `ring-white/40` 同色 → 零回归；简约态自动变深）。**不沿用旧字面量**——同区 ☰/✕ 本就是 daisyUI `.btn`，由 daisyUI 自带 outline，并不构成"既有约定"（评审 R3-2 指出原论证有误）。
+3. `focus-visible:ring-2 ring-white/40 outline-none` —— 与现状 `InputField`/`ChatHistory` 的焦点环写法一致；同区 ☰/✕ 是 daisyUI `.btn`，由 daisyUI 自带 outline，故本组并非"与它们一致"，而是**与项目内非 `.btn` 元素一致**。4B 的 Task 5 会把这四处统一换成 `chat-focus`（token 化）。
 4. **`<button>` 默认 `line-height` 与字体继承**：Tailwind 的 preflight 已将 `button` 的 `font`/`line-height` 设为继承，`SpeakerIcon` 是固定 `w-5 h-5` 的 SVG，不受影响。已核实 `frontend/node_modules/tailwindcss` preflight 规则存在。
 5. **不加 `disabled`**：语音开关任何时刻都可用。
 
@@ -143,7 +143,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 ```html
 <button type="button"
         class="h-10 w-fit rounded-full bg-black/50 flex items-center gap-2 px-2 cursor-pointer
-               chat-focus outline-none"
+               focus-visible:ring-2 ring-white/40 outline-none"
         :aria-label="`查看 ${character.name} 的角色详情`"
         @click="handleAvatarClick">
   <div class="avatar">

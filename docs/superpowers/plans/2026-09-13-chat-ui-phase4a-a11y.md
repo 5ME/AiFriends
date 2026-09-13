@@ -19,7 +19,7 @@
 - 不引入任何依赖（不装 `@vue/test-utils`、不装 eslint a11y 插件）。
 - 分支：`feature/gqyin/chat-ui-phase4a-a11y`；提交信息中文 `type(scope): 摘要`。
 - **焦点环规则（D4A-6）**：按**元素实际持有的类名**判定，不按文件/区域。
-  - 无 `btn` 类 → 加 `chat-focus`（沉浸态 `--cbg-ring` = `rgba(255,255,255,0.40)`，与 `ring-white/40` 同色 → 零回归；简约态自动变深可见）。⚠️ **不得写 `ring-white/40` 字面量**：白 40% 环落在简约模式 `#fafaf9` 窗口上几乎不可见，会让 4A 的无障碍收益静默失效（评审 R3-2），且被 4B 颜色门禁判红。含 `VoiceToggle`、`CharacterPhotoField`、`InputField` 的麦克风/发送/停止三个圆钮（实测 `:392/429/438` 无 `.btn`）、`ChatHistory` 示例问题胶囊、`Message` 引用 chip。
+  - 无 `btn` 类 → 加 `focus-visible:ring-2 ring-white/40`（**4A 沿用项目现状写法**）。含 `VoiceToggle`、`CharacterPhotoField`、`InputField` 的麦克风/发送/停止三个圆钮（实测 `:392/429/438` 无 `.btn`）、`ChatHistory` 示例问题胶囊、`Message` 引用 chip。
   - 有 `btn` 类 → **不加**自定义环（daisyUI 用 `outline-width:2px` + `outline-color:var(--color-base-content)`，与 `ring` 叠加会双环）。含头部件 ⚙/☰/✕、`InputField:454` 的重试按钮。
   - ⚠️ 同一文件里可能两类并存（`InputField` 即是），判断方式是看该元素的 class 串里有没有 `btn`，不要按文件推断。
 
@@ -124,7 +124,7 @@ Expected: FAIL —— `querySelector('button')` 返回 `null`（当前根元素�
           class="h-10 w-10 rounded-full bg-black/50
                  flex items-center justify-center cursor-pointer
                  hover:bg-black/60 transition-colors shrink-0
-                 chat-focus outline-none"
+                 focus-visible:ring-2 ring-white/40 outline-none"
           :title="voiceEnabled ? '语音已开启' : '语音已关闭'"
           :aria-label="voiceEnabled ? '关闭语音播报' : '开启语音播报'"
           :aria-pressed="voiceEnabled"
@@ -134,9 +134,9 @@ Expected: FAIL —— `querySelector('button')` 返回 `null`（当前根元素�
 </template>
 ```
 
-> 说明：类名与改动前**完全一致**，仅追加 `chat-focus outline-none`（D4A-6：本组件**无** `btn` 类，且此前是 `div` 完全不可聚焦，故必须有焦点环）。`SpeakerIcon` 不动（其 `text-white` 归 4B 的浅色模式处理）。
+> 说明：类名与改动前**完全一致**，仅追加 `focus-visible:ring-2 ring-white/40 outline-none`（D4A-6：本组件**无** `btn` 类，且此前是 `div` 完全不可聚焦，故必须有焦点环）。`SpeakerIcon` 不动（其 `text-white` 归 4B 的浅色模式处理）。
 >
-> ⚠️ **跨批次依赖**：`chat-focus` 最终由 4B 的 `main.css` 以双模式 token 提供。**4A 在 4B 之前交付**，故 4A 必须先自行落地其定义：`main.css` 加 `:root{--cbg-ring:rgba(255,255,255,0.40)}` 与 `.chat-focus:focus-visible{outline:none;box-shadow:0 0 0 2px var(--cbg-ring)}`；4B 再把 `--cbg-ring` 纳入 token 家族并补简约态取值。两批各改一次同一文件，属既定交付顺序的一部分。
+> **为什么 4A 不写 `chat-focus`**（评审 N2 的路线选择，**采纳选项 ②**）：若 4A 就写 `chat-focus`，则该类尚不存在、且模板同时带 `outline-none` → **完全没有焦点指示**（连浏览器默认 outline 都被关掉），而 4A 的全部目的就是焦点可见。改为"**4A 保持项目现状写法，4B 的 Task 5 统一换成 `chat-focus`**"：零跨批次耦合、4A 的环与现有 `InputField`/`ChatHistory` 同色同形，4B 那边 `main.css` 本就定义 `.chat-focus`，门禁在 Task 5 之后照样绿。代价是 4A 的焦点环不 token 化一个批次——可接受（4A 先交付，交付时它是唯一形态）。
 
 - [ ] **Step 4: 跑测试确认通过**
 
@@ -220,7 +220,7 @@ Expected: FAIL —— 无 `button`（当前是 `div`）
   <!-- 提示：<button> 内不得再嵌套交互元素；若日后需要在 pill 内加次级按钮，必须拆分结构 -->
   <button type="button"
           class="h-10 w-fit rounded-full bg-black/50 flex items-center gap-2 px-2 cursor-pointer
-                 chat-focus outline-none"
+                 focus-visible:ring-2 ring-white/40 outline-none"
           :aria-label="`查看 ${character.name} 的角色详情`"
           @click="handleAvatarClick">
     <div class="avatar">
