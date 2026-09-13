@@ -2,6 +2,8 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import CharacterPhotoField from '@/components/character/chat_field/character_photo_field/CharacterPhotoField.vue'
 import VoiceToggle from '@/components/character/chat_field/VoiceToggle.vue'
+import SettingsIcon from '@/components/character/icons/SettingsIcon.vue'
+import MenuIcon from '@/components/character/icons/MenuIcon.vue'
 import { useChatSettings } from '@/composables/useChatSettings'
 
 defineProps(['character'])
@@ -29,23 +31,25 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
     <CharacterPhotoField :character="character" />
 
     <div class="flex items-center gap-2">
-      <!-- 移动端会话抽屉入口（spec §4.2「头部菜单按钮」；lg:hidden = 桌面端列表常驻无需） -->
+      <!-- 移动端会话抽屉入口（spec §4.2「头部菜单按钮」；lg:hidden = 桌面端列表常驻无需）
+           Phase 4 补：原为 emoji "☰"（字体字形，各平台形状不一）→ 改 SVG 图标 -->
       <button type="button"
               class="lg:hidden btn btn-sm btn-circle btn-ghost text-white"
               aria-label="打开会话列表"
               data-tip="会话"
               @click="emits('openDrawer')">
-        ☰
+        <MenuIcon />
       </button>
       <VoiceToggle />
-      <!-- ⚙ 设置（简约背景 / 语音自动发送，spec §6.6 + D6；入口形态偏离 spec 原文，登记于 W6） -->
+      <!-- 设置（简约背景 / 语音自动发送，spec §6.6 + D6；入口形态偏离 spec 原文，登记于 W6）
+           Phase 4 补：原为 emoji "⚙" → 改 SVG 图标（SettingsIcon） -->
       <div ref="settingsRef" class="relative">
         <button type="button"
                 class="btn btn-sm btn-circle btn-ghost text-white"
                 aria-label="设置"
                 data-tip="设置"
                 @click="settingsOpen = !settingsOpen">
-          ⚙
+          <SettingsIcon />
         </button>
         <div v-if="settingsOpen"
              class="absolute right-0 top-11 z-30 w-52 rounded-xl border border-white/10
