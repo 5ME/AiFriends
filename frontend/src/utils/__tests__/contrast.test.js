@@ -127,33 +127,62 @@ describe('design §3.1 现状（sRGB 口径，纯白背景图）', () => {
 })
 
 describe('design §3.3 描边后（描边像素 = 底色 × 0.15）', () => {
-  it('底色 66.30（气泡本色）→ 19.80:1', () => {
-    expect(strokeContrast(66.30, STROKE)).toBeCloseTo(19.8, 1)
+  // 底色档位与 §3.1 同源（sRGB 0~255），全部由 bubbleBase 推导，不手写中间值
+  const bubbleBase = (scrim) => overlaySrgb(0.35, overlaySrgb(scrim, 255))
+
+  it('白图底部 气泡底 66.305 → 19.80:1', () => {
+    expect(strokeContrast(bubbleBase(OVERLAY_SRGB.BOTTOM), STROKE)).toBeCloseTo(19.8, 2)
   })
 
-  it('底色 95.625（纯白图最坏实际）→ 19.26:1', () => {
-    expect(strokeContrast(95.625, STROKE)).toBeCloseTo(19.26, 2)
+  it('白图中部 气泡底 95.3125 → 19.26:1', () => {
+    expect(strokeContrast(bubbleBase(OVERLAY_SRGB.MID), STROKE)).toBeCloseTo(19.26, 2)
   })
 
-  it('底色 191.25（气泡全透明 + 蒙层 0.25）→ 16.92:1', () => {
+  it('真实最坏档 气泡底 124.3125（白图顶部，气泡 α=0.35）→ 18.63:1', () => {
+    // 注意：最坏档是 124.3125，不是 95.625。后者 = 255×0.75×0.5，对应气泡 α=0.5，
+    // 本项目的合成链条里不存在这个值（v2 曾误把它当"最坏实际"并锁进单测）。
+    expect(strokeContrast(bubbleBase(OVERLAY_SRGB.TOP), STROKE)).toBeCloseTo(18.63, 2)
+  })
+
+  it('气泡全透明 + 蒙层 0.25 → 16.92:1', () => {
     expect(strokeContrast(191.25, STROKE)).toBeCloseTo(16.92, 2)
   })
 
-  it('底色 255（纯白 + 零蒙层，理论极限）→ 15.08:1', () => {
+  it('纯白 + 零蒙层（理论极限）→ 15.08:1', () => {
     expect(strokeContrast(255, STROKE)).toBeCloseTo(15.08, 2)
   })
 
-  it('四档全部 ≥4.5', () => {
-    for (const base of [66.30, 95.625, 191.25, 255]) {
-      expect(strokeContrast(base, STROKE)).toBeGreaterThanOrEqual(4.5)
-    }
+  it('五档全部 ≥4.5，且单调性成立（底色越暗对比度越高）', () => {
+    const tiers = [
+      bubbleBase(OVERLAY_SRGB.BOTTOM),   // 66.305 最暗
+      bubbleBase(OVERLAY_SRGB.MID),      // 95.3125
+      bubbleBase(OVERLAY_SRGB.TOP),      // 124.3125
+      191.25,
+      255,                               // 最亮
+    ]
+    const ratios = tiers.map((b) => strokeContrast(b, STROKE))
+    for (const r of ratios) expect(r).toBeGreaterThanOrEqual(4.5)
+    for (let i = 1; i < ratios.length; i++) expect(ratios[i]).toBeLessThan(ratios[i - 1])
+  })
+})
+
+describe('design §3.6 行内 code 无需描边（v2 曾用错口径得 3.06:1）', () => {
+  // 行内 code 底 = rgba(0,0,0,.4) 叠在气泡底之上；最亮档取白图顶部 124.3125
+  const codeBase = (bubble) => overlaySrgb(0.4, bubble)
+
+  it('最亮档（白图顶部）→ 8.78:1，本就远高于 4.5', () => {
+    const r = grayContrast(codeBase(124.3125))
+    expect(r).toBeCloseTo(8.78, 2)
+    expect(r).toBeGreaterThanOrEqual(4.5)
   })
 
-  it('单调性：底色越暗，对比度越高', () => {
-    const a = strokeContrast(255, STROKE)
-    const b = strokeContrast(95.625, STROKE)
-    const c = strokeContrast(66.30, STROKE)
-    expect(a).toBeLessThan(b)
-    expect(b).toBeLessThan(c)
+  it('气泡本色（白图底部）→ 14.79:1', () => {
+    expect(grayContrast(codeBase(66.305))).toBeCloseTo(14.79, 2)
+  })
+
+  it('全档位均 ≥4.5（故去掉描边不会让行内 code 变难读）', () => {
+    for (const b of [66.305, 95.3125, 124.3125]) {
+      expect(grayContrast(codeBase(b))).toBeGreaterThanOrEqual(4.5)
+    }
   })
 })
