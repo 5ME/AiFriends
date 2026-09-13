@@ -9,6 +9,7 @@ import Microphone from "@/components/character/chat_field/input_field/Microphone
 import {useVoiceToggle} from "@/composables/useVoiceToggle.js";
 import {shouldSendOnEnter} from "@/utils/inputKey";
 import { voiceReducer, VOICE_STATES, VOICE_EVENTS, acceptTranscript, acceptMicError } from "@/utils/voiceState";
+import { useChatSettings } from "@/composables/useChatSettings";
 
 const props = defineProps(['friendId'])
 const emits = defineEmits(['pushBackMessage', 'appendToLastMessage', 'streamState'])
@@ -37,6 +38,25 @@ const micState = ref(VOICE_STATES.IDLE)
 const micErrorKind = ref('')   // 错误态类型：vad_init_failed / mic_permission_denied / asr_failed
 let micSeqCounter = 0          // 会话令牌计数：每次 start/retry 递增
 const activeMicSeq = ref(0)    // 当前会话令牌：transcript/error 迟到结果按 seq 丢弃
+
+// Phase 4 语音自动发送（默认关）：确认态停留 AUTO_SEND_DELAY 后自动发出。
+// 不新增对外接口——复用 handleSend()（函数声明有提升，可在此处引用）。
+const AUTO_SEND_DELAY = 800
+const { autoSendVoice } = useChatSettings()   // 模块级单例，与 WindowHeader 共享
+let autoSendTimer = null
+
+watch(micState, (s) => {
+  if (autoSendTimer) {
+    clearTimeout(autoSendTimer)
+    autoSendTimer = null
+  }
+  if (s !== VOICE_STATES.CONFIRM || !autoSendVoice.value) return
+  autoSendTimer = setTimeout(() => {
+    autoSendTimer = null
+    // 回到条件判断（不信任闭包旧值）：只有仍处确认态才发；期间用户重录/取消则不发
+    if (micState.value === VOICE_STATES.CONFIRM) handleSend()
+  }, AUTO_SEND_DELAY)
+})
 
 const ERROR_COPY = {
   vad_init_failed: '语音初始化失败，请重试',
@@ -253,6 +273,10 @@ onUnmounted(() => {
   if (abortController) {
     abortController.abort()  // 通知后端客户端已断开，停止 TTS
     abortController = null
+  }
+  if (autoSendTimer) {        // Phase 4：切换会话时取消待触发的自动发送
+    clearTimeout(autoSendTimer)
+    autoSendTimer = null
   }
   audioPlayer.pause();
   audioPlayer.src = '';
