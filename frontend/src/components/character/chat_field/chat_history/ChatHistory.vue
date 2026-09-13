@@ -181,8 +181,13 @@ defineExpose({
 
     <!-- 空态：新会话 introduction + 示例问题（D7 文案；点击 quickSend 直达发送）。
          与错误态互斥（LD §5:300/301）：loadMore 失败时只显示「加载失败+重试」，不同屏双态 -->
+    <!-- 空态：新会话 introduction + 示例问题（D7 文案；点击 quickSend 直达发送）。
+         与错误态互斥（LD §5:300/301）：loadMore 失败时只显示「加载失败+重试」，不同屏双态
+         Phase 4（2026-09-13 补）：这两处也是"浮在图上的文字"，衬底只有 25% 黑 →
+         亮背景图上实测白字约 2.4~2.6:1，故加与气泡同一套描边（变量在 main.css :root） -->
     <div v-if="!initialLoading && !hasMessages && history.length === 0 && !loadError"
-         class="h-full flex flex-col items-center justify-center gap-5 px-6 text-center">
+         class="h-full flex flex-col items-center justify-center gap-5 px-6 text-center"
+         style="text-shadow: var(--msg-text-shadow)">
       <p v-if="character?.introduction" class="text-white/90 text-lg leading-relaxed">
         {{ character.introduction }}
       </p>

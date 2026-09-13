@@ -78,22 +78,29 @@
   border-top-right-radius: 4px;
 }
 
-/* 组首名字 pill 底衬（N1） */
+/* 组首名字 pill 底衬（N1）
+   Phase 4（2026-09-13 补）：加文字描边。它是"浮在图上的文字"——
+   只有一层 30% 黑薄衬底，在亮背景图上实测白字仅约 2.07:1（远低于 4.5）。
+   描边与衬底无关，亮暗图一致承托（衬底纯白时仍有 15.13:1）。 */
 .msg-name-pill {
   background: rgba(0, 0, 0, 0.3);
   border-radius: 9999px;
   padding: 1px 8px;
   font-size: 14px;
   color: rgba(255, 255, 255, 0.7);
+  text-shadow: var(--msg-text-shadow);
 }
 
-/* 日期分隔胶囊（N1 深色玻璃方向） */
+/* 日期分隔胶囊（N1 深色玻璃方向）
+   Phase 4（2026-09-13 补）：同上，浮层文字需描边；其文字透明度更低（0.6），
+   在亮图上未加描边时约 1.75:1，是最脆弱的一处。 */
 .date-capsule {
   background: rgba(0, 0, 0, 0.25);
   color: rgba(255, 255, 255, 0.6);
   font-size: 12px;
   border-radius: 9999px;
   padding: 2px 12px;
+  text-shadow: var(--msg-text-shadow);
 }
 
 /* 隐藏滚动条（全局化，SessionList 与 ChatHistory 共用；原 ChatHistory scoped 样式迁移） */
