@@ -300,6 +300,15 @@ describe('4B token 家族（设计 §3.4）', () => {
     expect(stage).toContain('#e7e5e4')
   })
 
+  it('四个保真 token 的沉浸值 = 现状字面量（R6-3：把"保真"变机检）', () => {
+    // 这四处的全部意义就是"等于改造前的字面量"，故逐字锁定；
+    // 一个 0.05 写成 0.5 的笔误也会被拦住。
+    expect(plain).toContain('rgba(0, 0, 0, 0.50)')          // --cbg-glass-btn（原 bg-black/50）
+    expect(plain).toContain('rgba(0, 0, 0, 0.60)')          // --cbg-glass-btn-hover（原 bg-black/60）
+    expect(plain).toContain('rgba(23, 23, 23, 0.95)')       // --cbg-modal-bg（原 bg-neutral-900/95）
+    expect(plain).toContain('rgba(255, 255, 255, 0.10)')    // --cbg-modal-border（原 border-white/10）
+  })
+
   it('用户气泡引用 var(--accent) 而非硬编码 #10b981（D4B-7）', () => {
     const bubble = css.match(/\.msg-bubble-user\s*\{[^}]*\}/)?.[0] ?? ''
     expect(bubble).toContain('var(--accent)')
@@ -359,6 +368,8 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
   --cbg-hover: rgba(0, 0, 0, 0.20);
   --cbg-ring: rgba(255, 255, 255, 0.40);
   --cbg-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+  --cbg-switch-off: rgba(255, 255, 255, 0.40);    /* 沉浸值 = Task 4 开关轨道现状字面量（保真） */
+  --cbg-switch-on: var(--accent);                 /* 沉浸值 = 现状（裸 accent） */
   --cbg-glass-btn: rgba(0, 0, 0, 0.50);           /* 沉浸值 = VoiceToggle/CharacterPhotoField 现状字面量（保真项，见设计 §3.5.1） */
   --cbg-glass-btn-hover: rgba(0, 0, 0, 0.60);     /* 沉浸值 = VoiceToggle 现状 hover */
   --cbg-modal-bg: rgba(23, 23, 23, 0.95);         /* 沉浸值 = 现状 bg-neutral-900/95 */
@@ -389,6 +400,8 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
   --cbg-hover: rgba(28, 25, 23, 0.06);
   --cbg-ring: rgba(28, 25, 23, 0.30);
   --cbg-shadow: 0 24px 64px rgba(28, 25, 23, 0.18);
+  --cbg-switch-off: #78716c;                      /* 简约：白滑块 4.80:1 */
+  --cbg-switch-on: #0b825a;                       /* 简约：白滑块 4.82:1（accent 70%+黑，与己方气泡同色） */
   --cbg-glass-btn: #f5f5f4;
   --cbg-glass-btn-hover: #e7e5e4;
   --cbg-modal-bg: #ffffff;
@@ -484,6 +497,20 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
 
 /* 危险文字（语音错误横幅） */
 .chat-danger { color: var(--cbg-danger); }
+
+/* 设置弹层开关（Task 4）。轨道/滑块都走语义 token：
+   简约模式下 OFF 用 #78716c、ON 用 #0b825a，白滑块对比 4.80 / 4.82:1（均 ≥3:1，
+   满足 WCAG 1.4.11 非文本对比）；沉浸模式保持现状字面量（零回归）。
+   ⚠️ 滑块**不得**写 bg-white 字面量——它是唯一被颜色门禁判红的白类。 */
+.chat-switch-track {
+  background-color: var(--cbg-switch-off);
+}
+.chat-switch-track.on {
+  background-color: var(--cbg-switch-on);
+}
+.chat-switch-knob {
+  background-color: #ffffff;
+}
 
 /* 引用浮层（窗口内 modal） */
 .chat-modal {
@@ -951,10 +978,10 @@ onBeforeUnmount(() => {
             <button type="button" role="switch"
                     :aria-checked="simpleBg ? 'true' : 'false'"
                     aria-label="简约背景"
-                    class="relative h-5 w-9 shrink-0 rounded-full transition-colors chat-focus"
-                    :style="{ backgroundColor: simpleBg ? 'var(--accent)' : 'var(--cbg-float)' }"
+                    class="chat-switch-track relative h-5 w-9 shrink-0 rounded-full transition-colors cursor-pointer"
+                    :class="{ on: simpleBg }"
                     @click="emits('toggleSimpleBg')">
-              <span class="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all"
+              <span class="chat-switch-knob absolute top-0.5 h-4 w-4 rounded-full transition-all"
                     :style="{ left: simpleBg ? '18px' : '2px' }"></span>
             </button>
           </div>
@@ -1143,7 +1170,7 @@ grep -c "overlay-k" *.css         # 0（砍掉项未引入）
 - [ ] **Step 5: 全量单测**
 
 Run: `cd frontend && npx vitest run`
-Expected: 4A 后基线 **75** + 本批新增 24（T1 7 + T2 6 + T3 5 + T4 4 + 门禁 `chatBgLiterals` 1 + 遮罩 `chatBgScrim` 1）= **99 passed**，0 failed
+Expected: 4A 后基线 **75** + 本批新增 25（T1 7 + T2 7 + T3 5 + T4 4 + 门禁 `chatBgLiterals` 1 + 遮罩 `chatBgScrim` 1）= **100 passed**，0 failed
 
 - [ ] **Step 6: 提交**
 
@@ -1219,12 +1246,12 @@ const { simpleOn: simpleBg } = useChatBg(activeCharacterId)
 
 > `activeCharacterId` 在会话中心（`null`）时 `String(null)` 得 `'null'`，读取结果恒为 `false` → 遮罩保持黑 50%，无副作用。
 
-- [ ] **Step 2: 跑测试确认通过**
+- [ ] **Step 3: 跑测试确认通过**
 
 Run: `cd frontend && npx vitest run src/utils/__tests__/chatBgScrim.test.js`
 Expected: PASS（1 个用例）
 
-- [ ] **Step 6: 提交**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add frontend/src/views/chat/ChatIndex.vue frontend/src/utils/__tests__/chatBgScrim.test.js

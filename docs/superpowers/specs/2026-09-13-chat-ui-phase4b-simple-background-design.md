@@ -162,6 +162,8 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 次要文字 | `--cbg-text-2` | `#57534e` | 时间戳、日期胶囊、引用 chip、空态 introduction |
 | 三级文字 | `--cbg-text-3` | `#78716c` | 占位符（`#ffffff` 底上 4.80:1 达标） |
 | 悬停底 | `--cbg-hover` | `rgba(28,25,23,0.06)` | 图标按钮 hover（浅底上压深） |
+| 开关轨道 OFF | `--cbg-switch-off` | 沉浸 `rgba(255,255,255,0.40)`（= 现状字面量）/ 简约 `#78716c`（= `--cbg-text-3`） | 设置弹层开关；简约态白滑块 vs 该轨道 **4.80:1** ✓ |
+| 开关轨道 ON | `--cbg-switch-on` | 沉浸 `var(--accent)`（= 现状）/ 简约 `#0b825a`（= 用户气泡那枚 accent 70%+黑，色板内已有） | 白滑块 vs 该轨道 **4.82:1** ✓；**不得**用裸 `var(--accent)`（白滑块仅 2.54:1，低于 WCAG 1.4.11 的 3:1） |
 | 头部胶囊底（0.50 那枚） | `--cbg-glass-btn` | 沉浸 `rgba(0,0,0,0.50)`（= `VoiceToggle`/`CharacterPhotoField` 现状字面量）/ 简约 `#f5f5f4` | 头部两个胶囊（语音开关、头像 pill）——**不得复用 `--cbg-float`(0.25)**，那是引用 chip 的值 |
 | 头部胶囊 hover | `--cbg-glass-btn-hover` | 沉浸 `rgba(0,0,0,0.60)`（= `VoiceToggle` 现状 hover）/ 简约 `#e7e5e4` | 同上（头像 pill 现状无 hover，保持不变） |
 | 引用浮层底 | `--cbg-modal-bg` | 沉浸 `rgba(23,23,23,0.95)`（= 现状 `bg-neutral-900/95`）/ 简约 `#ffffff` | 引用原文浮层面板——**不得复用 `--cbg-surface`(0.40)**，那会让面板从近乎实心变成 40% 玻璃 |
@@ -286,6 +288,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 头部条 | `bg-black/40 backdrop-blur`（无边框） | `--cbg-surface` + `1px` `--cbg-surface-border` | 浅底上白条需描边才有边界（PR #37 评审 M3 同一结论） |
 | 头部图标（☰/✕） | `text-white`，hover `bg-black/20` | `--cbg-text`，hover `--cbg-hover` | |
 | 语音开关 | `bg-black/50`（0.50），图标白，hover `bg-black/60` | `--cbg-glass-btn` + `--cbg-text`；hover `--cbg-glass-btn-hover` | 实现用 `.chat-icon-btn-solid` 一个类同时给底与字色。**不得**用 `--cbg-float`(0.25)：那会让胶囊暗度减半（评审 N5）；`SpeakerIcon` 改 `currentColor`（F10） |
+| 设置弹层开关（轨道/滑块） | OFF 轨道 `rgba(255,255,255,0.40)`；ON 轨道 `var(--accent)`；滑块 `#ffffff` | OFF `--cbg-switch-off`；ON `--cbg-switch-on`；滑块 `--cbg-switch-knob`（`#ffffff`，两模式同值） | **简约态必须换色**：`#f5f5f4` 轨道贴在 `#ffffff` 头部上仅 **1.09:1**，OFF 状态几乎不可见（评审 R6-1 实算）；ON 态白滑块 vs 裸 accent 仅 **2.54:1**，低于 WCAG 1.4.11 的 3:1。改用 `#78716c` / `#0b825a` 后为 **4.80:1 / 4.82:1**。**沉浸态按零回归不变**（其白滑块 vs OFF 轨道 1.78:1 亦偏低，属既有观感，本批不动） |
 | 头像 pill（`CharacterPhotoField`） | `bg-black/50`（0.50） | **`--cbg-glass-btn`**（0.50，保真） | **不得**用 `--cbg-float`(0.25)：会让头部件两个 0.50 胶囊同时变浅（评审 N5） |
 | 名字 pill | `bg-black/30` + `white/70` | `--cbg-float-strong` + `--cbg-text` | 13.93:1 |
 | AI 气泡 | `bg-black/35` + blur + 白字 | `--cbg-bubble-ai` + `1px` 描边 + `--cbg-text` | 白底白窗，靠描边分界 |
@@ -429,7 +432,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 
 | 命令 | 期望 |
 |------|------|
-| `cd frontend && npx vitest run` | 现有 65 与 4A 新增 10 不回归；本批新增 24 条：`useChatBg.test.js`（7）、`chatBgTokens.test.js`（6）、`ChatWindow.test.js`（5）、`WindowHeader.test.js`（4）、`chatBgLiterals.test.js`（1，颜色字面量门禁）、`chatBgScrim.test.js`（1，抽屉遮罩）；合计 **99** |
+| `cd frontend && npx vitest run` | 现有 65 与 4A 新增 10 不回归；本批新增 25 条：`useChatBg.test.js`（7）、`chatBgTokens.test.js`（**7**，含保真 token 机检）、`ChatWindow.test.js`（5）、`WindowHeader.test.js`（4）、`chatBgLiterals.test.js`（1，颜色字面量门禁）、`chatBgScrim.test.js`（1，抽屉遮罩）；合计 **100** |
 | `cd frontend && npm run build` | exit 0 |
 | 产物核对 | 构建产物 CSS 含 `--cbg-window` / `.chat-simple` / `.stage-simple` / `#fafaf9` / `#e7e5e4`；沉浸模式原有值（`rgba(0,0,0,.35)`、`blur(24px)`）**仍在** |
 
