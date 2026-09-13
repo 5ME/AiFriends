@@ -115,3 +115,27 @@
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* ===== Phase 4：文字描边（design §3.2）=====
+   问题：AI 气泡是 rgba(0,0,0,.35) 半透明玻璃，纯白背景图顶部白字对比度 4.16:1（略低于 4.5）。
+   做法：只给文字加 1px 深色实心描边，气泡底色/透明度/圆角/布局一律不动。
+   性质：描边色彩固定、与背景图内容完全解耦，满足 spec C2 对"确定性"的要求。
+   边界：描边**不改变** WCAG 意义上的对比度（那只量"文字色 vs 声明背景色"，仍是 4.16:1）；
+        它改善的是感知可读性（压掉文字周围的高频亮度起伏）。因此不得声称"加描边后对比度达标"。
+   数值依据与可复算实现见 frontend/src/utils/contrast.js 与其单测（28 用例）。 */
+:root {
+  --msg-text-shadow:
+    0 0 1px rgba(0, 0, 0, 0.85),
+    0 0 2px rgba(0, 0, 0, 0.55),
+    0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+/* ===== Phase 4：prefers-reduced-motion 兜底（spec §12）=====
+   覆盖范围仅限本项目自绘动画：.skeleton-shimmer（会话列表 + 聊天记录骨架共用）
+   与 ChatHistory 的思考中三点（在组件 scoped 样式内处理）。
+   daisyUI 的 .loading-* 动画是 SMIL，CSS 停不掉，不在本轮范围（登记为长期待办）。 */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none;
+  }
+}

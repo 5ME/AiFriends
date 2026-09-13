@@ -127,13 +127,16 @@ watch(
 
 <style scoped>
 /* markdown 渲染内容（v-html 无 scope 属性 → 经 .msg-markdown 根用 :deep 下钻） */
+/* Phase 4 文字描边：气泡文字容器（变量定义在 main.css :root） */
 .msg-markdown {
   white-space: normal;
+  text-shadow: var(--msg-text-shadow);
 }
 /* 用户消息纯文本（不走 markdown）：保留换行与多空格 */
 .msg-markdown-plain {
   white-space: pre-wrap;
   word-break: break-word;
+  text-shadow: var(--msg-text-shadow);
 }
 .msg-markdown :deep(p) { margin: 0.4em 0; }
 .msg-markdown :deep(p:first-child) { margin-top: 0; }
@@ -148,9 +151,13 @@ watch(
 .msg-markdown :deep(h2) { font-size: 1.18em; }
 .msg-markdown :deep(h3) { font-size: 1.1em; }
 .msg-markdown :deep(h4) { font-size: 1.05em; }
-.msg-markdown :deep(code) { background: rgba(0, 0, 0, 0.4); border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.85em; }
-.msg-markdown :deep(pre) { position: relative; background: rgba(0, 0, 0, 0.45); border-radius: 8px; padding: 0.6em 0.8em; margin: 0.5em 0; overflow-x: auto; }
-.msg-markdown :deep(pre code) { background: transparent; padding: 0; }
+/* Phase 4：代码块一律排除描边。二者自带深色底，实测白字对比度充足——
+   行内 code（黑 .4 叠气泡底）：最亮档 74.59 → 8.78:1，最暗档 39.78 → 14.79:1；
+   pre（黑 .45）：更高。均远高于 4.5:1，加描边纯属冗余。
+   （v2 曾以"行内 code 仅 3.06:1"为由保留其描边，那个数是把 sRGB 值当线性亮度算的，已作废。） */
+.msg-markdown :deep(code) { background: rgba(0, 0, 0, 0.4); border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.85em; text-shadow: none; }
+.msg-markdown :deep(pre) { position: relative; background: rgba(0, 0, 0, 0.45); border-radius: 8px; padding: 0.6em 0.8em; margin: 0.5em 0; overflow-x: auto; text-shadow: none; }
+.msg-markdown :deep(pre code) { background: transparent; padding: 0; text-shadow: none; }
 .msg-markdown :deep(blockquote) { border-left: 3px solid rgba(255, 255, 255, 0.3); padding-left: 0.7em; margin: 0.4em 0; color: rgba(255, 255, 255, 0.85); }
 .msg-markdown :deep(a) { color: #7dd3fc; text-decoration: underline; word-break: break-all; }
 
