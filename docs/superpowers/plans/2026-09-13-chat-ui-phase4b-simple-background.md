@@ -64,10 +64,16 @@
 ```js
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
-import { STORAGE_KEY, parseChatBg, loadChatBgMap, saveChatBgMap, useChatBg } from '../useChatBg.js'
+import { watch } from 'vue'
+import {
+  STORAGE_KEY, parseChatBg, loadChatBgMap, saveChatBgMap, useChatBg, __resetChatBgState,
+} from '../useChatBg.js'
 
 describe('useChatBg（4B D4B-3：每角色独立）', () => {
-  beforeEach(() => localStorage.clear())
+  beforeEach(() => {
+    localStorage.clear()
+    __resetChatBgState()   // 模块单例的初始值取自存储；清了存储必须同步重置内存态
+  })
 
   it('脏数据/异常输入 → 空对象（不抛错）', () => {
     expect(parseChatBg(null)).toEqual({})
@@ -104,6 +110,17 @@ describe('useChatBg（4B D4B-3：每角色独立）', () => {
   it('数字与字符串 id 等价（路由参数是字符串，store 可能是数字）', () => {
     useChatBg('12').setSimple(true)
     expect(useChatBg(12).simpleOn.value).toBe(true)
+  })
+
+  // 防回流：若有人把实现改回 computed 直读 localStorage，本用例立刻失败
+  it('状态是响应式的（交互后同一引用可观察到变化）', () => {
+    const a = useChatBg(12)
+    const seen = []
+    const stop = watch(a.simpleOn, (v) => seen.push(v), { flush: 'sync' })
+    a.setSimple(true)
+    a.setSimple(false)
+    stop()
+    expect(seen).toEqual([true, false])
   })
 
   it('localStorage 抛错时退化为内存态，且读写均不抛（E1）', () => {
@@ -171,6 +188,12 @@ export function saveChatBgMap(map) {
 // 模块级单例：启动读一次，之后每次变更持久化（deep 覆盖 future 的嵌套写）
 const state = ref(loadChatBgMap())
 watch(state, (v) => saveChatBgMap(v), { deep: true })
+
+/** 仅供测试：把模块状态重新对回存储（单测里清空 localStorage 后必须调用，
+ *  否则上一用例的内存态会污染下一用例——模块状态只在首次 import 时读一次） */
+export function __resetChatBgState() {
+  state.value = loadChatBgMap()
+}
 
 /** @param {number|string} characterId */
 export function useChatBg(characterId) {
@@ -930,7 +953,7 @@ grep -c "overlay-k" *.css         # 0（砍掉项未引入）
 - [ ] **Step 3: 全量单测**
 
 Run: `cd frontend && npx vitest run`
-Expected: 4A 后基线 74 + 本批新增 22（T1 6 + T2 6 + T3 5 + T4 5）= **96 passed**，0 failed
+Expected: 4A 后基线 74 + 本批新增 22（T1 7 + T2 6 + T3 5 + T4 4）= **96 passed**，0 failed
 
 - [ ] **Step 4: 提交**
 
