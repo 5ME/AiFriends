@@ -199,14 +199,37 @@ defineExpose({
       </div>
     </div>
 
-    <!-- 思考中指示（首 token 前） -->
+    <!-- 思考中指示（首 token 前）。Phase 4：改项目自绘三点——
+         daisyUI 的 loading-dots 动画在 mask-image 内嵌 SVG 的 SMIL 里，CSS 无法在
+         prefers-reduced-motion 下停掉（已核实 daisyui/components/loading.css 5.5.17）。 -->
     <div v-if="thinking" class="flex justify-start my-2">
       <div class="msg-bubble msg-bubble-ai flex items-center gap-1">
-        <span class="loading loading-dots loading-sm"></span>
+        <span class="thinking-dot" style="animation-delay: 0s"></span>
+        <span class="thinking-dot" style="animation-delay: 0.2s"></span>
+        <span class="thinking-dot" style="animation-delay: 0.4s"></span>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* Phase 4：思考中三点（自绘，可被 prefers-reduced-motion 停掉） */
+.thinking-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.7);
+  animation: thinking-bounce 1.2s ease-in-out infinite;
+}
+@keyframes thinking-bounce {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30%           { opacity: 1;    transform: translateY(-3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thinking-dot {
+    animation: none;
+    opacity: 0.6;   /* 静止但可见，仍表达"指示中" */
+    transform: none;
+  }
+}
 </style>
