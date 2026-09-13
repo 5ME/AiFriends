@@ -1,11 +1,23 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import WindowHeader from '@/components/chat/chat_window/WindowHeader.vue'
 import ChatHistory from '@/components/character/chat_field/chat_history/ChatHistory.vue'
 import InputField from '@/components/character/chat_field/input_field/InputField.vue'
+import { useChatSettings } from '@/composables/useChatSettings'
 
 const props = defineProps(['friend'])
 const emits = defineEmits(['closed', 'openDrawer'])
+
+// Phase 4：简约背景模式（用户降级通道）
+// E2 承接（design §5.4）有两条路径，都必须生效：
+//   ① 角色无背景图（background_image 为空）
+//   ② 背景图加载失败（404 / 跨域 / 网络）→ 由 <img> 的 error 事件置位
+const { simpleBackground } = useChatSettings()
+const backgroundFailed = ref(false)
+const hasBackground = computed(() => !!props.friend?.character?.background_image)
+const usePlainBackground = computed(
+  () => simpleBackground.value || !hasBackground.value || backgroundFailed.value,
+)
 
 // history 数组所有权在 ChatWindow（D-L1）：每个会话一个实例，:key 重建即隔离
 const history = ref([])
@@ -87,19 +99,35 @@ function scheduleScroll() {
   <!-- 单根容器：absolute 铺满舞台，内部 flex 居中窗口
        （修复：原多根组件导致窗口在 main 的 flex 布局中未真正居中） -->
   <div class="absolute inset-0 flex items-center justify-center">
-    <!-- 舞台（桌面端：同图模糊压暗延展；移动端无舞台） -->
+    <!-- 舞台（桌面端：同图模糊压暗延展；移动端无舞台）
+         Phase 4：简约背景模式 / 无背景图 / 背景图加载失败 → 深色纯色
+         （spec C3 与 E2；design §5.1/§5.4）
+         注意：这里用真实 <img> 而非 background-image，就是为了拿到 error 事件
+         （CSS 背景图加载失败没有回调，这是 E2 第二条路径唯一可靠的落点）。 -->
     <div class="absolute inset-0 overflow-hidden hidden lg:block">
-      <div class="absolute -inset-[10%] bg-cover bg-center stage-blur"
-           :style="{ backgroundImage: `url(${friend.character.background_image})` }"></div>
-      <div class="absolute inset-0 stage-dim"></div>
+      <template v-if="!usePlainBackground">
+        <img :src="friend.character.background_image"
+             alt=""
+             aria-hidden="true"
+             class="absolute -inset-[10%] w-[120%] h-[120%] object-cover stage-blur"
+             @error="backgroundFailed = true">
+        <div class="absolute inset-0 stage-dim"></div>
+      </template>
+      <div v-else class="absolute inset-0 bg-[#0c0a09]"></div>
     </div>
 
     <!-- 角色之窗（3:5，桌面居中 / 移动端全屏，纯 CSS 尺寸公式） -->
-    <div class="chat-window relative flex flex-col">
-    <!-- 窗口背景 + 渐变蒙层 -->
-    <div class="absolute inset-0 bg-cover bg-center"
-         :style="{ backgroundImage: `url(${friend.character.background_image})` }"></div>
-    <div class="absolute inset-0 window-scrim"></div>
+    <div class="chat-window relative flex flex-col"
+         :class="{ 'bg-[#1c1917]': usePlainBackground }">
+    <!-- 窗口背景 + 渐变蒙层（简约/无图/加载失败时整块不渲染，避免覆盖纯色底） -->
+    <template v-if="!usePlainBackground">
+      <img :src="friend.character.background_image"
+           alt=""
+           aria-hidden="true"
+           class="absolute inset-0 w-full h-full object-cover"
+           @error="backgroundFailed = true">
+      <div class="absolute inset-0 window-scrim"></div>
+    </template>
 
     <!-- 内容列（flex column，杜绝 absolute 堆叠） -->
     <div class="relative z-10 flex flex-col h-full">
