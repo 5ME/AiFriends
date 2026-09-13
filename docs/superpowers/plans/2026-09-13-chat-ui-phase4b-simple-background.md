@@ -40,6 +40,11 @@
 | 修改 | `frontend/src/components/character/chat_field/chat_history/message/Message.vue` | 气泡/名字/时间戳/日期/引用/markdown token 化（含 scoped 样式迁移） |
 | 修改 | `frontend/src/components/character/chat_field/input_field/InputField.vue` | 输入区/按钮/错误横幅 token 化 |
 | 修改 | `frontend/src/components/character/chat_field/input_field/Microphone.vue` | 语音栏容器 + 小点/文字 token 化 |
+| 新增 | `frontend/src/utils/__tests__/chatBgTokens.test.js` | token 家族 + @layer 守卫 + 保真 token 机检（Task 2） |
+| 新增 | `frontend/src/components/chat/chat_window/__tests__/ChatWindow.test.js` | 窗口/舞台类切换 + 交互路径 + E2 无图（Task 3） |
+| 新增 | `frontend/src/components/chat/chat_window/__tests__/WindowHeader.test.js` | 弹层开关语义与范围说明（Task 4） |
+| 新增 | `frontend/src/utils/__tests__/chatBgLiterals.test.js` | 颜色字面量残留门禁（Task 5） |
+| 新增 | `frontend/src/utils/__tests__/chatBgScrim.test.js` | 抽屉遮罩随模式反转（Task 6） |
 | 修改 | `frontend/src/views/chat/ChatIndex.vue` | 移动端抽屉遮罩随模式反转（Task 6） |
 
 ---
@@ -370,6 +375,7 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
   --cbg-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
   --cbg-switch-off: rgba(255, 255, 255, 0.40);    /* 沉浸值 = Task 4 开关轨道现状字面量（保真） */
   --cbg-switch-on: var(--accent);                 /* 沉浸值 = 现状（裸 accent） */
+  --cbg-switch-knob: #ffffff;                     /* 两模式同值 */
   --cbg-glass-btn: rgba(0, 0, 0, 0.50);           /* 沉浸值 = VoiceToggle/CharacterPhotoField 现状字面量（保真项，见设计 §3.5.1） */
   --cbg-glass-btn-hover: rgba(0, 0, 0, 0.60);     /* 沉浸值 = VoiceToggle 现状 hover */
   --cbg-modal-bg: rgba(23, 23, 23, 0.95);         /* 沉浸值 = 现状 bg-neutral-900/95 */
@@ -402,6 +408,7 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
   --cbg-shadow: 0 24px 64px rgba(28, 25, 23, 0.18);
   --cbg-switch-off: #78716c;                      /* 简约：白滑块 4.80:1 */
   --cbg-switch-on: #0b825a;                       /* 简约：白滑块 4.82:1（accent 70%+黑，与己方气泡同色） */
+  --cbg-switch-knob: #ffffff;                     /* 简约同值 */
   --cbg-glass-btn: #f5f5f4;
   --cbg-glass-btn-hover: #e7e5e4;
   --cbg-modal-bg: #ffffff;
@@ -509,7 +516,7 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
   background-color: var(--cbg-switch-on);
 }
 .chat-switch-knob {
-  background-color: #ffffff;
+  background-color: var(--cbg-switch-knob);
 }
 
 /* 引用浮层（窗口内 modal） */
@@ -1184,7 +1191,7 @@ git commit -m "feat(chat): 消息区与输入区 token 化——浅色模式全�
 ### Task 6: 移动端抽屉遮罩随模式反转
 
 **Files:**
-- Modify: `frontend/src/views/chat/ChatIndex.vue:119`
+- Modify: `frontend/src/views/chat/ChatIndex.vue`（抽屉遮罩在 `:119`）
 - Test: `frontend/src/utils/__tests__/chatBgTokens.test.js`（追加一条源码断言）
 
 **Interfaces:**

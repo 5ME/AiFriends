@@ -149,7 +149,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 
 | 语义 | token | 值 | 用途 |
 |------|-------|-----|------|
-| 舞台底 | `--cbg-stage` | `#e7e5e4` | 舞台纯色（替代模糊图 + 压暗） |
+| 舞台底 | （**不立变量**，直接字面量 `#e7e5e4`） | `#e7e5e4` | 舞台纯色（替代模糊图 + 压暗）。实现在 `.chat-stage-root.stage-simple .stage-dim { background: #e7e5e4 }`——单值且只有一个消费者，**不声明 CSS 变量**（故计划里也没有 `--cbg-stage`，这是有意的） |
 | 窗口底 | `--cbg-window` | `#fafaf9` | 角色之窗背景 |
 | 气泡底（AI） | `--cbg-bubble-ai` | `#ffffff` | AI 消息气泡 |
 | 气泡描边（AI） | `--cbg-bubble-ai-border` | `#e7e5e4` | 与窗口底区分（白底白窗时唯一分界） |
@@ -168,8 +168,18 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 头部胶囊 hover | `--cbg-glass-btn-hover` | 沉浸 `rgba(0,0,0,0.60)`（= `VoiceToggle` 现状 hover）/ 简约 `#e7e5e4` | 同上（头像 pill 现状无 hover，保持不变） |
 | 引用浮层底 | `--cbg-modal-bg` | 沉浸 `rgba(23,23,23,0.95)`（= 现状 `bg-neutral-900/95`）/ 简约 `#ffffff` | 引用原文浮层面板——**不得复用 `--cbg-surface`(0.40)**，那会让面板从近乎实心变成 40% 玻璃 |
 | 引用浮层描边 | `--cbg-modal-border` | 沉浸 `rgba(255,255,255,0.10)`（= 现状 `border-white/10`）/ 简约 `#e7e5e4` | 同上 |
-| 骨架 | `--cbg-skeleton` | `rgba(28,25,23,0.08)` → `0.14` | shimmer 渐变（浅底上压深） |
-| 分隔/焦点环 | `--cbg-ring` | `rgba(28,25,23,0.30)` | `focus-visible:ring` |
+| 骨架渐变（暗色） | `--cbg-skeleton-a` | 沉浸 `rgba(255,255,255,0.08)`（= 现状）；简约 `rgba(28,25,23,0.06)` | shimmer 三停点 `a → b → a` 的第 1、3 停点 |
+| 骨架渐变（亮色） | `--cbg-skeleton-b` | 沉浸 `rgba(255,255,255,0.18)`（= 现状）；简约 `rgba(28,25,23,0.14)` | 同上的第 2 停点（沉浸=白系提亮、简约=黑系压深，与现状同构） |
+| 代码底（行内） | `--cbg-code` | 沉浸 `rgba(0,0,0,0.40)`（= `Message.vue:151`）；简约 `rgba(28,25,23,0.06)` | 行内 `code` |
+| 代码底（块） | `--cbg-code-block` | 沉浸 `rgba(0,0,0,0.45)`（= `Message.vue:152`）；简约 `rgba(28,25,23,0.08)` | `pre` 与复制按钮底 |
+| 危险文字 | `--cbg-danger` | 沉浸 `#fca5a5`（= 现状 `text-red-300` 系）；简约 `#b91c1c` | 语音错误横幅 |
+| 链接 | `--cbg-link` | 沉浸 `#7dd3fc`（= 现状 `Message.vue:155`）；简约 `#0f766e` | markdown 链接 |
+| 表面底（次级） | `--cbg-surface-2` | 沉浸 `rgba(0,0,0,0.35)`（= 现状 `bg-black/35`）；简约 `#ffffff` | 输入栏、语音栏（与头部条 0.40 区分） |
+| 弹层/窗口投影 | `--cbg-shadow` | 沉浸 `0 24px 64px rgba(0,0,0,0.45)`（= 现状）；简约 `0 24px 64px rgba(28,25,23,0.18)` | 窗口与弹层 |
+| 焦点环 | `--cbg-ring` | 沉浸 `rgba(255,255,255,0.40)`（= 4A 的 `ring-white/40`，交接一致）；简约 `rgba(28,25,23,0.30)` | `focus-visible` 环 |
+| 强调色本地绑定 | `--cbg-own-accent` | 两模式均 `var(--accent)` | **实现细节**：`1px` 与全局 accent 绑定，便于日后按角色覆盖（`.chat-icon-btn-active` 内部使用） |
+| 开关滑块 | `--cbg-switch-knob` | 沉浸 `#ffffff`（= 现状）/ 简约 `#ffffff` | 设置弹层开关滑块（白滑块 vs 两种轨道分别 4.80 / 4.82:1，均 ≥3:1） |
+
 
 **对比度实算结果**（WCAG 2.x，sRGB 分量空间合成）：
 
