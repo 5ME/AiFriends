@@ -40,6 +40,7 @@
 | 修改 | `frontend/src/components/character/chat_field/chat_history/message/Message.vue` | 气泡/名字/时间戳/日期/引用/markdown token 化（含 scoped 样式迁移） |
 | 修改 | `frontend/src/components/character/chat_field/input_field/InputField.vue` | 输入区/按钮/错误横幅 token 化 |
 | 修改 | `frontend/src/components/character/chat_field/input_field/Microphone.vue` | 语音栏容器 + 小点/文字 token 化 |
+| 修改 | `frontend/src/views/chat/ChatIndex.vue` | 移动端抽屉遮罩随模式反转（Task 6） |
 
 ---
 
@@ -264,6 +265,7 @@ git commit -m "feat(chat): useChatBg 按角色记忆简约背景 + 存储容错�
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+// 注：本文件同时从 main.css 与 ChatIndex.vue 读源码做断言
 
 const css = readFileSync(fileURLToPath(new URL('../../assets/main.css', import.meta.url)), 'utf8')
 // 取 .chat-window 基础块：命中第一个 "{" 到第一个 "}" —— 该块内无颜色函数嵌套，安全
@@ -311,6 +313,15 @@ describe('4B token 家族（设计 §3.4）', () => {
     const layers = css.match(/@layer[^{;]*/g) ?? []
     // 本批此前 main.css 零 @layer；若新增，必须显式评审（见设计 §3.4 硬性约束一）
     expect(layers).toEqual([])
+  })
+
+  it('移动端抽屉遮罩随模式反转（设计 §3.7，用户裁决纳入）', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('../../views/chat/ChatIndex.vue', import.meta.url)),
+      'utf8',
+    )
+    expect(src).toContain('bg-[#1c1917]/40')   // 简约：暖深色 40%
+    expect(src).toContain('bg-black/50')       // 沉浸：现状不变
   })
 })
 ```
@@ -953,7 +964,7 @@ grep -c "overlay-k" *.css         # 0（砍掉项未引入）
 - [ ] **Step 3: 全量单测**
 
 Run: `cd frontend && npx vitest run`
-Expected: 4A 后基线 74 + 本批新增 22（T1 7 + T2 6 + T3 5 + T4 4）= **96 passed**，0 failed
+Expected: 4A 后基线 74 + 本批新增 23（T1 7 + T2 7 + T3 5 + T4 4）= **97 passed**，0 failed
 
 - [ ] **Step 4: 提交**
 
@@ -964,7 +975,58 @@ git commit -m "feat(chat): 消息区与输入区 token 化——浅色模式全�
 
 ---
 
-### Task 6: 验证与验收证据
+### Task 6: 移动端抽屉遮罩随模式反转
+
+**Files:**
+- Modify: `frontend/src/views/chat/ChatIndex.vue:119`
+- Test: `frontend/src/utils/__tests__/chatBgTokens.test.js`（追加一条源码断言）
+
+**Interfaces:**
+- Consumes: `useChatBg(activeCharacterId)`（Task 1，模块级单例——与 `ChatWindow` 读同一状态，不会不一致）、`.chat-simple` 语义（Task 2）
+- Produces: 抽屉遮罩类名随模式切换（`bg-black/50` ⟷ `bg-[#1c1917]/40`）
+
+> **背景**：用户裁决（2026-09-13）纳入本批。遮罩是 `lg` 以下的移动端独有覆盖层，属简约模式的组成部分；纯黑遮罩在浅色整页中会显得突兀。实算见设计 §3.7。
+
+> **断言归属**：本任务的源码断言**已写进 Task 2 的 `chatBgTokens.test.js` 断言块**（最后一条 `it`），此处不重复。若先做 Task 6 再做 Task 2，该条会先红——这是预期的。
+
+> **为什么用源码断言而不是组件测试**：遮罩位于 `lg:hidden` 的 Teleport 抽屉内，要触发它需 mock `useMediaQuery` 与 Teleport 目标，成本远高于价值；本条的核心风险是"人删了简约分支"，源码断言足以拦住。
+
+- [ ] **Step 1: 实现**
+
+`ChatIndex.vue` 的 `<script setup>` 中：
+
+```js
+import { useChatBg } from '@/composables/useChatBg.js'
+// 抽屉与 ChatWindow 是兄弟节点，但 useChatBg 是模块级单例 → 两处读到同一状态
+const { simpleOn: simpleBg } = useChatBg(activeCharacterId)
+```
+
+模板第 119 行（`Teleport` 内的遮罩）：
+
+```html
+<!-- 移动端抽屉遮罩：沉浸=黑 50%（现状不变）；简约=暖深色 40%（设计 §3.7） -->
+<div class="absolute inset-0"
+     :class="simpleBg ? 'bg-[#1c1917]/40' : 'bg-black/50'"
+     @click="drawerOpen = false"></div>
+```
+
+> `activeCharacterId` 在会话中心（`null`）时 `String(null)` 得 `'null'`，读取结果恒为 `false` → 遮罩保持黑 50%，无副作用。
+
+- [ ] **Step 2: 跑测试确认通过**
+
+Run: `cd frontend && npx vitest run src/utils/__tests__/chatBgTokens.test.js`
+Expected: PASS（7 个用例）
+
+- [ ] **Step 3: 提交**
+
+```bash
+git add frontend/src/views/chat/ChatIndex.vue frontend/src/utils/__tests__/chatBgTokens.test.js
+git commit -m "fix(chat): 移动端抽屉遮罩随模式反转（浅色整页不再出现纯黑块）（4B T6）"
+```
+
+---
+
+### Task 7: 验证与验收证据
 
 **Files:** 无源码改动
 

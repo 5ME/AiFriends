@@ -328,6 +328,34 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | E6 | 弹层打开时切换角色 | `:key` 重建会卸载弹层与其状态（关闭）——可接受，不需额外处理 |
 | E7 | 简约模式下收到引用/长代码块/markdown | 全部走 §3.5 的 token，无特例 |
 
+
+### 3.7 移动端抽屉遮罩随模式反转（用户裁决 2026-09-13 纳入）
+
+**问题**：`ChatIndex.vue:119` 的移动端会话抽屉遮罩写死 `bg-black/50`。简约模式下舞台变浅（`#e7e5e4`），纯黑遮罩会显得突兀——整页唯一的深色块。
+
+**改动**：遮罩是移动端独有的覆盖层（`lg:hidden` 语义），属简约模式的组成部分，故跟随模式：
+
+```html
+<!-- 移动端抽屉遮罩：沉浸=黑 50%（现状不变）；简约=暖深色 40% -->
+<div class="absolute inset-0"
+     :class="simpleBg ? 'bg-[#1c1917]/40' : 'bg-black/50'"
+     @click="drawerOpen = false"></div>
+```
+
+**为什么用 `#1c1917`@40% 而不是纯黑**：浅色模式整体更轻，遮罩也应更轻；暖黑与浅色族的暖调同源。
+
+**实算（本机脚本，与 §3.3 同一套公式）**：
+
+| 遮罩 | 合成色（叠在舞台 `#e7e5e4` 上） | 与舞台底对比 |
+|------|-------------------------------|--------------|
+| 现状 `bg-black/50` | `#747272` | **3.81:1** |
+| 简约 `#1c1917`@40% | `#969392` | **2.43:1** |
+| 简约 `#1c1917`@35% | `#a09e9c` | 2.13:1 |
+
+取 **40%**：与现状同为"明显可见的压暗"，但方向与色调都更轻。遮罩上无文字，故不涉及 WCAG 文字对比度门槛；此处数值用于保证"可见但不过重"。
+
+**`simpleBg` 的可见性**：`ChatIndex.vue` 目前不持有该状态（它在 `ChatWindow` 内）。移动端抽屉与 ChatWindow 是兄弟节点，故需要把 `useChatBg(activeCharacterId)` 也在 `ChatIndex` 用一次——同一模块级单例，两处读到**同一状态**，不会出现不一致。
+
 ---
 
 ## 4. 文件清单
@@ -335,7 +363,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 动作 | 文件 | 职责 |
 |------|------|------|
 | 新增 | `frontend/src/composables/useChatBg.js` | 按 `character_id` 读/写/切换（localStorage，`try/catch`） |
-| 新增 | `frontend/src/utils/__tests__/chatBg.test.js` | 存储读写与容错（E1） |
+| 新增 | `frontend/src/composables/__tests__/useChatBg.test.js` | 存储读写、每角色隔离、响应性、容错（E1） |
 | 新增 | `frontend/src/components/character/icons/SettingsIcon.vue` | ⚙ 内联 SVG（替换 emoji 字形） |
 | 修改 | `frontend/src/assets/main.css` | `--cbg-*` token 家族 + `.chat-simple` / `.stage-simple` + `.chat-popover` |
 | 修改 | `frontend/src/components/chat/chat_window/ChatWindow.vue` | 持有 `simpleBg`、渲染 `stage-simple`/`chat-simple`、引用浮层 token 化 |
@@ -347,6 +375,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 修改 | `frontend/src/components/character/chat_field/chat_history/message/Message.vue` | 气泡/名字/时间戳/日期/引用/markdown token 化 |
 | 修改 | `frontend/src/components/character/chat_field/input_field/InputField.vue` | 输入区/按钮/错误横幅 token 化 |
 | 修改 | `frontend/src/components/character/chat_field/input_field/Microphone.vue` | 语音栏容器 token 化 |
+| 修改 | `frontend/src/views/chat/ChatIndex.vue` | 移动端抽屉遮罩随模式反转（§3.7，用户裁决纳入） |
 
 **后端零改动**。**会话栏与 NavBar 不改**（D4B-6）。
 
@@ -394,6 +423,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | B8 | 沉浸模式关键 CSS 值在构建产物中逐字保留（`rgba(0,0,0,.35)` / `blur(24px)` / `saturate(1.35)` / `.45` 阴影） | 产物核对 5.1 |
 | B9 | 无背景图 / 图片加载失败时不出现破图或亮底白字（E2/E3） | 手工（造一个无背景图角色） |
 | B10 | 现有前端单测不回归 | `npx vitest run` |
+| B11 | 简约模式下移动端抽屉遮罩为暖深色 40%（非纯黑 50%），沉浸模式保持现状 | 手工（窄视口开抽屉）+ 源码核对 |
 
 ---
 
@@ -430,11 +460,11 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 
 | # | 问题 | 我的建议 |
 |---|------|----------|
-| Q-4B-1 | ① 开启简约后**会话栏**是否也要跟着变？（现状已是浅色 daisyUI 主题）② `ChatIndex.vue:119` 的移动端抽屉遮罩 `bg-black/50` 是否要跟着变浅？ | ① **不动**（跨角色公共区域，且本就达标）。② **倾向纳入**：遮罩是简约模式的组成部分，整页变浅后黑色遮罩会显得突兀；该处改动仅为 1 处类名。但这是产品判断，**请裁决** |
-| Q-4B-2 | E2/E3（无背景图 / 图片加载失败）在 **沉浸模式**下是既有缺陷（`url(undefined)` → 渲染异常）。是否纳入本批顺手修？ | **纳入**。它是本批必然会碰到的代码路径（我要在同一处加 `chat-simple` 分支），顺手修成本极低 |
-| Q-4B-3 | 窗口底色用 `#fafaf9`（暖白）还是 `#f5f5f4`（spec 原文）？ | **`#fafaf9`**。你说的是"纯白"，`#fafaf9` 比 `#f5f5f4` 更接近白，同时保留暖调；且与 AI 气泡 `#ffffff` 拉开 2% 明度，气泡靠描边分界更稳 |
-| Q-4B-4 | 弹层里是否现在就把"语音自动发送"开关一起做（Phase 3 spec D6 的遗留项）？ | **不做**。它是全局偏好而简约背景是每角色偏好，混在一个弹层里语义打架；且上次它是与深色方案一起被否的连坐项 |
-| Q-4B-5 | 移动端是否需要"仅窗口浅色、无舞台"之外的额外处理？ | **不需要**。移动端无舞台（F7），逻辑天然兼容 |
+| Q-4B-1 | ~~① 会话栏是否跟着变？② 抽屉遮罩是否跟着变？~~ | ✅ **用户裁决（2026-09-13）：① 会话栏不动；② 抽屉遮罩纳入**（按 Agent 倾向）。具体值与实算见 §3.7 |
+| Q-4B-2 | ~~E2/E3（无背景图 / 加载失败）是否纳入本批？~~ | ✅ **用户裁决（2026-09-13）：纳入**（本批必然碰到同一处代码路径） |
+| Q-4B-3 | ~~窗口底色 `#fafaf9` vs spec 原文 `#f5f5f4`？~~ | ✅ **用户裁决（2026-09-13）：`#fafaf9`**（更接近"纯白"且保留暖调） |
+| Q-4B-4 | ~~弹层里是否顺带做"语音自动发送"开关？~~ | ✅ **用户裁决（2026-09-13）：不做**（全局偏好与每角色偏好语义打架，另行立项） |
+| Q-4B-5 | ~~移动端是否需要额外处理？~~ | ✅ **用户裁决（2026-09-13）：逻辑无需额外处理**，但**抽屉遮罩除外**——移动端独有的覆盖层，见 §3.7 |
 
 ---
 
