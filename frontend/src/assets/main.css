@@ -115,3 +115,31 @@
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* 思考中三点（4A：替换 daisyUI loading-dots。后者的动画在内嵌 SVG 的 SMIL 里，
+   CSS 既覆盖不了也不响应 prefers-reduced-motion；自绘三点与 Microphone 既有
+   animate-pulse-dot 同构，走同一套 reduce 处理） */
+.thinking-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: currentColor;
+  /* 呼吸区间 0.75→1.0：峰值保持满白以贴近 daisyUI 实心点的观感。
+     幅度收窄到 25% —— 初版 0.35→1.0 的平均亮度约为旧实现的一半，属可见变化，
+     会让门 4 的"思考中态逐项比对必须一致"把它误判成回归（PR #42 评审 F4）。 */
+  opacity: 0.75;
+  animation: thinking-bounce 1.2s ease-in-out infinite;
+}
+.thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes thinking-bounce {
+  0%, 60%, 100% { opacity: 0.75; transform: translateY(0); }
+  30%           { opacity: 1;    transform: translateY(-3px); }
+}
+
+/* 4A：全局装饰动画的 reduce 兜底（骨架 shimmer 此前遗漏） */
+@media (prefers-reduced-motion: reduce) {
+  .thinking-dot { animation: none; opacity: 0.85; }
+  .skeleton-shimmer { animation: none; }
+}
