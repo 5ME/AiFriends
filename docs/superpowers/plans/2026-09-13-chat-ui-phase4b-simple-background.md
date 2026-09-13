@@ -1061,7 +1061,7 @@ npm run build && ls -la ../backend/static/frontend/assets/   # 产物 hash
 
 ## 自查清单（提交 PR 前）
 
-- [ ] 仅 §文件结构 中列出的文件被改动（含待裁决的 `ChatIndex.vue`——见设计 §9 Q-4B-1）
+- [ ] 仅 §文件结构 中列出的文件被改动（含已裁决纳入的 `ChatIndex.vue`——见设计 §9 Q-4B-1）
 - [ ] `grep -rn "#10b981" frontend/src/assets/main.css` → 仅剩 `--accent` 定义与 fallback
 - [ ] 未引入 `--overlay-k` / `--user-bubble-bg` / `--msg-text-shadow` / canvas 采样 / 主色提取
 - [ ] 沉浸模式截图与 master 逐项一致（Task 6 Step 1）
