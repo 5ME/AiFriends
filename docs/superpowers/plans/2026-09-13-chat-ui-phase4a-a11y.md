@@ -36,7 +36,7 @@
 | 修改 | `frontend/src/assets/main.css` | `.thinking-dot` + `@keyframes` + reduce 块 |
 | 新增 | `frontend/src/components/character/chat_field/__tests__/VoiceToggle.test.js` | 按钮语义与键盘 |
 | 新增 | `frontend/src/components/character/chat_field/character_photo_field/__tests__/CharacterPhotoField.test.js` | 按钮语义与 aria |
-| 新增 | `frontend/src/utils/__tests__/thinkingDots.test.js` | 三点数量与 reduce 样式存在性 |
+| 新增 | `frontend/src/utils/__tests__/thinkingDots.test.js` | `.thinking-dot` 取色 / 关键帧存在 / reduce 块 / shimmer 兜底（**4 条源码级断言，不挂载组件**） |
 
 ---
 
@@ -301,7 +301,12 @@ git commit -m "fix(a11y): NavBar 用户菜单补 aria-label（此前无任何可
 创建 `frontend/src/utils/__tests__/thinkingDots.test.js`：
 
 ```js
-// @vitest-environment jsdom
+// 本文件只读 main.css 做源码级断言，**不得声明 jsdom 环境**。
+// 根因（实施时实测）：jsdom 生效时 `new URL(相对路径, import.meta.url)` 会解析到
+// jsdom 的文档基准（href=http://localhost:3000/src/assets/main.css），于是
+// fileURLToPath 抛 "The URL must be of scheme file"。
+// 注意 `import.meta.url` 本身始终是 file://，失败点在**相对解析**那一步。
+// ⚠️ 连注释里也不能出现环境声明字符串：Vitest 按**全文字面量**匹配 pragma。
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -360,16 +365,20 @@ Expected: FAIL —— `main.css` 中无 `.thinking-dot`
 .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
 
 @keyframes thinking-bounce {
-  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  0%, 60%, 100% { opacity: 0.75; transform: translateY(0); }
   30%           { opacity: 1;    transform: translateY(-3px); }
 }
 
 /* 4A：全局装饰动画的 reduce 兜底（骨架 shimmer 此前遗漏） */
 @media (prefers-reduced-motion: reduce) {
-  .thinking-dot { animation: none; opacity: 0.6; }
+  .thinking-dot { animation: none; opacity: 0.85; }
   .skeleton-shimmer { animation: none; }
 }
 ```
+
+> **呼吸区间取 0.75→1.0**（`.thinking-dot` 的 `opacity` 与关键帧两处都要改）：峰值保持满白以贴近 daisyUI 实心点的观感，幅度收窄到 25%。初版用 0.35→1.0，其平均亮度约为旧实现的一半，会让门 4 的"思考中态逐项比对必须一致"把**已接受的行为变更**误判成回归（PR #42 评审 F4）。
+>
+> **通用规则（实施时踩坑后补，评审 F1）**：**读文件型测试一律不声明 jsdom 环境**——jsdom 生效时相对 URL 解析会落到 jsdom 文档基准（`http://localhost:3000/...`），`fileURLToPath` 因此抛错；触发条件是该文件**自身**是否声明，与同一次 run 里有几个 jsdom 文件无关（对照实验证实）。若确实同时需要 DOM 与读文件，用 `path.join(process.cwd(), 'src/assets/main.css')`；**不要**用 `?raw` 导入（Tailwind 处理下取到空串）。
 
 - [ ] **Step 4: 实现模板**
 
