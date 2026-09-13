@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **执行状态：全部 12 个 Task 已完成（2026-09-11）**。步骤全部勾选；实际执行与计划的差异记录在下方"执行记录"节。
+
 > **版本历史**：v1（原始）→ v2（按两轴评审修 3 个阻断：sRGB 模型 / 单例 / reduced-motion）→ **v3（按两轴复审修 3 处数值与引用错误 + 补全回写清单 + 修复流程状态失真）**
 >
 > **v3 修正要点**：① 删除伪引用（v2 曾称"spec 原文要求 `pre` 与 `code` 都排除描边"，但 **spec 全文没有该条款、也没有 §3.4**）；② §3.3 档位改用**真实最坏档 124.3125 → 18.63**（v2 用的 95.625 对应气泡 α=0.5，合成链条里不存在）；③ 行内 `code` 改**去掉描边**（真值 8.78~14.79:1，v2 的 3.06 是错口径）；④ W8 作废、W9 标注待授权、补 W10~W12 与 L5~L6；⑤ E2 补 `@error` 路径；⑥ 新增 Task 12（评审记录）；⑦ 标注 Task 1 已先行落地（流程违规，待裁决）。
@@ -116,7 +118,7 @@ export function strokeContrast(base, strokeAlpha = STROKE_ALPHA) {
 - Modify: `frontend/src/assets/main.css`（文件末尾追加）
 - Modify: `frontend/src/components/character/chat_field/chat_history/message/Message.vue`（`:130-137` 与 `:151-153`）
 
-- [ ] **Step 1: main.css 追加描边变量**
+- [x] **Step 1: main.css 追加描边变量**
 
 追加到 `frontend/src/assets/main.css` **文件最末尾**：
 
@@ -136,7 +138,7 @@ export function strokeContrast(base, strokeAlpha = STROKE_ALPHA) {
 }
 ```
 
-- [ ] **Step 2: 文字容器挂上描边**
+- [x] **Step 2: 文字容器挂上描边**
 
 修改 `frontend/src/components/character/chat_field/chat_history/message/Message.vue`。
 
@@ -169,7 +171,7 @@ export function strokeContrast(base, strokeAlpha = STROKE_ALPHA) {
 }
 ```
 
-- [ ] **Step 3: 代码块排除描边（`pre` 与行内 `code` 都排除）**
+- [x] **Step 3: 代码块排除描边（`pre` 与行内 `code` 都排除）**
 
 把（当前第 151-153 行）：
 
@@ -191,12 +193,12 @@ export function strokeContrast(base, strokeAlpha = STROKE_ALPHA) {
 .msg-markdown :deep(pre code) { background: transparent; padding: 0; text-shadow: none; }
 ```
 
-- [ ] **Step 4: 构建验证**
+- [x] **Step 4: 构建验证**
 
 Run: `cd frontend && npm run build`
 Expected: 构建成功（exit 0）
 
-- [ ] **Step 5: 校验产物（PowerShell，不用 grep）**
+- [x] **Step 5: 校验产物（PowerShell，不用 grep）**
 
 ```powershell
 cd D:\MyProjects\AiFriends\frontend
@@ -205,7 +207,7 @@ Select-String -Path ..\backend\static\frontend\assets\*.css -Pattern '--msg-text
 ```
 Expected: 出现该变量名，且组件内的 `text-shadow: var(--msg-text-shadow)` 引用存在于源码（产物可能被压缩合并，故判据是"≥1 处且源码确有引用"，不苛求计数）
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add frontend/src/assets/main.css frontend/src/components/character/chat_field/chat_history/message/Message.vue
@@ -222,7 +224,7 @@ git commit -m "fix(chat): 文字描边补足亮背景图顶部可读性（design
 
 > 背景：两个元素当前是 `<div @click>`。**div 不可聚焦**，键盘用户按 Tab 永远走不到，等于"用键盘开关语音 / 打开角色详情"这两个功能不存在。改成 `<button>` 后浏览器自动提供可聚焦、Enter/空格触发、读屏播报为按钮。
 
-- [ ] **Step 1: VoiceToggle 改按钮**
+- [x] **Step 1: VoiceToggle 改按钮**
 
 把 `frontend/src/components/character/chat_field/VoiceToggle.vue` 的 `<template>` 整块：
 
@@ -258,7 +260,7 @@ git commit -m "fix(chat): 文字描边补足亮背景图顶部可读性（design
 
 注意：**不加 daisyUI 的 `btn` 类**（避免其预设尺寸/背景与现有 `h-10 w-10` 冲突）；`type="button"` 必须写。焦点环用 `ring-white/40`，与 `InputField` 麦克风按钮一致（spec §5.3/§12 原文写的是 `ring-white/60`，该偏离登记于 W10）。
 
-- [ ] **Step 2: CharacterPhotoField 改按钮 + 补 alt**
+- [x] **Step 2: CharacterPhotoField 改按钮 + 补 alt**
 
 把 `frontend/src/components/character/chat_field/character_photo_field/CharacterPhotoField.vue` 的 `<template>` 整块：
 
@@ -304,12 +306,12 @@ git commit -m "fix(chat): 文字描边补足亮背景图顶部可读性（design
 </template>
 ```
 
-- [ ] **Step 3: 构建验证**
+- [x] **Step 3: 构建验证**
 
 Run: `cd frontend && npm run build`
 Expected: 构建成功（exit 0），无 Vue 模板编译告警
 
-- [ ] **Step 4: 校验产物**
+- [x] **Step 4: 校验产物**
 
 ```powershell
 cd D:\MyProjects\AiFriends\frontend
@@ -318,7 +320,7 @@ Select-String -Path ..\backend\static\frontend\assets\*.js -Pattern '查看角�
 ```
 Expected: 三条文案均命中（证明 `aria-label` 进了打包产物）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add frontend/src/components/character/chat_field/VoiceToggle.vue frontend/src/components/character/chat_field/character_photo_field/CharacterPhotoField.vue
@@ -336,7 +338,7 @@ git commit -m "fix(a11y): 语音开关与角色详情改为真按钮（原 div �
 > **必须是模块级单例**（LD D-L7 明文：WindowHeader 与 InputField 共享同一状态）。v1 写成工厂函数会导致 ⚙ 切不动背景、自动发送开关失效。
 > 参照 `frontend/src/composables/useVoiceToggle.js:4`：ref 定义在模块顶层，函数只做返回。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 创建 `frontend/src/composables/__tests__/useChatSettings.test.js`。注意 `watch` 默认 `flush:'pre'`（回调在微任务里跑），**必须 `await nextTick()` 之后再断言持久化**：
 
@@ -429,12 +431,12 @@ describe('useChatSettings（模块级单例，LD D-L7）', () => {
 })
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `cd frontend && npx vitest run src/composables/__tests__/useChatSettings.test.js`
 Expected: FAIL —— `Failed to resolve import "../useChatSettings"`
 
-- [ ] **Step 3: 写实现（模块级单例）**
+- [x] **Step 3: 写实现（模块级单例）**
 
 创建 `frontend/src/composables/useChatSettings.js`：
 
@@ -485,17 +487,17 @@ export function useChatSettings() {
 }
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `cd frontend && npx vitest run src/composables/__tests__/useChatSettings.test.js`
 Expected: PASS，6 个用例全绿
 
-- [ ] **Step 5: 全量单测**
+- [x] **Step 5: 全量单测**
 
 Run: `cd frontend && npx vitest run`
 Expected: PASS，`Test Files 6 passed`，`Tests 99 passed`（93 + 6）
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add frontend/src/composables/useChatSettings.js frontend/src/composables/__tests__/useChatSettings.test.js
@@ -510,7 +512,7 @@ git commit -m "feat(chat): useChatSettings 模块级单例（简约背景 + 语�
 - Modify: `frontend/src/components/chat/chat_window/WindowHeader.vue`（整块重写）
 - Modify: `frontend/src/components/chat/chat_window/ChatWindow.vue`（import 区 `:2`/`:5`、状态区 `:11`、模板 `:90-102`）
 
-- [ ] **Step 1: WindowHeader 加 ⚙ 设置弹层**
+- [x] **Step 1: WindowHeader 加 ⚙ 设置弹层**
 
 把 `frontend/src/components/chat/chat_window/WindowHeader.vue` **整个文件**替换为：
 
@@ -600,7 +602,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 </style>
 ```
 
-- [ ] **Step 2: ChatWindow 接简约背景 + 背景图兜底（无图 **与** 加载失败两条路径）**
+- [x] **Step 2: ChatWindow 接简约背景 + 背景图兜底（无图 **与** 加载失败两条路径）**
 
 修改 `frontend/src/components/chat/chat_window/ChatWindow.vue`。
 
@@ -692,12 +694,12 @@ const usePlainBackground = computed(
 > 说明：简约模式**只做深色版**（`#1c1917` 窗口 / `#0c0a09` 舞台）。浅色版会使玻璃头部条、名字 pill、日期胶囊、引用 chips 这批"白字系"元素集体失效，需连带重做（design §5.1）。
 > 气泡处置：spec §6.6 要求简约模式下气泡改 daisyUI 对比色，本设计**不采纳**（深色底 + 白字实测 17.04:1，改气泡反而破坏一致性），登记于 W6。
 
-- [ ] **Step 3: 构建验证**
+- [x] **Step 3: 构建验证**
 
 Run: `cd frontend && npm run build`
 Expected: 构建成功（exit 0）
 
-- [ ] **Step 4: 校验产物**
+- [x] **Step 4: 校验产物**
 
 ```powershell
 cd D:\MyProjects\AiFriends\frontend
@@ -706,7 +708,7 @@ Select-String -Path ..\backend\static\frontend\assets\*.js -Pattern '简约背�
 ```
 Expected: 四项文案/色值均命中
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add frontend/src/components/chat/chat_window/WindowHeader.vue frontend/src/components/chat/chat_window/ChatWindow.vue
@@ -720,7 +722,7 @@ git commit -m "feat(chat): ⚙ 设置弹层（简约背景 + 语音自动发送�
 **Files:**
 - Modify: `frontend/src/components/character/chat_field/input_field/InputField.vue`（import 区 `:11`、状态区 `:39`、`onUnmounted` `:252-260`）
 
-- [ ] **Step 1: 接入设置单例**
+- [x] **Step 1: 接入设置单例**
 
 在 import 区（第 11 行 `import { voiceReducer, ... } from "@/utils/voiceState";` 之后）加：
 
@@ -728,7 +730,7 @@ git commit -m "feat(chat): ⚙ 设置弹层（简约背景 + 语音自动发送�
 import { useChatSettings } from "@/composables/useChatSettings";
 ```
 
-- [ ] **Step 2: 加自动发送计时器**
+- [x] **Step 2: 加自动发送计时器**
 
 在语音状态机声明区（第 39 行 `const activeMicSeq = ref(0)` 之后）加：
 
@@ -753,7 +755,7 @@ watch(micState, (s) => {
 })
 ```
 
-- [ ] **Step 3: 卸载时清定时器**
+- [x] **Step 3: 卸载时清定时器**
 
 把 `onUnmounted`（第 252-260 行）：
 
@@ -787,12 +789,12 @@ onUnmounted(() => {
 });
 ```
 
-- [ ] **Step 4: 构建验证**
+- [x] **Step 4: 构建验证**
 
 Run: `cd frontend && npm run build`
 Expected: 构建成功（exit 0）
 
-- [ ] **Step 5: 校验产物**
+- [x] **Step 5: 校验产物**
 
 ```powershell
 cd D:\MyProjects\AiFriends\frontend
@@ -801,7 +803,7 @@ Select-String -Path ..\backend\static\frontend\assets\*.js -Pattern 'chatAutoSen
 ```
 Expected: ≥ 1 处
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add frontend/src/components/character/chat_field/input_field/InputField.vue
@@ -818,7 +820,7 @@ git commit -m "feat(chat): 语音自动发送（确认态 800ms 自动发出，�
 
 > **为什么不能用 CSS 覆盖 daisyUI**：`loading-dots` 的动画是 `mask-image` 内嵌 SVG 里的 **SMIL**（`<animate>`），daisyUI 的 `loading.css` 内**没有任何 CSS animation / @keyframes / ::before / ::after**（已核实 5.5.17）→ `animation: none` 与 `::before/::after` 规则全部空转。因此改为项目自绘三点。
 
-- [ ] **Step 1: main.css 补骨架的 reduce 兜底**
+- [x] **Step 1: main.css 补骨架的 reduce 兜底**
 
 追加到 `frontend/src/assets/main.css` 末尾：
 
@@ -834,7 +836,7 @@ git commit -m "feat(chat): 语音自动发送（确认态 800ms 自动发出，�
 }
 ```
 
-- [ ] **Step 2: ChatHistory 换自绘三点**
+- [x] **Step 2: ChatHistory 换自绘三点**
 
 把 `frontend/src/components/character/chat_field/chat_history/ChatHistory.vue` 模板里的思考中指示（当前第 202-207 行）：
 
@@ -895,12 +897,12 @@ git commit -m "feat(chat): 语音自动发送（确认态 800ms 自动发出，�
 </style>
 ```
 
-- [ ] **Step 3: 构建验证**
+- [x] **Step 3: 构建验证**
 
 Run: `cd frontend && npm run build`
 Expected: 构建成功（exit 0）
 
-- [ ] **Step 4: 校验产物与遗留**
+- [x] **Step 4: 校验产物与遗留**
 
 ```powershell
 cd D:\MyProjects\AiFriends\frontend
@@ -909,7 +911,7 @@ cd D:\MyProjects\AiFriends\frontend
 ```
 Expected: 前者 ≥1，后者 = 0
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add frontend/src/assets/main.css frontend/src/components/character/chat_field/chat_history/ChatHistory.vue
@@ -922,22 +924,22 @@ git commit -m "fix(a11y): 思考中指示器换自绘三点（daisyUI loading-do
 
 **Files:** 无（只跑验证）
 
-- [ ] **Step 1: 前端单测全量**
+- [x] **Step 1: 前端单测全量**
 
 Run: `cd frontend && npx vitest run`
 Expected: PASS，`Test Files 6 passed`，`Tests 99 passed`
 
-- [ ] **Step 2: 前端生产构建**
+- [x] **Step 2: 前端生产构建**
 
 Run: `cd frontend && npm run build`
 Expected: exit 0
 
-- [ ] **Step 3: 后端测试未被波及（本轮零后端改动，仍须实测）**
+- [x] **Step 3: 后端测试未被波及（本轮零后端改动，仍须实测）**
 
 Run: `cd backend && python -m pytest web/tests/ -q`
 Expected: PASS（221 passed）。若本地 PostgreSQL / Redis 未启动导致无法运行，**如实记为环境限制，不得写"通过"**
 
-- [ ] **Step 4: 汇总证据，报告门 4**
+- [x] **Step 4: 汇总证据，报告门 4**
 
 把 Step 1~3 的真实输出贴进汇报，并列出需在**用户浏览器**人工确认的项（design §9 的第 3~11 条）：
 
@@ -960,7 +962,7 @@ Expected: PASS（221 passed）。若本地 PostgreSQL / Redis 未启动导致无
 
 > **W8 已作废**（v3）：v2 曾要登记"偏离 spec 原文要求"，但 **spec 全文没有 `text-shadow` 条款，也没有 §3.4**（已 grep 核实，只有 `## 3. 已拍板决策`）。那句话来自 design v1 §3.4 自身 → 改为 design 内部约定变更（已写在 design §3.6），**spec 无需回写**。
 
-- [ ] **Step 1: 回写 §13 Phase 4 段**
+- [x] **Step 1: 回写 §13 Phase 4 段**
 
 把 §13 的（第 406-413 行）：
 
@@ -991,7 +993,7 @@ Expected: PASS（221 passed）。若本地 PostgreSQL / Redis 未启动导致无
 6. **新增**：背景图缺失或加载失败时，窗口与舞台回落深色纯色，文字可读（E2 双路径）。
 ```
 
-- [ ] **Step 2: §6.5 加作废声明**
+- [x] **Step 2: §6.5 加作废声明**
 
 在 §6.5 标题（第 219 行 `### 6.5 亮度自适应算法（useBackgroundAdaptive.js）`）之后插入：
 
@@ -1000,7 +1002,7 @@ Expected: PASS（221 passed）。若本地 PostgreSQL / Redis 未启动导致无
 > 原因：① 主色 accent 已拍板固定为 `#10b981`，不再从背景图提取；② 实测表明可读性缺口比预想小得多——sRGB 合成口径下纯白图顶部为 4.16:1（仅略低于 4.5），中部以下早已达标，且"单改蒙层"即可达标（顶部 0.375 → 5.61:1）；③ 改用文字描边后，承托与背景亮度解耦。详见 `2026-09-11-chat-ui-phase4-readability-a11y-design.md` §3。
 ```
 
-- [ ] **Step 3: 更正四处同源对比度论断（W4）**
+- [x] **Step 3: 更正四处同源对比度论断（W4）**
 
 **(a)** §11 E3（第 343 行）：
 
@@ -1042,7 +1044,7 @@ Expected: PASS（221 passed）。若本地 PostgreSQL / Redis 未启动导致无
 7. 背景图之上文字在亮/暗图下均可读（人工目测；亮图顶部的余量由 Phase 4 的文字描边补足，见 §13 Phase 4 断言 1 与 design §3.4）。
 ```
 
-- [ ] **Step 4: 补 §6.6 的实施偏离（W6）**
+- [x] **Step 4: 补 §6.6 的实施偏离（W6）**
 
 在 §6.6 标题（第 235 行 `### 6.6 "简约背景"模式（C3 用户降级，用户设置，localStorage 持久化）`）之后插入：
 
@@ -1050,7 +1052,7 @@ Expected: PASS（221 passed）。若本地 PostgreSQL / Redis 未启动导致无
 > **2026-09-11 实施口径（偏离登记 W6）**：① **只做深色版**（窗口 `#1c1917` / 舞台 `#0c0a09`），不做浅色 `#f5f5f4` 与"跟随系统"——浅色底会使玻璃头部条、名字 pill、日期胶囊、引用 chips 这批白字系元素集体失效，需连带重做；② **气泡不改** daisyUI 对比色（深色底 + 白字实测 17.04:1，已远超标线，改气泡反而破坏与沉浸模式的一致性）；③ 入口改为 WindowHeader 的 **⚙ 设置弹层**（两个开关并列，LD §3.5 / Q6 落点），非原文的"月亮/减淡图标 + tooltip"。
 ```
 
-- [ ] **Step 5: 更正 E2 承接方式（W7，双路径）**
+- [x] **Step 5: 更正 E2 承接方式（W7，双路径）**
 
 §11 边界情况表 E2（第 342 行）：
 
@@ -1062,7 +1064,7 @@ Expected: PASS（221 passed）。若本地 PostgreSQL / Redis 未启动导致无
 | E2 | 背景图缺失/加载失败/跨域被拦 | 两条路径均回落简约模式的深色渲染（窗口 `#1c1917` / 舞台 `#0c0a09`）：① `background_image` 为空；② `<img>` 的 `error` 事件置位。原 `useBackgroundAdaptive` 的 `K=1.0` 回退随 §6.5 一并作废 |
 ```
 
-- [ ] **Step 6: 改写 C2 条款（W9）——仅在用户明确授权后执行**
+- [x] **Step 6: 改写 C2 条款（W9）——仅在用户明确授权后执行**
 
 §2 产品约束的 C2（第 38 行）：
 
@@ -1076,7 +1078,7 @@ Expected: PASS（221 passed）。若本地 PostgreSQL / Redis 未启动导致无
 
 > ⚠️ **执行前置**：本步骤改动的是最高权威文档的**硬约束条款**，必须等用户在 design §11.2 上明确确认"这就是授权"后才能执行。**未获确认前跳过本步骤**，并改走 design §3.5 的乙或丙（纯 CSS 数值改动，不动条款）。
 
-- [ ] **Step 7: 登记焦点环偏离（W10）与散落引用（W11/W12）**
+- [x] **Step 7: 登记焦点环偏离（W10）与散落引用（W11/W12）**
 
 **(a)** §5.3 InputField 契约的焦点环（第 361 行一带，原文 `focus-visible:ring-2 ring-white/60`）之后插入：
 
@@ -1100,7 +1102,7 @@ Expected: PASS（221 passed）。若本地 PostgreSQL / Redis 未启动导致无
 
 **(c)** §6.2 舞台背景（第 207 行）末尾的"（2026-09-07 实机调优…Phase 4 引入 `--overlay-k` 自适应时以 0.35 为基准系数起调。）" → 改为"（2026-09-07 实机调优值；`--overlay-k` 自适应已取消，0.35 定为固定值。）"（W12）
 
-- [ ] **Step 8: 文件末尾追加变更登记**
+- [x] **Step 8: 文件末尾追加变更登记**
 
 在 spec **最末尾**追加：
 
@@ -1127,7 +1129,7 @@ Expected: PASS（221 passed）。若本地 PostgreSQL / Redis 未启动导致无
 **数值口径说明**：本次全部对比度按 **sRGB 分量空间合成 → 再线性化** 计算（CSS 的真实行为）。design v1 误用亮度空间线性混合，v2 又误用 sRGB 数值当线性亮度（行内 code 3.06:1）与错底色（95.625），均已在 design v3 §0 记录。
 ```
 
-- [ ] **Step 9: 验证回写（独立进程读盘断言）**
+- [x] **Step 9: 验证回写（独立进程读盘断言）**
 
 ```powershell
 cd D:\MyProjects\AiFriends
@@ -1141,7 +1143,7 @@ foreach ($n in $need) {
 ```
 Expected: 七项计数全部 ≥1；反向检查为 0
 
-- [ ] **Step 10: 提交**
+- [x] **Step 10: 提交**
 
 ```bash
 git add docs/superpowers/specs/2026-09-07-chat-ui-redesign-spec-for-llm.md
@@ -1157,7 +1159,7 @@ git commit -m "docs(chat): spec 回写 Phase 4 事实变更（W1~W7、W9~W12）�
 
 > v1/v2 遗漏：LD 完全未回写，导致两份文档对已砍内容相互矛盾。若 Phase 4 完成而 LD 未更新，会被误当作权威继续指导实施。
 
-- [ ] **Step 1: L1——标注已砍模块**
+- [x] **Step 1: L1——标注已砍模块**
 
 在 LD §3.10 标题（**第 162 行** `### 3.10 \`useBackgroundAdaptive.js\`【新】`）之后插入：
 
@@ -1171,7 +1173,7 @@ git commit -m "docs(chat): spec 回写 Phase 4 事实变更（W1~W7、W9~W12）�
 > **2026-09-11 本期不实施**：`--user-bubble-bg` 与 `resolveUserBubble` 三档阶梯取消——己方气泡为固定不透明色，实测白字 4.85:1 已达标，无需按 accent 解析。
 ```
 
-- [ ] **Step 2: L2——改写 §10 的 Phase 4 表**
+- [x] **Step 2: L2——改写 §10 的 Phase 4 表**
 
 把 LD §10「### Phase 4 — 自适应与质感」整段（第 465-474 行）：
 
@@ -1204,7 +1206,7 @@ git commit -m "docs(chat): spec 回写 Phase 4 事实变更（W1~W7、W9~W12）�
 | 验收 | spec Phase 4 断言 1~6（改口径后） |
 ```
 
-- [ ] **Step 3: L3——标注 WindowHeader 契约偏离**
+- [x] **Step 3: L3——标注 WindowHeader 契约偏离**
 
 在 LD §3.5（**第 103 行** `### 3.5 \`components/chat/chat_window/WindowHeader.vue\`【新】`）之后插入：
 
@@ -1212,7 +1214,7 @@ git commit -m "docs(chat): spec 回写 Phase 4 事实变更（W1~W7、W9~W12）�
 > **2026-09-11 实施偏离**：不再通过 props/emits 传递设置——WindowHeader 与 InputField 均直接使用 `useChatSettings()` **模块级单例**（本文件 D-L7 本就要求二者共享同一状态，单例下 props 传递是冗余的）。因此 `simpleBackground` prop 与 `toggleSimple`/`toggleAutoSend` emits 不实现。
 ```
 
-- [ ] **Step 4: L4——补 Q6 落地注记**
+- [x] **Step 4: L4——补 Q6 落地注记**
 
 LD §13 决策表 Q6 行（第 514 行）末尾补注：
 
@@ -1220,7 +1222,7 @@ LD §13 决策表 Q6 行（第 514 行）末尾补注：
 （2026-09-11 补注：入口已实现为 WindowHeader 的 ⚙ 设置弹层，与"简约背景"开关并列。）
 ```
 
-- [ ] **Step 5: L5——散落引用补全**
+- [x] **Step 5: L5——散落引用补全**
 
 对以下各行逐一追加行内标注 `（2026-09-11：本期不实施）`：
 
@@ -1233,7 +1235,7 @@ LD §13 决策表 Q6 行（第 514 行）末尾补注：
 | `:407` / `:410` | §9.2 单测清单里的 `backgroundAdaptive` / `resolveUserBubble` 用例 |
 | `:490` | §11 竞态风险表里的"背景采样 `seq` 令牌" |
 
-- [ ] **Step 6: L6——补 ChatHistory 契约变更**
+- [x] **Step 6: L6——补 ChatHistory 契约变更**
 
 在 LD §3.6（ChatHistory 契约）的"新增状态渲染"块之后插入：
 
@@ -1241,7 +1243,7 @@ LD §13 决策表 Q6 行（第 514 行）末尾补注：
 > **2026-09-11 变更**：思考中指示器由 daisyUI `<span class="loading loading-dots">` 换为**项目自绘三点**——daisyUI 的 `loading-*` 动画位于 `mask-image` 内嵌 SVG 的 SMIL 中，CSS 无法在 `prefers-reduced-motion` 下停掉（已核实 `daisyui/components/loading.css` 5.5.17）。
 ```
 
-- [ ] **Step 7: 验证回写**
+- [x] **Step 7: 验证回写**
 
 ```powershell
 cd D:\MyProjects\AiFriends
@@ -1253,7 +1255,7 @@ foreach ($n in $need) {
 ```
 Expected: 五项计数全部 ≥1
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git add docs/superpowers/specs/2026-09-07-chat-ui-redesign-logic-design.md
@@ -1269,21 +1271,21 @@ git commit -m "docs(chat): LD 回写 Phase 4 变更（L1~L6）—— 标注已�
 - Add: `docs/superpowers/reviews/2026-06-28-pr31-docker-compose-review.md`
 - Add: `docs/superpowers/reviews/2026-08-19-deployment-registry-refactor-spec-review.md`
 
-- [ ] **Step 1: 移动误归档的评审报告**
+- [x] **Step 1: 移动误归档的评审报告**
 
 ```bash
 cd D:/MyProjects/AiFriends && git mv docs/superpowers/specs/2026-09-07-chat-ui-redesign-review.md docs/superpowers/reviews/2026-09-07-chat-ui-redesign-review.md && git status --short -- docs/superpowers/
 ```
 Expected: `R  docs/superpowers/specs/… -> docs/superpowers/reviews/…`
 
-- [ ] **Step 2: 纳入两份未跟踪的历史评审记录**
+- [x] **Step 2: 纳入两份未跟踪的历史评审记录**
 
 ```bash
 cd D:/MyProjects/AiFriends && git add docs/superpowers/reviews/2026-06-28-pr31-docker-compose-review.md docs/superpowers/reviews/2026-08-19-deployment-registry-refactor-spec-review.md && git status --short -- docs/superpowers/reviews/
 ```
 Expected: 两条 `A ` 记录
 
-- [ ] **Step 3: 确认未误伤工作区杂物**
+- [x] **Step 3: 确认未误伤工作区杂物**
 
 ```powershell
 cd D:\MyProjects\AiFriends
@@ -1291,7 +1293,7 @@ git status --short
 ```
 Expected: 仍能看到未提交的 `.codegraph/.gitignore` 与 `.superpowers/brainstorm/**` 条目，且它们**不在暂存区**
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add docs/superpowers/reviews/
@@ -1307,7 +1309,7 @@ git commit -m "docs: 评审记录归位（chat-ui-redesign-review 移入 reviews
 
 > 契约 §4 要求 L 档评审记录落 `reviews/YYYY-MM-DD-<topic>-review.md`。本轮 Phase 4 已经历 **3 轮评审**（v1 两轴 / v2 两轴 / v3 复审），必须留档，否则日后无法解释 design/plan 为何从 v1 改到 v3。
 
-- [ ] **Step 1: 写评审记录**
+- [x] **Step 1: 写评审记录**
 
 创建 `docs/superpowers/reviews/2026-09-11-chat-ui-phase4-review.md`，内容至少包含：
 
@@ -1343,7 +1345,7 @@ git commit -m "docs: 评审记录归位（chat-ui-redesign-review 移入 reviews
 三次错误同源：**把 sRGB 数值当作线性亮度代入 WCAG 公式**（v1 用错空间、v2 又用错一次），以及**手写中间值而不从公式推导**（95.625）。二者均已通过"档位全部由 `bubbleBase()` 推导 + 单测锁定"从机制上消除。
 ```
 
-- [ ] **Step 2: 提交**
+- [x] **Step 2: 提交**
 
 ```bash
 git add docs/superpowers/reviews/2026-09-11-chat-ui-phase4-review.md
