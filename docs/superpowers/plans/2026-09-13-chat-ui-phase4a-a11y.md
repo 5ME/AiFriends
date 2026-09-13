@@ -53,7 +53,7 @@
 ```js
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach } from 'vitest'
-import { createApp, h } from 'vue'
+import { createApp, h, nextTick } from 'vue'
 import VoiceToggle from '../VoiceToggle.vue'
 import { useVoiceToggle } from '@/composables/useVoiceToggle.js'
 
@@ -78,14 +78,14 @@ describe('VoiceToggle（4A D4A-1：真按钮 + 可访问名称）', () => {
     expect(el.getAttribute('type')).toBe('button')
   })
 
-  it('可访问名称随状态变化，且 aria-pressed 反映开关态', () => {
+  it('可访问名称随状态变化，且 aria-pressed 反映开关态', async () => {
     const { voiceEnabled } = useVoiceToggle()
     const btn = mount().querySelector('button')
     expect(btn.getAttribute('aria-label')).toBe('关闭语音播报')
     expect(btn.getAttribute('aria-pressed')).toBe('true')
     btn.click()
+    await nextTick()            // Vue 的 DOM 更新是异步批处理的，同步读会拿到旧值
     expect(voiceEnabled.value).toBe(false)
-    // 同一个元素会被 Vue 反应式更新（无需重新查询）
     expect(btn.getAttribute('aria-label')).toBe('开启语音播报')
     expect(btn.getAttribute('aria-pressed')).toBe('false')
   })
@@ -130,7 +130,7 @@ Expected: FAIL —— `querySelector('button')` 返回 `null`（当前根元素�
 </template>
 ```
 
-> 说明：类名与改动前**完全一致**，仅追加 `focus-visible:ring-2 ring-white/40 outline-none`（该项目同区按钮 ☰/✕ 的既有约定）。`SpeakerIcon` 不动（其 `text-white` 归 4B 的浅色模式处理）。
+> 说明：类名与改动前**完全一致**，仅追加 `focus-visible:ring-2 ring-white/40 outline-none`（D4A-6：本组件是 `div`→`button`，此前完全不可聚焦，故必须有焦点环；头部件那些 daisyUI `.btn` 由 daisyUI 自带，不重复加）。`SpeakerIcon` 不动（其 `text-white` 归 4B 的浅色模式处理）。
 
 - [ ] **Step 4: 跑测试确认通过**
 
@@ -311,10 +311,6 @@ describe('思考中三点（4A T4：替换 CSS 停不掉的 daisyUI SMIL）', ()
     expect(block).toContain('currentColor')
   })
 
-  it('定义了 thinking-bounce 关键帧', () => {
-    expect(css).toContain('@keyframes thinking-bounce')
-  })
-
   it('reduced-motion 下三点静止但保留可见（opacity 不得为 0）', () => {
     const reduce = css.match(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/)?.[0] ?? ''
     expect(reduce).toContain('.thinking-dot')
@@ -401,7 +397,7 @@ git commit -m "fix(a11y): 思考中指示器换自绘三点（daisyUI loading-do
 - [ ] **Step 1: 全量前端单测**
 
 Run: `cd frontend && npx vitest run`
-Expected: 既有 65 passed + 本批新增 9（T1 2 + T2 3 + T4 4）= **74 passed**，0 failed
+Expected: 既有 65 passed + 本批新增 9（T1 3 + T2 3 + T4 3）= **74 passed**，0 failed
 
 - [ ] **Step 2: 构建**
 

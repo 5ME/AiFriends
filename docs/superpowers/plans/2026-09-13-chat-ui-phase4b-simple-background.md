@@ -129,7 +129,11 @@ Expected: FAIL —— 无法解析 `../useChatBg.js`（模块不存在）
 // 简约背景开关（4B D4B-3：**每角色独立**）。
 // 存 localStorage：{"<character_id>": true}。键名与值都做校验——脏数据一律忽略，
 // 任何存储异常都不得影响聊天页渲染（E1）。
-import { computed } from 'vue'
+//
+// ⚠️ 响应式关键：状态必须落在**模块级 ref**（与既有 useVoiceToggle / useToast 同惯例）。
+// 若写成 computed(() => loadChatBgMap()[key]) —— 读取 localStorage 不是响应式依赖，
+// computed 缓存后**永不失效**，表现为"点了开关没反应"。评审探针已复现该缺陷。
+import { computed, ref, watch } from 'vue'
 
 export const STORAGE_KEY = 'chatSimpleBg'
 
@@ -164,24 +168,26 @@ export function saveChatBgMap(map) {
   }
 }
 
+// 模块级单例：启动读一次，之后每次变更持久化（deep 覆盖 future 的嵌套写）
+const state = ref(loadChatBgMap())
+watch(state, (v) => saveChatBgMap(v), { deep: true })
+
 /** @param {number|string} characterId */
 export function useChatBg(characterId) {
   const key = String(characterId)
-  const simpleOn = computed(() => loadChatBgMap()[key] === true)
+  const simpleOn = computed(() => state.value[key] === true)
 
   function setSimple(on) {
-    const map = loadChatBgMap()
-    map[key] = !!on
-    saveChatBgMap(map)
+    state.value = { ...state.value, [key]: !!on }
   }
 
-  function toggleSimple() {
-    setSimple(!simpleOn.value)
-  }
-
-  return { simpleOn, setSimple, toggleSimple }
+  return { simpleOn, setSimple, toggleSimple: () => setSimple(!simpleOn.value) }
 }
 ```
+
+> **为什么不用 computed 直读 localStorage**：`computed` 只跟踪响应式依赖，读 `localStorage` 不会建立依赖关系，缓存值永不失效——开关写入了存储但界面不更新。这是评审用探针实测出的 P0 缺陷（`expected false to be true`），已在上面修正。
+>
+> **代价**：模块级状态使"跨标签页同步"仍不支持（不做），但同一页内多组件共享同一状态（正是所需）。读取时机为模块首次 import 时，若存储不可用则退化为 `{}`（E1）。
 
 - [ ] **Step 4: 跑测试确认通过**
 
@@ -256,7 +262,7 @@ describe('4B token 家族（设计 §3.4）', () => {
     expect(simple).toContain('#1c1917')
     expect(simple).toContain('#57534e')
     expect(simple).toContain('#78716c')
-    expect(simple).toContain('#f5f5f4')
+    expect(simple).toContain('#f5f5f4')   // chip 底；其上的 --cbg-text-2 对比 6.99:1
   })
 
   it('舞台浅色块存在且使用 #e7e5e4（舞台略深于窗口）', () => {
@@ -271,9 +277,17 @@ describe('4B token 家族（设计 §3.4）', () => {
   })
 
   it('未引入被砍掉的机制（防蔓延）', () => {
-    expect(css).not.toContain('--overlay-k')
-    expect(css).not.toContain('--user-bubble-bg')
-    expect(css).not.toContain('--msg-text-shadow')
+    // 只查**声明位**：main.css 的注释里本就提到过 --overlay-k / --user-bubble-bg
+    // （Phase 1 留下的前瞻注释），用 not.toContain 会误报——评审实测发现
+    expect(css).not.toMatch(/--overlay-k\s*:/)
+    expect(css).not.toMatch(/--user-bubble-bg\s*:/)
+    expect(css).not.toMatch(/--msg-text-shadow\s*:/)
+  })
+
+  it('新增的 token 与语义类不得落进 @layer（否则被 utilities 压过，浅色静默失效）', () => {
+    const layers = css.match(/@layer[^{;]*/g) ?? []
+    // 本批此前 main.css 零 @layer；若新增，必须显式评审（见设计 §3.4 硬性约束一）
+    expect(layers).toEqual([])
   })
 })
 ```
@@ -458,7 +472,9 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
 }
 ```
 
-> **注意**：`.msg-bubble-ai` 新增 `border: 1px solid transparent` 在沉浸模式下不可见（`transparent`），但**会改变盒模型**——`.msg-bubble` 是 `padding` 型气泡，1px 边框会让气泡整体宽/高各 +2px。为守住 D4B-5，同时给 `.msg-bubble` 加 `border: 1px solid transparent;` 并把 `padding` 从 `8px 12px` 改为 `7px 11px`（净尺寸不变）。**实施时必须用截图对照验证**（Task 6 Step 4）。
+> **注意（层级）**：以上所有 token 与语义类**必须写在 `@layer` 之外**（`main.css` 目前零 `@layer`，这是它们能压过 Tailwind utilities 的原因）。不要为求整洁套 `@layer components`——会让浅色模式静默失效，且单测只有新增的那条断言能发现。
+>
+> **注意（盒模型）**：`.msg-bubble-ai` 新增 `border: 1px solid transparent` 在沉浸模式下不可见（`transparent`），但**会改变盒模型**——`.msg-bubble` 是 `padding` 型气泡，1px 边框会让气泡整体宽/高各 +2px。为守住 D4B-5，同时给 `.msg-bubble` 加 `border: 1px solid transparent;` 并把 `padding` 从 `8px 12px` 改为 `7px 11px`（净尺寸不变）。**实施时必须用截图对照验证**（Task 6 Step 4）。
 
 - [ ] **Step 4: 跑测试确认通过**
 
@@ -544,6 +560,21 @@ describe('ChatWindow 简约模式接线（4B T3）', () => {
     const host = mount()
     await nextTick()
     expect(host.querySelector('.chat-window')?.className).not.toContain('chat-simple')
+  })
+
+  // ⚠️ 必需：真实交互路径。仅在 mount 前写 localStorage 的用例**无法**发现
+  // "computed 读非响应式数据"这类缺陷（评审探针已证），必须由点击驱动一次。
+  it('点击开关后窗口与舞台类名同时更新（交互路径）', async () => {
+    const host = mount()
+    await nextTick()
+    expect(host.querySelector('.chat-window')?.className).not.toContain('chat-simple')
+
+    // WindowHeader 在本测试中被 stub；其根元素即 stub 组件实例，可直接触发事件
+    host.querySelector('.stub-header').__vueParentComponent.emit('toggleSimpleBg')
+    await nextTick()
+    expect(host.querySelector('.chat-window')?.className).toContain('chat-simple')
+    expect(host.querySelector('.chat-stage-root')?.className).toContain('stage-simple')
+    expect(JSON.parse(localStorage.getItem('chatSimpleBg'))).toEqual({ 12: true })
   })
 
   it('无背景图的角色：不渲染背景图与蒙层（E2）', async () => {
@@ -790,7 +821,7 @@ onBeforeUnmount(() => {
 
     <div class="flex items-center gap-2">
       <button type="button"
-              class="lg:hidden chat-icon-btn chat-focus btn btn-sm btn-circle btn-ghost"
+              class="lg:hidden chat-icon-btn btn btn-sm btn-circle btn-ghost"
               aria-label="打开会话列表" data-tip="会话"
               @click="emits('openDrawer')">
         ☰
@@ -799,7 +830,7 @@ onBeforeUnmount(() => {
       <!-- ⚙ 设置（4B：简约背景开关落点，D4B-4） -->
       <div ref="gearRef" class="relative">
         <button type="button"
-                class="chat-icon-btn chat-focus btn btn-sm btn-circle btn-ghost"
+                class="chat-icon-btn btn btn-sm btn-circle btn-ghost"
                 aria-label="聊天设置"
                 :aria-expanded="settingsOpen ? 'true' : 'false'"
                 data-tip="设置"
@@ -830,7 +861,7 @@ onBeforeUnmount(() => {
 
       <VoiceToggle />
       <button type="button"
-              class="chat-icon-btn chat-focus btn btn-sm btn-circle btn-ghost"
+              class="chat-icon-btn btn btn-sm btn-circle btn-ghost"
               aria-label="关闭对话" data-tip="关闭"
               @click="emits('close')">
         ✕
@@ -876,11 +907,12 @@ git commit -m "feat(chat): ⚙ 设置弹层（简约背景开关 + 生效范围�
 |------|------|
 | `Message.vue` | 时间戳 `text-white/60` → `chat-text-2`；名字 pill 用既有 `.msg-name-pill`（已在 main.css token 化）；引用 chip 的 `bg-black/25 text-white/90` → `chat-float chat-float-hover chat-focus`；scoped 样式里 `rgba(0,0,0,.4)` → `var(--cbg-code)`，`rgba(0,0,0,.45)` → `var(--cbg-code-block)`，`blockquote` 边框 → `var(--cbg-text-2)`，链接 → `var(--cbg-link)`，复制按钮底色 → `var(--cbg-code-block)` |
 | `ChatHistory.vue` | 骨架块 `skeleton-shimmer` 保留（颜色已由 main.css 按模式反转）；错误文字 `text-red-300` → `chat-danger`；空态 `text-white/90` → `chat-text-2`；示例问题 `bg-black/25 text-white/90` → `chat-float chat-float-hover chat-focus`；思考中气泡保留 `.msg-bubble-ai`；`ring-white/40` → `chat-focus` |
-| `InputField.vue` | 麦克风/发送/停止按钮 `text-white` + `hover:bg-black/20` → `chat-icon-btn chat-focus`（激活态仍 `bg-[var(--accent)]` 且 `text-white` 不变——绿底白字两模式通用）；未激活发送键 `bg-neutral-700` → `chat-btn-idle`；textarea `bg-black/35 text-white` → `chat-surface-2 chat-text`，加 `placeholder:text-[var(--cbg-text-3)]`；错误横幅 `text-red-300` → `chat-danger` + 保留字号 |
+| `InputField.vue` | 麦克风/发送/停止按钮 `text-white` + `hover:bg-black/20` → `chat-icon-btn`（**不加** `chat-focus`：daisyUI `.btn` 自带 `:focus-visible`，再加会出现双焦点环）（激活态仍 `bg-[var(--accent)]` 且 `text-white` 不变——绿底白字两模式通用）；未激活发送键 `bg-neutral-700` → `chat-btn-idle`；textarea `bg-black/35 text-white` → `chat-surface-2 chat-text`，加 `placeholder:text-[var(--cbg-text-3)]`；错误横幅 `text-red-300` → `chat-danger` + 保留字号 |
 | `Microphone.vue` | 语音栏容器 `bg-black/35 backdrop-blur` → `chat-surface-2`；"语音初始化中…"/"识别中…" 的 `text-white/40` → `chat-text-3`；聆听条 `bg-white/30` → `var(--cbg-text-2)`（用内联 style 或语义类）；小点 `bg-blue-400` 保留（品牌色，两模式均可见） |
-| `VoiceToggle.vue` | `bg-black/50` + `hover:bg-black/60` → `chat-float chat-focus`；图标改 `currentColor` |
-| `CharacterPhotoField.vue` | `bg-black/50` → `chat-float`；名字 `text-white` → `chat-text`；加 `chat-focus` |
+| `VoiceToggle.vue` | `bg-black/50` + `hover:bg-black/60` → `chat-float`（非 `.btn`，**保留** `focus-visible:ring-2 ring-white/40` 焦点环） |
+| `CharacterPhotoField.vue` | `bg-black/50` → `chat-float`；名字 `text-white` → `chat-text`；加 `focus-visible:ring-2 ring-white/40`（非 `.btn`） |
 | `SpeakerIcon.vue` | 两处 `text-white` / `text-white/40` → `text-current` / `opacity-40` |
+| （说明） | 凡带 daisyUI `.btn` 类的元素（⚙/☰/✕/麦克风/发送）：**只加 `chat-icon-btn`，不加 `chat-focus`**——`.btn` 已自带 `:focus-visible` 样式（实测 `node_modules/daisyui/components/button.css`），叠加会出现双焦点环 |
 
 - [ ] **Step 2: 构建并核对产物（正反两向）**
 
@@ -898,7 +930,7 @@ grep -c "overlay-k" *.css         # 0（砍掉项未引入）
 - [ ] **Step 3: 全量单测**
 
 Run: `cd frontend && npx vitest run`
-Expected: 4A 后基线 74 + 本批新增 19（T1 6 + T2 5 + T3 4 + T4 4）= **93 passed**，0 failed
+Expected: 4A 后基线 74 + 本批新增 22（T1 6 + T2 6 + T3 5 + T4 5）= **96 passed**，0 failed
 
 - [ ] **Step 4: 提交**
 
@@ -944,7 +976,7 @@ npm run build && ls -la ../backend/static/frontend/assets/   # 产物 hash
 
 ## 自查清单（提交 PR 前）
 
-- [ ] 仅 §文件结构 中列出的文件被改动
+- [ ] 仅 §文件结构 中列出的文件被改动（含待裁决的 `ChatIndex.vue`——见设计 §9 Q-4B-1）
 - [ ] `grep -rn "#10b981" frontend/src/assets/main.css` → 仅剩 `--accent` 定义与 fallback
 - [ ] 未引入 `--overlay-k` / `--user-bubble-bg` / `--msg-text-shadow` / canvas 采样 / 主色提取
 - [ ] 沉浸模式截图与 master 逐项一致（Task 6 Step 1）

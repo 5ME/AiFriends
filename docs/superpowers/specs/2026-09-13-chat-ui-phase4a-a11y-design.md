@@ -14,7 +14,9 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 
 它们**不改变任何颜色与布局**，因此不受"简约背景该是什么样"这一审美争议牵连 —— 上一次（PR #40）它们与深色简约背景捆在同一 PR 内一起被否，属于**连坐**。本批独立交付，正是为了把这个连坐关系切掉。
 
-**本批不含任何视觉变更。** 若验收时发现观感有变，即视为回归缺陷。
+- **本批不含任何视觉变更。** 若验收时发现观感有变，即视为回归缺陷。
+  - 精确定义：指**默认渲染**（未聚焦、未交互）与改动前逐像素一致。
+  - **例外（有意为之）**：键盘焦点环属 4A 新增的可访问性改进（spec §12「焦点可见」明确要求）。`VoiceToggle` 与 `CharacterPhotoField` 由 `div` 改 `button` 后，键盘聚焦会出现 ring——改动前它们**根本不可聚焦**，故不构成回归。默认渲染不变。
 
 ---
 
@@ -25,13 +27,14 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 | F1 | `VoiceToggle` 是 `<div @click>`，无 `tabindex`、无 `role`、无 `aria-label`，仅 `:title` | `frontend/src/components/character/chat_field/VoiceToggle.vue:7-12` | **键盘用户无法开关语音**（Tab 不到，Enter/空格无效） |
 | F2 | `CharacterPhotoField` 是 `<div @click>`，内嵌 `<img alt="">`（空 alt） | `character_photo_field/CharacterPhotoField.vue:15-18` | **键盘用户无法打开角色详情**；头像无替代文本 |
 | F3 | `UserMenu` 触发器是 `<div tabindex="0" role="button">`，**无 `aria-label`** | `components/navbar/UserMenu.vue:41` | 可聚焦但无可访问名称；读屏播报为空 |
-| F4 | 对话区"思考中"用 daisyUI `<span class="loading loading-dots loading-sm">` | `chat_history/ChatHistory.vue:205` | **CSS 停不掉**：daisyUI 5.5.17 的 `.loading-*` 是 `mask-image` 内嵌 SVG 的 SMIL 动画（`frontend/node_modules/daisyui/components/loading.css`，文件内无 `animation`/`@keyframes`/`::before`/`::after`）。SMIL 不响应 `prefers-reduced-motion` |
+| F4 | 对话区"思考中"用 daisyUI `<span class="loading loading-dots loading-sm">` | `chat_history/ChatHistory.vue:205` | **CSS 停不掉**：daisyUI 的 `.loading-*` 是 `mask-image` 内嵌 SVG 的 SMIL 动画（本机实测版本 5.5.18，见 F11）（`frontend/node_modules/daisyui/components/loading.css`，文件内无 `animation`/`@keyframes`/`::before`/`::after`）。SMIL 不响应 `prefers-reduced-motion` |
 | F5 | 语音栏的六个小点**已**受 `preferReduced` 控制 | `input_field/Microphone.vue:25`（`matchMedia`）、`:266-289`（`animate-pulse-dot` 条件绑定） | 这部分**已达标**，本批不重复处理，仅作回归基线 |
 | F6 | 波形高度在 reduce 时固定为 8px | `Microphone.vue:159` | 已达标，同上 |
 | F7 | 骨架 shimmer **未**受 reduce 控制 | `assets/main.css:110-118`（`.skeleton-shimmer` + `@keyframes shimmer`，无 `prefers-reduced-motion`） | 遗漏项，本批补齐 |
 | F8 | 会话栏 `SessionItem` / `SessionList` 已是 `<button>` 或 `RouterLink` | `components/chat/SessionItem.vue`、`SessionList.vue`（`aria-label` 齐备） | 已达标，不动 |
-| F9 | 聊天页图标按钮（麦克风/发送/停止/☰/✕）均有 `aria-label` + `focus-visible:ring` | `InputField.vue:397,431,442`、`WindowHeader.vue` | 已达标，不动 |
+| F9 | 聊天页图标按钮（麦克风/发送/停止）有 `aria-label`；**但 `focus-visible:ring` 全项目只在 2 个文件出现**（`ChatHistory.vue:194`、`InputField.vue:393/430/439`），头部件 ⚙/☰/✕ 是靠 daisyUI `.btn` 自带的 `:focus-visible` 样式 | `InputField.vue:397,431,442`、`WindowHeader.vue` | 已达标，不动 |
 | F10 | 全局仅有 2 处 `@keyframes`：`shimmer`（main.css）与 `pulse-dot`（Microphone.vue scoped） | `grep -rn "@keyframes" frontend/src` | 自定义动画可控，daisyUI 的不可控（F4） |
+| F11 | daisyUI 实际安装版本为 **5.5.18**（`node -e "require('./node_modules/daisyui/package.json').version"`）；spec §1 写的 5.5.17 是旧值 | 本机实测 | 仅版本号表述差异，F4 的结论（`.loading-*` 是 SMIL、CSS 停不掉）在 5.5.18 上成立 |
 
 ### 1.1 与 commit message 不符的历史欠账（登记）
 
@@ -63,6 +66,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 | D4A-3 | reduced-motion 只覆盖**我们自己可控**的动画。daisyUI 内部 SMIL 不试图用 CSS 关闭，改为**替换实现**（F4 → `loading-dots` 换成自绘三点） | 同上 |
 | D4A-4 | 本批**零视觉变更**：改 `div`→`button` 必须保持原尺寸/间距/圆角/悬停观感逐像素一致 | 用户 2026-09-13：「拆两批，4A 无障碍 → 4B 简约背景」 |
 | D4A-5 | 不引入依赖（不装 `axe-core`、不装 `eslint-plugin-vuejs-accessibility`）；验证靠真实浏览器键盘走查 + 产物核对 | YAGNI；项目当前无前端 lint 链 |
+| D4A-6 | 焦点环来源**不叠加**：非 daisyUI 按钮（`VoiceToggle`、`CharacterPhotoField`）用项目既有写法 `focus-visible:ring-2 ring-white/40`；daisyUI `.btn`（⚙/☰/✕/麦克风/发送）**已有**自带 `:focus-visible` 样式，**不再加**自定义环——否则同一次聚焦出现两个环 | 评审发现（2026-09-13）：`.btn` 自带 focus 样式 |
 
 ### 2.1 已否决的替代方案
 
@@ -190,7 +194,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
   width: 4px;
   height: 4px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.7);
+  background: currentColor;   /* 继承气泡文字色：沉浸=白、简约=深，两模式都正确 */
   animation: thinking-bounce 1.2s ease-in-out infinite;
 }
 .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
@@ -211,7 +215,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 **要点（尺寸与观感对齐，D4A-4）：**
 
 1. daisyUI `loading-sm` 的点约 4px、间距由 `gap-1`（4px）给出 —— 上述实现与之一致，**肉眼尺寸不变**。
-2. 颜色：daisyUI `loading` 默认继承 `currentColor`，在 AI 气泡（白字）内即白色；故取 `rgba(255,255,255,0.7)` 作为基线，与呼吸感相符。
+2. 颜色：**必须用 `currentColor`**（继承 AI 气泡的文字色），不得写死白色。沉浸模式下 AI 气泡本来就是白字，故渲染结果与 daisyUI 的白色点**完全一致**；简约模式（4B）气泡文字变深色时，三点自动跟随变深，无需为该模式另写规则。
 3. `reduce` 时三点静态显示（`opacity: 0.6`）—— **保留"进行中"的信息**，只是不动。这是 spec §12「三点动画降为静态」的字面要求，不是"隐藏"。
 4. `.skeleton-shimmer` 的 reduce 覆盖补在**同一 media query** 内（F7 遗漏项）。
 5. `Microphone.vue` 的 `animate-pulse-dot` / `pulse-dot` 已在作者组件内处理（F5/F6），**本文不动**，避免同一机制两个真相源。

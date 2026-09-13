@@ -64,12 +64,13 @@
 |---|------|------|------|
 | F1 | 窗口与舞台的背景图都来自 `friend.character.background_image`，直接写在 `:style` 内联 | `ChatWindow.vue:69-71,88-90` | 简约模式必须同时接管两处 |
 | F2 | `.window-scrim`（渐变蒙层）、`.stage-blur`/`.stage-dim`、`.msg-bubble-*`、`.date-capsule`、`.msg-name-pill`、`.session-active`、`.skeleton-shimmer` 全部定义在 `assets/main.css`，**值写死** | `main.css:26-114` | 需要 token 化；但**默认值必须逐字保留**，否则沉浸模式回归 |
-| F3 | 硬编码白/黑玻璃类共 **34 处**，分布在 8 个文件 | `VoiceToggle(2) / ChatHistory(4) / CharacterPhotoField(2) / ChatIndex(1) / WindowHeader(3) / InputField(7) / ChatWindow(5) / Microphone(5)` | 这是"浅色化"的真实工作量；**逐处替换为 token，不重写模板结构** |
+| F3 | 硬编码白/黑玻璃类共 **38 处**，分布在 **9** 个文件 | 实测逐文件：`InputField(9) / Message(6) / ChatWindow(5) / ChatHistory(5) / Microphone(5) / WindowHeader(3) / VoiceToggle(2) / CharacterPhotoField(2) / ChatIndex(1)`；按 token 分：`text-white(7) / text-white-90(4) / ring-white-40(4) / text-white-40(3) / bg-black-50(3) / bg-black-40(3) / bg-black-35(3) / text-white-60(2) / border-white-10(2) / bg-black-25(2) / 其余 5 种各 1` | 这是"浅色化"的真实工作量；**逐处替换为 token，不重写模板结构**。<br>⚠️ 初稿写"34 处 / 8 文件"是**错的**（漏了 `ChatIndex.vue`，且部分文件漏数）——评审实测发现 |
 | F4 | `--accent` 定义在全局 `:root`（`#10b981`），无任何地方按角色覆盖 | `main.css:9-11` | 简约与沉浸两模式**共用同一个 accent**，本批不引入提取 |
+| F4b | daisyUI **实际版本 5.5.18**（本机 `node -e` 读取 `node_modules/daisyui/package.json`）；spec §1 写的 5.5.17 为旧值 | 本机实测 | 仅影响引用准确性；`loading.css` 的内容（`mask-image` + SMIL、无 CSS 动画）在 5.5.18 上成立 |
 | F5 | 用户气泡底色 `color-mix(in srgb, #10b981 70%, black)` = `#0b825a`，白字对比 **4.82:1** | `main.css:60-63`；对比度实算 | 两模式下均已达标。**但**它硬编码了 `#10b981`，若日后 accent 可变就会失效 → 本批改为引用 `var(--accent)` |
 | F6 | 会话栏（`SessionList`/`SessionItem`）与 NavBar **已是浅色**（daisyUI 默认主题：`bg-base-200`/`bg-base-100` + 深字），`session-active` 用 accent 40% 打底 | `SessionList.vue:60`、`SessionItem.vue`、`main.css:44-49` | 简约模式窗口变浅后，**全页色调反而统一**；会话栏不改 |
 | F7 | 移动端（<1024px）窗口铺满，**无舞台** | `main.css:23-31`（媒体查询）、`ChatWindow.vue:86`（`hidden lg:block`） | 简约模式在移动端只影响窗口自身；逻辑天然兼容 |
-| F8 | `--user-bubble-bg` / `--overlay-k` 在 master **不存在** | `grep -rn "overlay-k\|user-bubble-bg" frontend/src` → 空 | 本版不引入（砍掉项） |
+| F8 | `--user-bubble-bg` / `--overlay-k` 在 master **没有任何声明位** | `git grep -n -E "--(overlay-k|user-bubble-bg)\\s*:"` → 无输出。⚠️ 初稿写「`grep ... frontend/src` → 空」是**错的**：`main.css` 第 33/38/58 行的注释里就提到过这两个名字，grep 会命中——评审实测发现。**故 4B 计划的防蔓延断言必须只查声明位**（`/--overlay-k\s*:/`），不能只查子串 | 本版不引入（砍掉项） |
 | F9 | 头部条（`.h-14 bg-black/40 backdrop-blur`）、输入栏（`bg-black/35 backdrop-blur`）、思考中气泡、引用 chip、示例问题、日期胶囊、名字 pill 都是"深玻璃 + 白字"族 | `WindowHeader.vue:8`、`InputField.vue:406`、`ChatHistory.vue:192,204`、`Message.vue:117`、`main.css` | **浅色模式 = 这一族的整体反转**（不是个别调色） |
 | F10 | `SpeakerIcon` 内部写死 `text-white` / `text-white/40`；`MicIcon`/`SendIcon`/`StopIcon` 继承 `currentColor` | `SpeakerIcon.vue:12,26`；`InputField.vue:392-445`（按钮类名给 `text-white`） | 浅色下需把这两个来源都改为 token |
 | F11 | `localStorage` 在本项目已有先例：`useVoiceToggle`（全局布尔） | `composables/useVoiceToggle.js` | 本批新增 key，**不改** `useVoiceToggle` |
@@ -174,12 +175,16 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | `#1c1917` 名字 | `#e7e5e4` pill 底 | **13.93:1** | ≥4.5 | ✓ |
 | `#44403c` 引用 chip 文字 | `#f5f5f4` chip 底 | **9.42:1** | ≥4.5 | ✓ |
 | `#57534e` 时间戳 | `#fafaf9` 窗口 | **7.30:1** | ≥3 | ✓ |
-| `#57534e` 引用 chip | `#f5f5f4` chip 底 | **7.30:1** | ≥4.5 | ✓（无需 `#44403c`） |
+| `#57534e` 引用 chip | `#f5f5f4` chip 底 | **6.99:1** | ≥4.5 | ✓（7.30 是它在窗口底上的值，chip 底更暗故略低；**评审实测更正**） |
 | `#0b825a`（accent 70% + 黑）白字 | 用户气泡 | **4.82:1** | ≥4.5 | ✓（沿用现状，D4B-7） |
 
 **最坏档 = 4.80:1（占位符）**，全部达标。**无需任何"档位阶梯"或运行时解析**——这是与前两版最大的复杂度差异：浅色下底色确定，色值可写死。
 
-> **一处曾被写错的地方（留档）**：本设计草稿第一版把引用 chip 的对比度写成「9.42:1，用 `#44403c` 档」。但 `9.42:1` 是 `#44403c` 在 `#f5f5f4` 上的值，而设计选定的 token 是 `--cbg-text-2 = #57534e`（在 `#f5f5f4` 上是 **7.30:1**）。两者都达标，但**引用的数字必须与选定的 token 同源**——上一轮两次翻车的根因正是"数字与口径不同源"。**故保留 `#57534e`，不使用 `#44403c`。**
+> **两处曾被写错的地方（留档，均为评审实测发现）**：
+> 1. 初稿把引用 chip 的对比度写成「9.42:1，用 `#44403c` 档」。`9.42:1` 确是 `#44403c` 在 `#f5f5f4` 上的值，但设计选定的 token 是 `--cbg-text-2 = #57534e`——**数字必须与选定的 token 同源**。
+> 2. 随后我把 `#57534e` 在 chip 底上的值写成 **7.30:1**，那实际是它在**窗口底 `#fafaf9`** 上的值；在 chip 底 `#f5f5f4` 上是 **6.99:1**（评审脚本复算，本机复现一致）。
+>
+> 两处都达标（≥4.5:1），结论不变：**chip 用 `--cbg-text-2`，不使用 `#44403c`**。留档的原因正是——上一轮两次翻车的根因是"数字与口径不同源"，本批再犯两次，必须记录。
 
 > **口径声明**（吸取教训）：以上数值由 WCAG 相对亮度公式实算，alpha 合成为 **sRGB 分量空间线性混合**（CSS 语义）。**不是**线性亮度空间混合。上一轮曾两次搞错这个口径，本批所有数值均以公式输出为准。
 
@@ -237,9 +242,11 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 
 **为什么 CSS 变量能穿透 scoped 样式**：CSS 自定义属性**继承**，Scoped CSS 只加属性选择器、不隔离变量继承。`Message.vue` 等子组件在 scoped 规则里写 `var(--cbg-text)` 即可取到由 `.chat-window` 注入的值。**已验证该机制在本项目生效**：Phase 1 起 `.session-active` 就在用 `var(--accent)`（定义于 `:root`），而 `SessionItem.vue` 是 scoped 组件。
 
-**为什么不用 Tailwind 任意值语法**（如 `text-[var(--cbg-text)]`）：可读性差、且 34 处替换后模板会更吵。统一进 `main.css` 的语义类（`.msg-bubble-ai` 等已存在），改动面更小。
+**为什么不用 Tailwind 任意值语法**（如 `text-[var(--cbg-text)]`）：可读性差、且 38 处替换后模板会更吵。统一进 `main.css` 的语义类（`.msg-bubble-ai` 等已存在），改动面更小。
 
-**硬性约束（门 3 评审要点）**：token 化改造后，沉浸模式下的**每个**声明必须与改造前逐字等价。做法是逐个类对照 `git show master:frontend/src/assets/main.css` 校验；构建产物比对见 §6-断言 B8。
+**硬性约束一（CSS 层级）**：`main.css` 目前**完全不使用 `@layer`**（`grep -c "@layer" frontend/src/assets/main.css` → `0`），因此其中的自定义类处于**未分层**状态，能压过 Tailwind utilities——本批的 token 与语义类依赖这一机制。**实施时不得为了"整洁"给它们套 `@layer`**：一旦落到 `components` 层，就会被 utilities 层压过，浅色模式静默失效（评审的产物核对已确认现状：`@layer` 仅出现在 daisyUI/theme/properties，不含这些自定义类）。
+
+**硬性约束二（零回归）**：token 化改造后，沉浸模式下的**每个**声明必须与改造前逐字等价。做法是逐个类对照 `git show master:frontend/src/assets/main.css` 校验；构建产物比对见 §6-断言 B8。
 
 **一处必须补偿的盒模型变更**：浅色模式下 AI 气泡需要 `1px` 描边才能与窗口底（`#ffffff` vs `#fafaf9`）区分，而沉浸模式下该描边取 `transparent`。但**加边框会改变盒模型**——`.msg-bubble` 现为 `padding: 8px 12px`（`main.css:59-68`），加 `1px` 边框后气泡外尺寸宽高各 +2px，破坏"零视觉回归"。
 
@@ -265,7 +272,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 用户气泡 | `#0b825a` + 白字 | **不变**（同色同字） | 4.82:1 已达标；D4B-7 |
 | 时间戳 / hover | `text-white/60` | `--cbg-text-2` | 7.30:1 |
 | 日期胶囊 | `bg-black/25` + `white/60` | `--cbg-float` + `--cbg-text-2` | |
-| 引用 chip | `bg-black/25` + `white/90` | `--cbg-float` + `--cbg-text-2` | 浮层底上 7.30:1（**非** `#f5f5f4` 上的 9.42:1——上一版此处口径写错，以本行为准） |
+| 引用 chip | `bg-black/25` + `white/90` | `--cbg-float` + `--cbg-text-2` | 浮层底上 **6.99:1**（`#57534e` on `#f5f5f4`，实算） |
 | markdown 行内 code | `bg-black/.4` + 白字 | `rgba(28,25,23,0.06)` + `--cbg-text` | 浅底上"更深一点" |
 | markdown `pre` | `bg-black/.45` | `rgba(28,25,23,0.08)` | 代码块底 |
 | markdown 链接 | `#7dd3fc` | `#0f766e` | 浅底上深青（对比 4.5+） |
@@ -278,7 +285,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 示例问题胶囊 | `bg-black/25` + `white/90` | `--cbg-float` + `--cbg-text` + 描边 | |
 | 思考中气泡 | 同 AI 气泡（白点） | 同 AI 气泡（深点） | `.thinking-dot` 用 `currentColor`（4A 已引入该类） |
 | 引用浮层（`ChatWindow` 内 modal） | `bg-neutral-900/95` + 白字 | `--cbg-surface` + `--cbg-text`（浅色弹层） | 它是窗口内容的一部分 |
-| `focus-visible` 环 | `ring-white/40` | `--cbg-ring` | |
+| `focus-visible` 环 | `ring-white/40`（仅 `ChatHistory`/`InputField` 有；`.btn` 元素由 daisyUI 自带，不加） | `--cbg-ring`（同样只加在非 `.btn` 元素上） | |
 
 **显式不改**：会话栏全部、NavBar、消息分组间距/字号/圆角、气泡 `max-width: 75%`、窗口 3:5 几何。
 
@@ -410,7 +417,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 风险 | 缓解 |
 |------|------|
 | **token 化改造破坏了沉浸模式**（最重的风险） | §3.4 硬性约束 + 断言 B8 产物逐字核对 + 截图对照 B6 |
-| 34 处替换漏改某处，浅色下出现"白字白底" | §3.5 清单逐项对照 + 手工 5.2-3 覆盖全部元素 |
+| 38 处替换漏改某处，浅色下出现"白字白底" | §3.5 清单逐项对照 + 手工 5.2-3 覆盖全部元素 |
 | 未达"整体观感"预期（第三次被否） | 本轮已把方向决策交给用户（§0.2 四项）；**云端验收时若仍不满意，回滚代价 = 一个分支**，master 不受污染 |
 | `localStorage` 权限异常导致聊天页白屏 | E1 容错 + 单测 |
 | 弹层层序与引用浮层冲突 | §3.6-4 明确层序策略，实现时写入计划并验证 |
@@ -423,7 +430,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 
 | # | 问题 | 我的建议 |
 |---|------|----------|
-| Q-4B-1 | 开启简约后，**会话栏**是否也要跟着变？（现状会话栏已是浅色 daisyUI 主题；简约模式下舞台也变浅，全页看起来会统一。我的判断：**不动**） | **不动**。改它属于跨角色的公共区域，且它本就达标；若你觉得色调不齐，我们单独看 |
+| Q-4B-1 | ① 开启简约后**会话栏**是否也要跟着变？（现状已是浅色 daisyUI 主题）② `ChatIndex.vue:119` 的移动端抽屉遮罩 `bg-black/50` 是否要跟着变浅？ | ① **不动**（跨角色公共区域，且本就达标）。② **倾向纳入**：遮罩是简约模式的组成部分，整页变浅后黑色遮罩会显得突兀；该处改动仅为 1 处类名。但这是产品判断，**请裁决** |
 | Q-4B-2 | E2/E3（无背景图 / 图片加载失败）在 **沉浸模式**下是既有缺陷（`url(undefined)` → 渲染异常）。是否纳入本批顺手修？ | **纳入**。它是本批必然会碰到的代码路径（我要在同一处加 `chat-simple` 分支），顺手修成本极低 |
 | Q-4B-3 | 窗口底色用 `#fafaf9`（暖白）还是 `#f5f5f4`（spec 原文）？ | **`#fafaf9`**。你说的是"纯白"，`#fafaf9` 比 `#f5f5f4` 更接近白，同时保留暖调；且与 AI 气泡 `#ffffff` 拉开 2% 明度，气泡靠描边分界更稳 |
 | Q-4B-4 | 弹层里是否现在就把"语音自动发送"开关一起做（Phase 3 spec D6 的遗留项）？ | **不做**。它是全局偏好而简约背景是每角色偏好，混在一个弹层里语义打架；且上次它是与深色方案一起被否的连坐项 |
