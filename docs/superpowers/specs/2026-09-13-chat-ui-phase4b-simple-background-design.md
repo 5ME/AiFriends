@@ -387,7 +387,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 
 | 命令 | 期望 |
 |------|------|
-| `cd frontend && npx vitest run` | 现有 65 + 4A 新增 不回归；`chatBg.test.js` 全绿 |
+| `cd frontend && npx vitest run` | 现有 65 与 4A 新增 9 不回归；`useChatBg.test.js`（7 条）与 `chatBgTokens.test.js`（7 条）全绿；合计 97 |
 | `cd frontend && npm run build` | exit 0 |
 | 产物核对 | 构建产物 CSS 含 `--cbg-window` / `.chat-simple` / `.stage-simple` / `#fafaf9` / `#e7e5e4`；沉浸模式原有值（`rgba(0,0,0,.35)`、`blur(24px)`）**仍在** |
 
