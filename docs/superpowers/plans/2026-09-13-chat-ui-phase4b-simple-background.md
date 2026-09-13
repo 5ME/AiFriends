@@ -251,6 +251,10 @@ git commit -m "feat(chat): useChatBg 按角色记忆简约背景 + 存储容错�
   | `--cbg-hover` | `rgba(0, 0, 0, 0.20)` | `rgba(28, 25, 23, 0.06)` |
   | `--cbg-ring` | `rgba(255, 255, 255, 0.40)` | `rgba(28, 25, 23, 0.30)` |
   | `--cbg-shadow` | `0 24px 64px rgba(0, 0, 0, 0.45)` | `0 24px 64px rgba(28, 25, 23, 0.18)` |
+  | `--cbg-glass-btn` | `rgba(0, 0, 0, 0.50)` | `#f5f5f4` |
+  | `--cbg-glass-btn-hover` | `rgba(0, 0, 0, 0.60)` | `#e7e5e4` |
+  | `--cbg-modal-bg` | `rgba(23, 23, 23, 0.95)` | `#ffffff` |
+  | `--cbg-modal-border` | `rgba(255, 255, 255, 0.10)` | `#e7e5e4` |
   | `--cbg-code` | `rgba(0, 0, 0, 0.40)` | `rgba(28, 25, 23, 0.06)` |
   | `--cbg-code-block` | `rgba(0, 0, 0, 0.45)` | `rgba(28, 25, 23, 0.08)` |
   | `--cbg-code-block-hover` | `rgba(0, 0, 0, 0.75)` | `rgba(28, 25, 23, 0.14)` |
@@ -355,6 +359,10 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
   --cbg-hover: rgba(0, 0, 0, 0.20);
   --cbg-ring: rgba(255, 255, 255, 0.40);
   --cbg-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+  --cbg-glass-btn: rgba(0, 0, 0, 0.50);           /* 沉浸值 = VoiceToggle/CharacterPhotoField 现状字面量（保真项，见设计 §3.5.1） */
+  --cbg-glass-btn-hover: rgba(0, 0, 0, 0.60);     /* 沉浸值 = VoiceToggle 现状 hover */
+  --cbg-modal-bg: rgba(23, 23, 23, 0.95);         /* 沉浸值 = 现状 bg-neutral-900/95 */
+  --cbg-modal-border: rgba(255, 255, 255, 0.10);  /* 沉浸值 = 现状 border-white/10 */
   --cbg-code: rgba(0, 0, 0, 0.40);
   --cbg-code-block: rgba(0, 0, 0, 0.45);
   --cbg-code-block-hover: rgba(0, 0, 0, 0.75);   /* 现状 Message.vue:171 原值 */
@@ -381,6 +389,10 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
   --cbg-hover: rgba(28, 25, 23, 0.06);
   --cbg-ring: rgba(28, 25, 23, 0.30);
   --cbg-shadow: 0 24px 64px rgba(28, 25, 23, 0.18);
+  --cbg-glass-btn: #f5f5f4;
+  --cbg-glass-btn-hover: #e7e5e4;
+  --cbg-modal-bg: #ffffff;
+  --cbg-modal-border: #e7e5e4;
   --cbg-code: rgba(28, 25, 23, 0.06);
   --cbg-code-block: rgba(28, 25, 23, 0.08);
   --cbg-code-block-hover: rgba(28, 25, 23, 0.14);
@@ -441,10 +453,12 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
    "语音开关 → `--cbg-float`，图标 `--cbg-text`"；直接用 .chat-float 会得到
    --cbg-text-2，与设计不符 —— 评审 R-4） */
 .chat-icon-btn-solid {
+  /* 头部两个 0.50 胶囊（语音开关、头像 pill）。**不得用 --cbg-float(0.25)**：
+     那会让胶囊暗度减半（设计 §3.5.1 列为"明确保真、不归并"项）。 */
   color: var(--cbg-text);
-  background-color: var(--cbg-float);
+  background-color: var(--cbg-glass-btn);
 }
-.chat-icon-btn-solid:hover { background-color: var(--cbg-float-strong); }
+.chat-icon-btn-solid:hover { background-color: var(--cbg-glass-btn-hover); }
 
 /* 文字层级 */
 .chat-text   { color: var(--cbg-text); }
@@ -473,8 +487,10 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
 
 /* 引用浮层（窗口内 modal） */
 .chat-modal {
-  background-color: var(--cbg-surface);
-  border-color: var(--cbg-surface-border);
+  /* 引用浮层面板。**不得用 --cbg-surface(0.40)**：那会让面板从近乎实心
+     变成 40% 玻璃并丢掉描边（设计 §3.5.1 的保真项）。 */
+  background-color: var(--cbg-modal-bg);
+  border-color: var(--cbg-modal-border);
 }
 
 /* 骨架（颜色随模式反转） */
@@ -724,11 +740,15 @@ watch(
     </div>
   </div>
 
-  <!-- 引用浮层：改引用 token（浅色下变浅底深字） -->
+  <!-- 引用浮层（浅色下变浅底深字）。逐处映射（右侧为现状类）：
+       面板底/描边：chat-modal ← bg-neutral-900/95 + border-white/10（**专属 token，不用 --cbg-surface**）
+       标题：chat-text      ← text-white/90
+       正文：chat-text-2    ← text-white/80
+       关闭键：chat-text-2  ← text-white/70（它是 daisyUI .btn，故用 chat-text-2 而非 chat-focus） -->
   <div v-if="activeCitation" ...>
     <div class="... chat-modal ..." @click.stop>
       <p class="chat-text ...">
-      <button class="... chat-text-2 chat-focus" ...>
+      <button class="... chat-text-2 ...">
       <div class="... chat-text-2 ...">
 ```
 
@@ -912,7 +932,8 @@ onBeforeUnmount(() => {
 
       <!-- ⚙ 设置（4B：简约背景开关落点，D4B-4） -->
       <div ref="gearWrapRef" class="relative">
-        <button type="button"
+        <button ref="gearBtnRef"
+                type="button"
                 class="chat-icon-btn btn btn-sm btn-circle btn-ghost"
                 aria-label="聊天设置"
                 :aria-expanded="settingsOpen ? 'true' : 'false'"
@@ -984,20 +1005,7 @@ git commit -m "feat(chat): ⚙ 设置弹层（简约背景开关 + 生效范围�
 **Interfaces:**
 - 仅替换类名与颜色声明，**不改结构、不改布局值**
 
-- [ ] **Step 1: 逐文件替换（按设计 §3.5 清单）**
-
-| 文件 | 替换 |
-|------|------|
-| `Message.vue`（**逐处，勿漏**） | ① 时间戳 ×2 处 `text-white/60` → `chat-text-2`（`:92` `:107`）<br>② 引用 chip 按钮（`:117-118`）`bg-black/25 backdrop-blur text-white/90 hover:bg-black/40` → `chat-float chat-float-hover chat-focus`<br>③ **chip 内的「第N段」span（`:122`）`text-white/75` → `chat-text-2`**<br>④ 名字 pill：用既有 `.msg-name-pill`（已在 main.css token 化，无需改模板）<br>⑤ scoped 样式 `:deep(code)`（`:151`）`rgba(0,0,0,0.4)` → `var(--cbg-code)`<br>⑥ scoped 样式 `:deep(pre)`（`:152`）`rgba(0,0,0,0.45)` → `var(--cbg-code-block)`<br>⑦ **scoped 样式 `:deep(blockquote)`（`:154`）`border-left: 3px solid rgba(255,255,255,0.3)` → `var(--cbg-text-2)`；`color: rgba(255,255,255,0.85)` → `var(--cbg-text-2)`**<br>⑧ **scoped 样式 `:deep(a)`（`:155`）`color: #7dd3fc` → `var(--cbg-link)`**<br>⑨ **`.code-copy-btn`（`:162-163`）`background: rgba(0,0,0,0.5)` → `var(--cbg-code-block)`；`color: rgba(255,255,255,0.85)` → `var(--cbg-text-2)`；`:hover`（`:171`）`background: rgba(0,0,0,0.75)` → `var(--cbg-code-block-hover)`**<br>⚠️ ③⑦⑧⑨ 四处**原计划漏列**（评审 R-4 实测发现）：根因是计划用「Tailwind 工具类正则」统计硬编码，而 `Message.vue` 的 scoped 样式里是 `rgba()`/十六进制字面量，正则匹配不到。**本表按文件逐处重数列出** |
-| `ChatHistory.vue` | 骨架块 `skeleton-shimmer` 保留
-| `InputField.vue` | 麦克风/发送/停止按钮 `text-white` + `hover:bg-black/20` → `chat-icon-btn chat-focus`（**加**环：实测这三个圆钮**没有** `.btn` 类，`:392/429/438` 只有 Tailwind 工具类）；**激活态** `class` 绑定里**删掉** `bg-[var(--accent)]` 与 `text-white` 字面量，改挂 `chat-icon-btn-active`（状态值在 CSS 类里，理由见 Task 2 的 R-4 注释）；未激活发送键 `bg-neutral-700 opacity-50` → `chat-btn-idle`；textarea `bg-black/35 text-white` → `chat-surface-2 chat-text`，加 `placeholder:text-[var(--cbg-text-3)]`；错误横幅 `text-red-300` → `chat-danger` + 保留字号 |
-| `Microphone.vue` | 语音栏容器 `bg-black/35 backdrop-blur` → `chat-surface-2`；"语音初始化中…"/"识别中…"/"**正在聆听…**" 的 `text-white/40` → `chat-text-3`（`:272` `:281` `:291`，三处都要改）；小点与音浪 `bg-blue-400` **保留**（品牌色，两模式均可见，已进白名单） |
-| `VoiceToggle.vue` | `bg-black/50` + `hover:bg-black/60` → **`--cbg-glass-btn` / `--cbg-glass-btn-hover`**（**不得**用 `--cbg-float`：0.25 会让胶囊暗度减半，评审 N5）；图标色 `--cbg-text`（用 `.chat-icon-btn-solid`，其 color 已设 `--cbg-text`）；焦点环 → `chat-focus`（4A T1 已引入，此处由 token 接管） |
-| `CharacterPhotoField.vue` | `bg-black/50` → **`--cbg-glass-btn`**（同上，不得用 `--cbg-float`；现状无 hover，不加 hover 态）；名字 `text-white` → `chat-text`；加 `chat-focus`（4A T2 已引入） |
-| `SpeakerIcon.vue` | 两处 `text-white` / `text-white/40` → `text-current` / `opacity-40` |
-| （说明） | 焦点环按**元素实际持有的类名**判定，不按文件/区域：**有 `btn` 类**（⚙/☰/✕、`InputField:454` 重试）→ 只加 `chat-icon-btn`，**不加** `chat-focus`（daisyUI 用 `outline-width:2px` + `outline-color:var(--color-base-content)`，与 `ring` 叠加会双环）；**无 `btn` 类**（麦克风/发送/停止三个圆钮、`VoiceToggle`、`CharacterPhotoField`、示例问题、引用 chip）→ `chat-focus` **必须加**，否则抹掉 4A 挣来的焦点可见性（评审 R-2 实测） |
-
-- [ ] **Step 1b: 新建 token 残留门禁（随本任务落地）**
+- [ ] **Step 1: 先建 token 残留门禁（**TDD 红点**：此时必红）**
 
 创建 `frontend/src/utils/__tests__/chatBgLiterals.test.js`：
 
@@ -1081,7 +1089,8 @@ describe('颜色字面量残留门禁（Token 化完成度）', () => {
     }
     for (const rel of WINDOW_TARGETS) {
       const raw = readFileSync(
-        fileURLToPath(new URL('../../chat/chat_window/' + rel, import.meta.url)),
+        // 测试文件在 src/utils/__tests__/ → ../../ = src/，故须带 components/
+        fileURLToPath(new URL('../../components/chat/chat_window/' + rel, import.meta.url)),
         'utf8',
       )
       const tmpl = stripStyleBlocks(stripComments(raw))
@@ -1098,12 +1107,27 @@ describe('颜色字面量残留门禁（Token 化完成度）', () => {
 })
 ```
 
+
+- [ ] **Step 2: 逐文件替换（按设计 §3.5 清单）——把 Step 1 的门禁改到绿**
+
+| 文件 | 替换 |
+|------|------|
+| `Message.vue`（**逐处，勿漏**） | ① 时间戳 ×2 处 `text-white/60` → `chat-text-2`（`:92` `:107`）<br>② 引用 chip 按钮（`:117-118`）`bg-black/25 backdrop-blur text-white/90 hover:bg-black/40` → `chat-float chat-float-hover chat-focus`<br>③ **chip 内的「第N段」span（`:122`）`text-white/75` → `chat-text-2`**<br>④ 名字 pill：用既有 `.msg-name-pill`（已在 main.css token 化，无需改模板）<br>⑤ scoped 样式 `:deep(code)`（`:151`）`rgba(0,0,0,0.4)` → `var(--cbg-code)`<br>⑥ scoped 样式 `:deep(pre)`（`:152`）`rgba(0,0,0,0.45)` → `var(--cbg-code-block)`<br>⑦ **scoped 样式 `:deep(blockquote)`（`:154`）`border-left: 3px solid rgba(255,255,255,0.3)` → `var(--cbg-text-2)`；`color: rgba(255,255,255,0.85)` → `var(--cbg-text-2)`**<br>⑧ **scoped 样式 `:deep(a)`（`:155`）`color: #7dd3fc` → `var(--cbg-link)`**<br>⑨ **`.code-copy-btn`（`:162-163`）`background: rgba(0,0,0,0.5)` → `var(--cbg-code-block)`；`color: rgba(255,255,255,0.85)` → `var(--cbg-text-2)`；`:hover`（`:171`）`background: rgba(0,0,0,0.75)` → `var(--cbg-code-block-hover)`**<br>⚠️ ③⑦⑧⑨ 四处**原计划漏列**（评审 R-4 实测发现）：根因是计划用「Tailwind 工具类正则」统计硬编码，而 `Message.vue` 的 scoped 样式里是 `rgba()`/十六进制字面量，正则匹配不到。**本表按文件逐处重数列出** |
+| `ChatHistory.vue` | 骨架块 `skeleton-shimmer` 保留（颜色已由 main.css 按模式反转）；错误文字 `text-red-300` → `chat-danger`；空态 introduction `text-white/90` → `chat-text-2`；示例问题 `bg-black/25 text-white/90` → `chat-float chat-float-hover chat-focus`；思考中气泡保留 `.msg-bubble-ai`（4A 已换自绘三点）；`ring-white/40` → `chat-focus`（**删掉字面量**：白环在简约窗口上不可见） |
+| `InputField.vue` | 麦克风/发送/停止按钮 `text-white` + `hover:bg-black/20` → `chat-icon-btn chat-focus`（**加**环：实测这三个圆钮**没有** `.btn` 类，`:392/429/438` 只有 Tailwind 工具类）；**激活态** `class` 绑定里**删掉** `bg-[var(--accent)]` 与 `text-white` 字面量，改挂 `chat-icon-btn-active`（状态值在 CSS 类里，理由见 Task 2 的 R-4 注释）；未激活发送键 `bg-neutral-700 opacity-50` → `chat-btn-idle`；textarea `bg-black/35 text-white` → `chat-surface-2 chat-text`，加 `placeholder:text-[var(--cbg-text-3)]`；错误横幅 `text-red-300` → `chat-danger` + 保留字号 |
+| `Microphone.vue` | 语音栏容器 `bg-black/35 backdrop-blur` → `chat-surface-2`；"语音初始化中…"/"识别中…"/"**正在聆听…**" 的 `text-white/40` → `chat-text-3`（`:272` `:281` `:291`，三处都要改）；小点与音浪 `bg-blue-400` **保留**（品牌色，两模式均可见，已进白名单） |
+| `VoiceToggle.vue` | `bg-black/50` + `hover:bg-black/60` → **`--cbg-glass-btn` / `--cbg-glass-btn-hover`**（**不得**用 `--cbg-float`：0.25 会让胶囊暗度减半，评审 N5）；图标色 `--cbg-text`（用 `.chat-icon-btn-solid`，其 color 已设 `--cbg-text`）；焦点环 → `chat-focus`（4A T1 已引入，此处由 token 接管） |
+| `CharacterPhotoField.vue` | `bg-black/50` → **`--cbg-glass-btn`**（同上，不得用 `--cbg-float`；现状无 hover，不加 hover 态）；名字 `text-white` → `chat-text`；加 `chat-focus`（4A T2 已引入） |
+| `SpeakerIcon.vue` | 两处 `text-white` / `text-white/40` → `text-current` / `opacity-40` |
+| （说明） | 焦点环按**元素实际持有的类名**判定，不按文件/区域：**有 `btn` 类**（⚙/☰/✕、`InputField:454` 重试）→ 只加 `chat-icon-btn`，**不加** `chat-focus`（daisyUI 用 `outline-width:2px` + `outline-color:var(--color-base-content)`，与 `ring` 叠加会双环）；**无 `btn` 类**（麦克风/发送/停止三个圆钮、`VoiceToggle`、`CharacterPhotoField`、示例问题、引用 chip）→ `chat-focus` **必须加**，否则抹掉 4A 挣来的焦点可见性（评审 R-2 实测） |
+
+> **顺序说明**（评审 P2-2）：本任务已重排为**真 TDD** —— Step 1 建门禁（此时必红，红点在前）→ Step 2 逐文件替换到绿 → Step 3 复核门禁 → Step 4 构建核对 → Step 5 全量单测 → Step 6 提交。上一版的编号是"Step 1 替换 → Step 1b 门禁"，与自己的说明相反，已改正。
+- [ ] **Step 3: 复核门禁（此时应已变绿）**
+
 Run: `cd frontend && npx vitest run src/utils/__tests__/chatBgLiterals.test.js`
-Expected: **FAIL（这是预期的：门禁写在替换之前，逐文件改到绿为止）**
+Expected: PASS —— 6 个文件全部无残留；若仍列 offenders，按列表补齐遗漏处
 
-> **顺序说明**（评审小事 2）：Step 1b 是本任务的 TDD 红点——先在 Step 1b 建门禁（允许红），Step 1 的"逐文件替换"完成后它自然变绿；若把门禁放在替换之后，就成了"事后补测"，红点会失去意义。Step 2 的构建核对在两者之后。
-
-- [ ] **Step 2: 构建并核对产物（正反两向）**
+- [ ] **Step 4: 构建并核对产物（正反两向）**
 
 ```bash
 cd frontend && npm run build
@@ -1116,12 +1140,12 @@ grep -c "#e7e5e4" *.css           # ≥1
 grep -c "overlay-k" *.css         # 0（砍掉项未引入）
 ```
 
-- [ ] **Step 3: 全量单测**
+- [ ] **Step 5: 全量单测**
 
 Run: `cd frontend && npx vitest run`
 Expected: 4A 后基线 **75** + 本批新增 24（T1 7 + T2 6 + T3 5 + T4 4 + 门禁 `chatBgLiterals` 1 + 遮罩 `chatBgScrim` 1）= **99 passed**，0 failed
 
-- [ ] **Step 4: 提交**
+- [ ] **Step 6: 提交**
 
 ```bash
 git add frontend/src/
@@ -1200,7 +1224,7 @@ const { simpleOn: simpleBg } = useChatBg(activeCharacterId)
 Run: `cd frontend && npx vitest run src/utils/__tests__/chatBgScrim.test.js`
 Expected: PASS（1 个用例）
 
-- [ ] **Step 4: 提交**
+- [ ] **Step 6: 提交**
 
 ```bash
 git add frontend/src/views/chat/ChatIndex.vue frontend/src/utils/__tests__/chatBgScrim.test.js

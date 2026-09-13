@@ -19,7 +19,7 @@
 - 不引入任何依赖（不装 `@vue/test-utils`、不装 eslint a11y 插件）。
 - 分支：`feature/gqyin/chat-ui-phase4a-a11y`；提交信息中文 `type(scope): 摘要`。
 - **焦点环规则（D4A-6）**：按**元素实际持有的类名**判定，不按文件/区域。
-  - 无 `btn` 类 → 加 `focus-visible:ring-2 ring-white/40`（**4A 沿用项目现状写法**）。含 `VoiceToggle`、`CharacterPhotoField`、`InputField` 的麦克风/发送/停止三个圆钮（实测 `:392/429/438` 无 `.btn`）、`ChatHistory` 示例问题胶囊、`Message` 引用 chip。
+  - 无 `btn` 类 → 加 `focus-visible:ring-2 ring-white/40`（**4A 沿用项目现状写法**）。**本批（4A）只动 `VoiceToggle` 与 `CharacterPhotoField`**；下列其余几处属 4B 的文件，4B 按同一判据处理，**4A 不得越界**（契约 §2 范围冻结）。完整清单（供 4B 参照）： `VoiceToggle`、`CharacterPhotoField`、`InputField` 的麦克风/发送/停止三个圆钮（实测 `:392/429/438` 无 `.btn`）、`ChatHistory` 示例问题胶囊、`Message` 引用 chip。
   - 有 `btn` 类 → **不加**自定义环（daisyUI 用 `outline-width:2px` + `outline-color:var(--color-base-content)`，与 `ring` 叠加会双环）。含头部件 ⚙/☰/✕、`InputField:454` 的重试按钮。
   - ⚠️ 同一文件里可能两类并存（`InputField` 即是），判断方式是看该元素的 class 串里有没有 `btn`，不要按文件推断。
 
