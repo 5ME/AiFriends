@@ -19,7 +19,7 @@
 - 不引入任何依赖（不装 `@vue/test-utils`、不装 eslint a11y 插件）。
 - 分支：`feature/gqyin/chat-ui-phase4a-a11y`；提交信息中文 `type(scope): 摘要`。
 - **焦点环规则（D4A-6）**：按**元素实际持有的类名**判定，不按文件/区域。
-  - 无 `btn` 类 → 加 `focus-visible:ring-2 ring-white/40`。含 `VoiceToggle`、`CharacterPhotoField`、`InputField` 的麦克风/发送/停止三个圆钮（实测 `:392/429/438` 无 `.btn`）、`ChatHistory` 示例问题胶囊、`Message` 引用 chip。
+  - 无 `btn` 类 → 加 `chat-focus`（沉浸态 `--cbg-ring` = `rgba(255,255,255,0.40)`，与 `ring-white/40` 同色 → 零回归；简约态自动变深可见）。⚠️ **不得写 `ring-white/40` 字面量**：白 40% 环落在简约模式 `#fafaf9` 窗口上几乎不可见，会让 4A 的无障碍收益静默失效（评审 R3-2），且被 4B 颜色门禁判红。含 `VoiceToggle`、`CharacterPhotoField`、`InputField` 的麦克风/发送/停止三个圆钮（实测 `:392/429/438` 无 `.btn`）、`ChatHistory` 示例问题胶囊、`Message` 引用 chip。
   - 有 `btn` 类 → **不加**自定义环（daisyUI 用 `outline-width:2px` + `outline-color:var(--color-base-content)`，与 `ring` 叠加会双环）。含头部件 ⚙/☰/✕、`InputField:454` 的重试按钮。
   - ⚠️ 同一文件里可能两类并存（`InputField` 即是），判断方式是看该元素的 class 串里有没有 `btn`，不要按文件推断。
 
@@ -124,7 +124,7 @@ Expected: FAIL —— `querySelector('button')` 返回 `null`（当前根元素�
           class="h-10 w-10 rounded-full bg-black/50
                  flex items-center justify-center cursor-pointer
                  hover:bg-black/60 transition-colors shrink-0
-                 focus-visible:ring-2 ring-white/40 outline-none"
+                 chat-focus outline-none"
           :title="voiceEnabled ? '语音已开启' : '语音已关闭'"
           :aria-label="voiceEnabled ? '关闭语音播报' : '开启语音播报'"
           :aria-pressed="voiceEnabled"
@@ -134,7 +134,9 @@ Expected: FAIL —— `querySelector('button')` 返回 `null`（当前根元素�
 </template>
 ```
 
-> 说明：类名与改动前**完全一致**，仅追加 `focus-visible:ring-2 ring-white/40 outline-none`（D4A-6：本组件**无** `btn` 类，且此前是 `div` 完全不可聚焦，故必须有焦点环）。`SpeakerIcon` 不动（其 `text-white` 归 4B 的浅色模式处理）。
+> 说明：类名与改动前**完全一致**，仅追加 `chat-focus outline-none`（D4A-6：本组件**无** `btn` 类，且此前是 `div` 完全不可聚焦，故必须有焦点环）。`SpeakerIcon` 不动（其 `text-white` 归 4B 的浅色模式处理）。
+>
+> ⚠️ **跨批次依赖**：`chat-focus` 最终由 4B 的 `main.css` 以双模式 token 提供。**4A 在 4B 之前交付**，故 4A 必须先自行落地其定义：`main.css` 加 `:root{--cbg-ring:rgba(255,255,255,0.40)}` 与 `.chat-focus:focus-visible{outline:none;box-shadow:0 0 0 2px var(--cbg-ring)}`；4B 再把 `--cbg-ring` 纳入 token 家族并补简约态取值。两批各改一次同一文件，属既定交付顺序的一部分。
 
 - [ ] **Step 4: 跑测试确认通过**
 
@@ -218,7 +220,7 @@ Expected: FAIL —— 无 `button`（当前是 `div`）
   <!-- 提示：<button> 内不得再嵌套交互元素；若日后需要在 pill 内加次级按钮，必须拆分结构 -->
   <button type="button"
           class="h-10 w-fit rounded-full bg-black/50 flex items-center gap-2 px-2 cursor-pointer
-                 focus-visible:ring-2 ring-white/40 outline-none"
+                 chat-focus outline-none"
           :aria-label="`查看 ${character.name} 的角色详情`"
           @click="handleAvatarClick">
     <div class="avatar">
@@ -315,6 +317,10 @@ describe('思考中三点（4A T4：替换 CSS 停不掉的 daisyUI SMIL）', ()
     expect(block).toContain('currentColor')
   })
 
+  it('定义了 thinking-bounce 关键帧', () => {
+    expect(css).toContain('@keyframes thinking-bounce')
+  })
+
   it('reduced-motion 下三点静止但保留可见（opacity 不得为 0）', () => {
     const reduce = css.match(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\n\}/)?.[0] ?? ''
     expect(reduce).toContain('.thinking-dot')
@@ -370,12 +376,17 @@ Expected: FAIL —— `main.css` 中无 `.thinking-dot`
 替换 `ChatHistory.vue` 第 203-206 行：
 
 ```html
-<!-- 思考中指示（首 token 前）：自绘三点——daisyUI loading-dots 是 SMIL，停不掉（4A 设计 §1-F4） -->
+<!-- 思考中指示（首 token 前）：自绘三点——daisyUI loading-dots 是 SMIL，停不掉（4A 设计 §1-F4）。
+     内层 h-5（20px）定尺盒是**几何约束**：daisyUI 的 loading-sm 是 20×20（aspect-ratio:1 +
+     width:calc(--size-selector*5)=20px），去掉后气泡高度会从约 44px 塌到约 20px，
+     破坏"零视觉变更"（评审 R-3 实测）。三点排在 20px 盒内 → 外尺寸逐像素守住。 -->
 <div v-if="thinking" class="flex justify-start my-2">
-  <div class="msg-bubble msg-bubble-ai flex items-center gap-1">
-    <span class="thinking-dot"></span>
-    <span class="thinking-dot"></span>
-    <span class="thinking-dot"></span>
+  <div class="msg-bubble msg-bubble-ai">
+    <div class="h-5 flex items-center gap-1">
+      <span class="thinking-dot"></span>
+      <span class="thinking-dot"></span>
+      <span class="thinking-dot"></span>
+    </div>
   </div>
 </div>
 ```
@@ -401,7 +412,7 @@ git commit -m "fix(a11y): 思考中指示器换自绘三点（daisyUI loading-do
 - [ ] **Step 1: 全量前端单测**
 
 Run: `cd frontend && npx vitest run`
-Expected: 既有 65 passed + 本批新增 9（T1 3 + T2 3 + T4 3）= **74 passed**，0 failed
+Expected: 既有 65 passed + 本批新增 10（T1 3 + T2 3 + T4 4）= **75 passed**，0 failed
 
 - [ ] **Step 2: 构建**
 
@@ -432,7 +443,7 @@ Tab 顺序：`用户菜单 → 头像 pill → 语音开关 → ☰/✕ → 消�
 
 - [ ] 仅 §文件清单 中的文件被改动（`git diff --stat` 核对）
 - [ ] 无任何颜色/尺寸/间距值被修改（`git diff` 中 template 只出现属性增删）
-- [ ] 74 个前端单测全绿
+- [ ] 75 个前端单测全绿
 - [ ] 产物核对 4 项全部命中
 - [ ] 无 `TODO`/占位符残留
 - [ ] PR 描述含：门 1/门 2 链接、验收断言 A1~A6 的逐条证据

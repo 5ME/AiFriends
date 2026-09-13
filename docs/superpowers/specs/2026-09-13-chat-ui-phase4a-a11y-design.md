@@ -26,7 +26,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 |---|------|------|------|
 | F1 | `VoiceToggle` 是 `<div @click>`，无 `tabindex`、无 `role`、无 `aria-label`，仅 `:title` | `frontend/src/components/character/chat_field/VoiceToggle.vue:7-12` | **键盘用户无法开关语音**（Tab 不到，Enter/空格无效） |
 | F2 | `CharacterPhotoField` 是 `<div @click>`，内嵌 `<img alt="">`（空 alt） | `character_photo_field/CharacterPhotoField.vue:15-18` | **键盘用户无法打开角色详情**；头像无替代文本 |
-| F3 | `UserMenu` 触发器是 `<div tabindex="0" role="button">`，**无 `aria-label`** | `components/navbar/UserMenu.vue:41` | 可聚焦但无可访问名称；读屏播报为空 |
+| F3 | `UserMenu` 触发器是 `<div tabindex="0" role="button">`，**无 `aria-label`** | `components/navbar/UserMenu.vue:34` | 可聚焦但无可访问名称；读屏播报为空 |
 | F4 | 对话区"思考中"用 daisyUI `<span class="loading loading-dots loading-sm">` | `chat_history/ChatHistory.vue:205` | **CSS 停不掉**：daisyUI 的 `.loading-*` 是 `mask-image` 内嵌 SVG 的 SMIL 动画（本机实测版本 5.5.18，见 F11）（`frontend/node_modules/daisyui/components/loading.css`，文件内无 `animation`/`@keyframes`/`::before`/`::after`）。SMIL 不响应 `prefers-reduced-motion` |
 | F5 | 语音栏的六个小点**已**受 `preferReduced` 控制 | `input_field/Microphone.vue:25`（`matchMedia`）、`:266-289`（`animate-pulse-dot` 条件绑定） | 这部分**已达标**，本批不重复处理，仅作回归基线 |
 | F6 | 波形高度在 reduce 时固定为 8px | `Microphone.vue:159` | 已达标，同上 |
@@ -55,6 +55,21 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 
 > **F3 的边界**：`UserMenu` 属全站 NavBar，与聊天改版无关。之所以并入本批，是因为它是同一轮 aria 扫描发现的同类缺陷，且改动仅一行。若你希望严格限定在聊天页，可从本批删除（见 §8 待决 Q-4A-1）。
 
+### 1.3 已知债务：其他页面的 reduced-motion（本批不修，登记备查）
+
+`daisyUI` 的 `loading-spinner` 与 `loading-dots` 同源——都是 `mask-image` 内嵌 SVG 的 **SMIL** 动画，**CSS 停不掉**（§1-F4）。4A 只处理对话区那一个"思考中"（因为它是聊天改版的一部分），**下列 7 处仍是现状**：
+
+| 位置 | 用途 |
+|------|------|
+| `views/chat/ChatIndex.vue:141` | 聊天页加载中 |
+| `components/character/CharacterDetail.vue:106` | 角色详情加载 |
+| `views/KnowledgeBase.vue`（UploadZone / DocumentCard） | 知识库上传与文档状态 |
+| `views/homepage/HomepageIndex.vue` | 首页 |
+| `views/user/space/SpaceIndex.vue` | 个人空间 |
+| `views/friend/FriendIndex.vue` | 好友列表 |
+
+**登记的目的**：验收时**不得**把 4A 理解成"reduced-motion 全覆盖"。若日后要统一，正确做法与 4A 相同——换掉 `loading-*`，而不是试图用 CSS 关停（不可能）。
+
 ---
 
 ## 2. 决策记录
@@ -66,7 +81,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 | D4A-3 | reduced-motion 只覆盖**我们自己可控**的动画。daisyUI 内部 SMIL 不试图用 CSS 关闭，改为**替换实现**（F4 → `loading-dots` 换成自绘三点） | 同上 |
 | D4A-4 | 本批**零视觉变更**：改 `div`→`button` 必须保持原尺寸/间距/圆角/悬停观感逐像素一致 | 用户 2026-09-13：「拆两批，4A 无障碍 → 4B 简约背景」 |
 | D4A-5 | 不引入依赖（不装 `axe-core`、不装 `eslint-plugin-vuejs-accessibility`）；验证靠真实浏览器键盘走查 + 产物核对 | YAGNI；项目当前无前端 lint 链 |
-| D4A-6 | 焦点环来源**不叠加**，判据是**元素实际持有的类名**（不是"哪个区域的按钮"）：<br>**① 非 daisyUI `.btn` 的按钮** → 用项目既有写法 `focus-visible:ring-2 ring-white/40`。含：`VoiceToggle`、`CharacterPhotoField`、`InputField` 的麦克风/发送/停止三个圆钮（**实测这三个无 `.btn` 类**）、`ChatHistory` 的示例问题胶囊、`Message` 的引用 chip。<br>**② 真正带 daisyUI `.btn` 的按钮** → **不加**自定义环。含：头部件 ⚙/☰/✕、`InputField` 的错误重试（`btn btn-xs btn-neutral`，`InputField.vue:454`）。daisyUI 给这类元素的是 `outline-width: 2px` + `outline-color: var(--color-base-content)`，与 `ring`（box-shadow）是两套视觉语言，叠加会出双环 | 评审发现（第 1、2 轮）+ **用户裁决（2026-09-13）**：允许本批新增键盘焦点环（只在键盘操作时出现、默认渲染不变，spec §12 明确要求"焦点可见"） |
+| D4A-6 | 焦点环来源**不叠加**，判据是**元素实际持有的类名**（不是"哪个区域的按钮"）：<br>**① 非 daisyUI `.btn` 的按钮** → 用 `chat-focus`（4B 提供的语义类；沉浸态 `--cbg-ring = rgba(255,255,255,0.40)` 与旧字面量同色 → 零回归，简约态自动变深可见）。**不得写 `ring-white/40` 字面量**（白环在简约窗口上不可见，会静默抹掉本批收益；评审 R3-2）。含：`VoiceToggle`、`CharacterPhotoField`、`InputField` 的麦克风/发送/停止三个圆钮（**实测这三个无 `.btn` 类**）、`ChatHistory` 的示例问题胶囊、`Message` 的引用 chip。<br>**② 真正带 daisyUI `.btn` 的按钮** → **不加**自定义环。含：头部件 ⚙/☰/✕、`InputField` 的错误重试（`btn btn-xs btn-neutral`，`InputField.vue:454`）。daisyUI 给这类元素的是 `outline-width: 2px` + `outline-color: var(--color-base-content)`，与 `ring`（box-shadow）是两套视觉语言，叠加会出双环 | 评审发现（第 1、2 轮）+ **用户裁决（2026-09-13）**：允许本批新增键盘焦点环（只在键盘操作时出现、默认渲染不变，spec §12 明确要求"焦点可见"） |
 
 ### 2.1 已否决的替代方案
 
@@ -100,7 +115,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 <button type="button"
         class="h-10 w-10 rounded-full bg-black/50 flex items-center justify-center
                cursor-pointer hover:bg-black/60 transition-colors shrink-0
-               focus-visible:ring-2 ring-white/40 outline-none"
+               chat-focus outline-none"
         :title="voiceEnabled ? '语音已开启' : '语音已关闭'"
         :aria-label="voiceEnabled ? '关闭语音播报' : '开启语音播报'"
         :aria-pressed="voiceEnabled"
@@ -113,7 +128,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 
 1. `h-10 w-10` 显式尺寸保留 —— `<button>` 的默认 `box-sizing`/`padding` 会改变布局，显式类名可避免（D4A-4）。
 2. `:aria-pressed` 暴露开关状态：这是**切换按钮**（toggle），`aria-pressed` 是正确语义，胜过把状态塞进 label。label 保持"动作导向"（"开启/关闭语音播报"）而非状态导向。
-3. `focus-visible:ring-2 ring-white/40 outline-none` 与同区其它按钮（☰/✕）一致 —— 项目既有约定。
+3. `chat-focus outline-none`：焦点环走 4B 的语义 token（沉浸态与旧 `ring-white/40` 同色 → 零回归；简约态自动变深）。**不沿用旧字面量**——同区 ☰/✕ 本就是 daisyUI `.btn`，由 daisyUI 自带 outline，并不构成"既有约定"（评审 R3-2 指出原论证有误）。
 4. **`<button>` 默认 `line-height` 与字体继承**：Tailwind 的 preflight 已将 `button` 的 `font`/`line-height` 设为继承，`SpeakerIcon` 是固定 `w-5 h-5` 的 SVG，不受影响。已核实 `frontend/node_modules/tailwindcss` preflight 规则存在。
 5. **不加 `disabled`**：语音开关任何时刻都可用。
 
@@ -128,7 +143,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 ```html
 <button type="button"
         class="h-10 w-fit rounded-full bg-black/50 flex items-center gap-2 px-2 cursor-pointer
-               focus-visible:ring-2 ring-white/40 outline-none"
+               chat-focus outline-none"
         :aria-label="`查看 ${character.name} 的角色详情`"
         @click="handleAvatarClick">
   <div class="avatar">
@@ -178,10 +193,12 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 ```html
 <!-- 思考中指示（首 token 前）：自绘三点——daisyUI loading-dots 是 SMIL，停不掉（见 4A 设计 F4） -->
 <div v-if="thinking" class="flex justify-start my-2">
-  <div class="msg-bubble msg-bubble-ai flex items-center gap-1">
-    <span class="thinking-dot"></span>
-    <span class="thinking-dot"></span>
-    <span class="thinking-dot"></span>
+  <div class="msg-bubble msg-bubble-ai">
+    <div class="h-5 flex items-center gap-1">
+      <span class="thinking-dot"></span>
+      <span class="thinking-dot"></span>
+      <span class="thinking-dot"></span>
+    </div>
   </div>
 </div>
 ```
@@ -214,7 +231,8 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 
 **要点（尺寸与观感对齐，D4A-4）：**
 
-1. daisyUI `loading-sm` 的点约 4px、间距由 `gap-1`（4px）给出 —— 上述实现与之一致，**肉眼尺寸不变**。
+1. **几何必须靠定尺盒守住**（评审 R-3 实测纠正）：daisyUI 的 `loading` 带 `aspect-ratio: 1`，`loading-sm` 的宽度是 `calc(var(--size-selector, .25rem) * 5)` = **20×20px**。若直接换成三个 4px 点，气泡高度会从约 44px 塌到约 20px——**这是可见回归**，不是"肉眼尺寸不变"。故三点包在 `h-5`（20px）定尺盒内，外尺寸逐像素守住。
+   - 三点 4px + `gap-1`（4px）×2 = 20px，与盒宽一致，横向也不溢出。
 2. 颜色：**必须用 `currentColor`**（继承 AI 气泡的文字色），不得写死白色。沉浸模式下 AI 气泡本来就是白字，故渲染结果与 daisyUI 的白色点**完全一致**；简约模式（4B）气泡文字变深色时，三点自动跟随变深，无需为该模式另写规则。
 3. `reduce` 时三点静态显示（`opacity: 0.6`）—— **保留"进行中"的信息**，只是不动。这是 spec §12「三点动画降为静态」的字面要求，不是"隐藏"。
 4. `.skeleton-shimmer` 的 reduce 覆盖补在**同一 media query** 内（F7 遗漏项）。
@@ -233,9 +251,9 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 | 修改 | `frontend/src/components/navbar/UserMenu.vue` | 触发器 `aria-label`（§3.3，一行） |
 | 修改 | `frontend/src/components/character/chat_field/chat_history/ChatHistory.vue` | 思考指示器换自绘三点（§3.4） |
 | 修改 | `frontend/src/assets/main.css` | `.thinking-dot` + `thinking-bounce` + reduce 块（§3.4） |
-| 新增 | `frontend/src/components/character/chat_field/__tests__/VoiceToggle.test.js` | 真按钮语义 + `aria-pressed` + 点击切换（2 条） |
+| 新增 | `frontend/src/components/character/chat_field/__tests__/VoiceToggle.test.js` | 真按钮语义 + `aria-pressed` + 点击切换（3 条） |
 | 新增 | `frontend/src/components/character/chat_field/character_photo_field/__tests__/CharacterPhotoField.test.js` | 真按钮语义 + 可访问名称 + 头像 alt（3 条） |
-| 新增 | `frontend/src/utils/__tests__/thinkingDots.test.js` | `.thinking-dot` 取色/关键帧/reduce 块/shimmer 兜底（3 条，源码级断言） |
+| 新增 | `frontend/src/utils/__tests__/thinkingDots.test.js` | `.thinking-dot` 取色 / 关键帧存在 / reduce 块 / shimmer 兜底（4 条，源码级断言） |
 
 **不改动**：`InputField.vue`、`WindowHeader.vue`、`SessionList.vue`、`SessionItem.vue`、`ChatWindow.vue`、`Microphone.vue`（均已达标或属 4B）。
 
@@ -249,7 +267,7 @@ Phase 3 交付语音与输入后，聊天页留下了**三类与观感无关的�
 
 | 命令 | 期望 |
 |------|------|
-| `cd frontend && npx vitest run` | 现有 **65 passed** 不回归；本批新增 9 条全绿（`VoiceToggle` 2 + `CharacterPhotoField` 3 + `thinkingDots` 3），合计 **74** |
+| `cd frontend && npx vitest run` | 现有 **65 passed** 不回归；本批新增 10 条全绿（`VoiceToggle` 3 + `CharacterPhotoField` 3 + `thinkingDots` 4），合计 **75** |
 | `cd frontend && npm run build` | exit 0；产物含 `thinking-dot`，**不含** `loading-dots` |
 
 三个测试文件的定位：`VoiceToggle`/`CharacterPhotoField` 走 **jsdom 真挂载**（`@vitest-environment jsdom` + `createApp`，不引入 `@vue/test-utils`），验证"根元素是原生 `button`""可访问名称""`aria-pressed`"等可断言事实；`thinkingDots.test.js` 走**源码级断言**（读 `main.css` 校验 `.thinking-dot` 用 `currentColor`、reduce 块内含 shimmer 兜底）。

@@ -309,50 +309,12 @@ describe('4B token 家族（设计 §3.4）', () => {
     expect(css).not.toMatch(/--msg-text-shadow\s*:/)
   })
 
-  it('聊天窗口相关文件里不得残留未 token 化的颜色字面量（评审 R-4 的机制性修复）', () => {
-    // 覆盖两类：Tailwind 工具类（text-white / bg-black 等）与 CSS 颜色字面量（rgba(...) / #hex）
-    // 这条断言的意义：原计划用工具类正则统计硬编码，漏掉了 scoped <style> 里的 rgba()/hex，
-    // 导致 Message.vue 的 4 处（第N段 span / blockquote / 复制按钮 / 链接）被漏检。
-    const TARGETS = [
-      'chat_history/message/Message.vue',
-      'chat_history/ChatHistory.vue',
-      'input_field/InputField.vue',
-      'input_field/Microphone.vue',
-      'character_photo_field/CharacterPhotoField.vue',
-      'VoiceToggle.vue',
-    ]
-    const UTIL_RE = /(text|bg|ring|border)-white(\/\d+)?|bg-black(\/\d+)?/g
-    const CSS_COLOR_RE = /rgba?\(|#[0-9a-fA-F]{3,6}\b/g
-    const offenders = []
-    for (const rel of TARGETS) {
-      const src = readFileSync(
-        fileURLToPath(new URL('../../components/character/chat_field/' + rel, import.meta.url)),
-        'utf8',
-      )
-      // 排除注释行（本批允许在注释里说明历史原因）
-      const code = src.split('\n').filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('/*')).join('\n')
-      const hits = [...(code.match(UTIL_RE) ?? []), ...(code.match(CSS_COLOR_RE) ?? [])]
-      // 允许白名单：纯白文字/图标在两模式下都成立（己方气泡绿底上的白字）
-      const allowed = hits.filter((h) => h !== 'text-white')
-      if (allowed.length) offenders.push(rel + ': ' + [...new Set(allowed)].join(', '))
-    }
-    expect(offenders).toEqual([])
-  })
-
   it('新增的 token 与语义类不得落进 @layer（否则被 utilities 压过，浅色静默失效）', () => {
     const layers = css.match(/@layer[^{;]*/g) ?? []
     // 本批此前 main.css 零 @layer；若新增，必须显式评审（见设计 §3.4 硬性约束一）
     expect(layers).toEqual([])
   })
 
-  it('移动端抽屉遮罩随模式反转（设计 §3.7，用户裁决纳入）', () => {
-    const src = readFileSync(
-      fileURLToPath(new URL('../../views/chat/ChatIndex.vue', import.meta.url)),
-      'utf8',
-    )
-    expect(src).toContain('bg-[#1c1917]/40')   // 简约：暖深色 40%
-    expect(src).toContain('bg-black/50')       // 沉浸：现状不变
-  })
 })
 ```
 
@@ -456,11 +418,30 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
   background: transparent;
 }
 .chat-icon-btn:hover { background: var(--cbg-hover); }
+
+/* 状态也必须走语义层，不能在元素上再挂 bg-[var(--accent)] / bg-neutral-700 / text-white 这类
+   工具类 —— 未分层类压过 @layer utilities，工具类会被上面两条规则**静默压掉**：
+   麦克风聆听/识别中与发送键激活时的绿底会在沉浸模式也消失（评审 R-4 实测）。
+   故状态一律用类切换，值在类里定义。 */
+.chat-icon-btn-active {
+  --cbg-own-accent: var(--accent);
+  color: #ffffff;
+  background-color: var(--cbg-own-accent);
+}
 .chat-btn-idle {
   color: var(--cbg-text);
   background-color: var(--cbg-hover);
 }
 .chat-btn-idle:disabled { opacity: 0.5; }
+
+/* VoiceToggle 专用：底色用浮层族，但图标必须是**主文字**色（设计 §3.5：
+   "语音开关 → `--cbg-float`，图标 `--cbg-text`"；直接用 .chat-float 会得到
+   --cbg-text-2，与设计不符 —— 评审 R-4） */
+.chat-icon-btn-solid {
+  color: var(--cbg-text);
+  background-color: var(--cbg-float);
+}
+.chat-icon-btn-solid:hover { background-color: var(--cbg-float-strong); }
 
 /* 文字层级 */
 .chat-text   { color: var(--cbg-text); }
@@ -508,6 +489,11 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
 .chat-stage-root.stage-simple .stage-blur { display: none; }
 .chat-stage-root.stage-simple .stage-dim  { background: #e7e5e4; }
 
+/* 无背景图 / 图片加载失败时的深色兜底（E2/E3）。顺序有意放在 .chat-simple 之后：
+   若该子树正好是简单模式，浅色 token 会因后者在源顺序靠后而取胜，符合 §3.6-E3 的约定。 */
+.chat-stage-root.no-bg .stage-dim { background: #1c1917; }
+.chat-window.no-bg { --cbg-window: #1c1917; }
+
 .msg-bubble-ai {
   background: var(--cbg-bubble-ai);
   border: 1px solid var(--cbg-bubble-ai-border);
@@ -543,7 +529,7 @@ Expected: FAIL —— 无 `.chat-window.chat-simple`
 - [ ] **Step 4: 跑测试确认通过**
 
 Run: `cd frontend && npx vitest run src/utils/__tests__/chatBgTokens.test.js`
-Expected: PASS（5 个用例）
+Expected: PASS（6 个用例）——token 家族与 @layer 守卫共 6 条；颜色门禁与遮罩断言已移到 Task 5 / Task 6（见评审 R3-1）
 
 - [ ] **Step 5: 提交**
 
@@ -681,9 +667,23 @@ import { useChatBg } from '@/composables/useChatBg.js'
 // 4B：简约背景按角色记忆（D4B-3）；:key 重建保证切换角色即换状态
 const { simpleOn, toggleSimple } = useChatBg(props.friend.character.id)
 
-// E2/E3：无背景图（空串）或图片加载失败时不渲染背景图层，避免 url(undefined) 与破图
+// E2/E3：无背景图（空串）或图片加载失败时不渲染背景图层，避免 url(undefined) 与破图。
+// ⚠️ 必须用 Image 预探测：监听器挂在用 :style 设 CSS background-image 的 <div> 上时，
+// `error` 事件**不会触发**（评审 R-5 实测）——那样写 bgFailed 永远是 false，是死代码。
 const bgFailed = ref(false)
 const hasBg = computed(() => !!props.friend.character.background_image && !bgFailed.value)
+
+watch(
+  () => props.friend.character.background_image,
+  (url) => {
+    bgFailed.value = false
+    if (!url) return
+    const probe = new Image()
+    probe.onerror = () => { bgFailed.value = true }
+    probe.src = url
+  },
+  { immediate: true },
+)
 ```
 
 （在既有 `import { onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'` 中补 `computed`）
@@ -707,8 +707,7 @@ const hasBg = computed(() => !!props.friend.character.background_image && !bgFai
        :class="{ 'chat-simple': simpleOn, 'no-bg': !hasBg }">
     <div v-if="hasBg"
          class="absolute inset-0 bg-cover bg-center"
-         :style="{ backgroundImage: `url(${friend.character.background_image})` }"
-         @error="bgFailed = true"></div>
+         :style="{ backgroundImage: `url(${friend.character.background_image})` }"></div>
     <div v-if="hasBg" class="absolute inset-0 window-scrim"></div>
     <div class="chat-window-bg absolute inset-0"></div>
 
@@ -856,18 +855,19 @@ const emits = defineEmits(['close', 'openDrawer', 'toggleSimpleBg'])
 
 const settingsOpen = ref(false)
 const popoverRef = ref(null)
-const gearRef = ref(null)
+const gearWrapRef = ref(null)   // 包裹层：仅用于「点外关闭」的 contains 判断
+const gearBtnRef = ref(null)    // 触发器本体：焦点回归必须落在可聚焦的 <button> 上（评审 R-5）
 
 const scopeLabel = computed(() => `仅对《${props.character?.name ?? '该角色'}》生效`)
 
 function closeSettings() {
   settingsOpen.value = false
-  gearRef.value?.focus()          // 焦点回归触发器（B7）
+  gearBtnRef.value?.focus()       // 焦点回归触发器本体（B7）
 }
 
 function onDocClick(e) {
   if (!settingsOpen.value) return
-  if (popoverRef.value?.contains(e.target) || gearRef.value?.contains(e.target)) return
+  if (popoverRef.value?.contains(e.target) || gearWrapRef.value?.contains(e.target)) return
   closeSettings()
 }
 
@@ -908,7 +908,7 @@ onBeforeUnmount(() => {
       </button>
 
       <!-- ⚙ 设置（4B：简约背景开关落点，D4B-4） -->
-      <div ref="gearRef" class="relative">
+      <div ref="gearWrapRef" class="relative">
         <button type="button"
                 class="chat-icon-btn btn btn-sm btn-circle btn-ghost"
                 aria-label="聊天设置"
@@ -987,12 +987,72 @@ git commit -m "feat(chat): ⚙ 设置弹层（简约背景开关 + 生效范围�
 |------|------|
 | `Message.vue`（**逐处，勿漏**） | ① 时间戳 ×2 处 `text-white/60` → `chat-text-2`（`:92` `:107`）<br>② 引用 chip 按钮（`:117-118`）`bg-black/25 backdrop-blur text-white/90 hover:bg-black/40` → `chat-float chat-float-hover chat-focus`<br>③ **chip 内的「第N段」span（`:122`）`text-white/75` → `chat-text-2`**<br>④ 名字 pill：用既有 `.msg-name-pill`（已在 main.css token 化，无需改模板）<br>⑤ scoped 样式 `:deep(code)`（`:151`）`rgba(0,0,0,0.4)` → `var(--cbg-code)`<br>⑥ scoped 样式 `:deep(pre)`（`:152`）`rgba(0,0,0,0.45)` → `var(--cbg-code-block)`<br>⑦ **scoped 样式 `:deep(blockquote)`（`:154`）`border-left: 3px solid rgba(255,255,255,0.3)` → `var(--cbg-text-2)`；`color: rgba(255,255,255,0.85)` → `var(--cbg-text-2)`**<br>⑧ **scoped 样式 `:deep(a)`（`:155`）`color: #7dd3fc` → `var(--cbg-link)`**<br>⑨ **`.code-copy-btn`（`:162-163`）`background: rgba(0,0,0,0.5)` → `var(--cbg-code-block)`；`color: rgba(255,255,255,0.85)` → `var(--cbg-text-2)`；`:hover`（`:171`）`background: rgba(0,0,0,0.75)` → `var(--cbg-code-block-hover)`**<br>⚠️ ③⑦⑧⑨ 四处**原计划漏列**（评审 R-4 实测发现）：根因是计划用「Tailwind 工具类正则」统计硬编码，而 `Message.vue` 的 scoped 样式里是 `rgba()`/十六进制字面量，正则匹配不到。**本表按文件逐处重数列出** |
 | `ChatHistory.vue` | 骨架块 `skeleton-shimmer` 保留（颜色已由 main.css 按模式反转）；错误文字 `text-red-300` → `chat-danger`；空态 `text-white/90` → `chat-text-2`；示例问题 `bg-black/25 text-white/90` → `chat-float chat-float-hover chat-focus`；思考中气泡保留 `.msg-bubble-ai`；`ring-white/40` → `chat-focus` |
-| `InputField.vue` | 麦克风/发送/停止按钮 `text-white` + `hover:bg-black/20` → `chat-icon-btn chat-focus`（**加**环：实测这三个圆钮**没有** `.btn` 类，`:392/429/438` 只有 Tailwind 工具类；它们现有的 `focus-visible:ring-2 ring-white/40` 需保留）（激活态仍 `bg-[var(--accent)]` 且 `text-white` 不变——绿底白字两模式通用）；未激活发送键 `bg-neutral-700` → `chat-btn-idle`；textarea `bg-black/35 text-white` → `chat-surface-2 chat-text`，加 `placeholder:text-[var(--cbg-text-3)]`；错误横幅 `text-red-300` → `chat-danger` + 保留字号 |
+| `InputField.vue` | 麦克风/发送/停止按钮 `text-white` + `hover:bg-black/20` → `chat-icon-btn chat-focus`（**加**环：实测这三个圆钮**没有** `.btn` 类，`:392/429/438` 只有 Tailwind 工具类）；**激活态** `class` 绑定里**删掉** `bg-[var(--accent)]` 与 `text-white` 字面量，改挂 `chat-icon-btn-active`（状态值在 CSS 类里，理由见 Task 2 的 R-4 注释）；未激活发送键 `bg-neutral-700 opacity-50` → `chat-btn-idle`；textarea `bg-black/35 text-white` → `chat-surface-2 chat-text`，加 `placeholder:text-[var(--cbg-text-3)]`；错误横幅 `text-red-300` → `chat-danger` + 保留字号 |
 | `Microphone.vue` | 语音栏容器 `bg-black/35 backdrop-blur` → `chat-surface-2`；"语音初始化中…"/"识别中…" 的 `text-white/40` → `chat-text-3`；聆听条 `bg-white/30` → `var(--cbg-text-2)`（用内联 style 或语义类）；小点 `bg-blue-400` 保留（品牌色，两模式均可见） |
-| `VoiceToggle.vue` | `bg-black/50` + `hover:bg-black/60` → `chat-float`（非 `.btn`，**保留** `focus-visible:ring-2 ring-white/40` 焦点环） |
-| `CharacterPhotoField.vue` | `bg-black/50` → `chat-float`；名字 `text-white` → `chat-text`；加 `focus-visible:ring-2 ring-white/40`（非 `.btn`） |
+| `VoiceToggle.vue` | `bg-black/50` + `hover:bg-black/60` → `chat-icon-btn-solid`（**不是** `chat-float`：后者的 `color: var(--cbg-text-2)` 会把图标从白 100% 降到白 70%，与设计 §3.5"图标 `--cbg-text`"冲突 —— 评审 R-4）；焦点环 → `chat-focus`（4A T1 已引入，此处由 token 接管） |
+| `CharacterPhotoField.vue` | `bg-black/50` → `chat-float`；名字 `text-white` → `chat-text`；加 `chat-focus`（4A T2 已引入） |
 | `SpeakerIcon.vue` | 两处 `text-white` / `text-white/40` → `text-current` / `opacity-40` |
 | （说明） | 焦点环按**元素实际持有的类名**判定，不按文件/区域：**有 `btn` 类**（⚙/☰/✕、`InputField:454` 重试）→ 只加 `chat-icon-btn`，**不加** `chat-focus`（daisyUI 用 `outline-width:2px` + `outline-color:var(--color-base-content)`，与 `ring` 叠加会双环）；**无 `btn` 类**（麦克风/发送/停止三个圆钮、`VoiceToggle`、`CharacterPhotoField`、示例问题、引用 chip）→ `chat-focus` **必须加**，否则抹掉 4A 挣来的焦点可见性（评审 R-2 实测） |
+
+- [ ] **Step 1b: 新建 token 残留门禁（随本任务落地）**
+
+创建 `frontend/src/utils/__tests__/chatBgLiterals.test.js`：
+
+```js
+// 门禁：聊天窗口相关文件里不得残留未 token 化的颜色字面量（评审 R-4 的机制性修复）。
+// 随本任务的 token 化落地——**只有 Task 5 全部改完才可能绿**（评审 R3-1 的放置要求）。
+import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
+const TARGETS = [
+  'chat_history/message/Message.vue',
+  'chat_history/ChatHistory.vue',
+  'input_field/InputField.vue',
+  'input_field/Microphone.vue',
+  'character_photo_field/CharacterPhotoField.vue',
+  'VoiceToggle.vue',
+]
+
+/** 扫描前剥掉全部注释：HTML <!-- -->、CSS 块注释、整行 //（评审 R3-3：
+ *  Microphone.vue:261-262 的 HTML 注释续行含 bg-black/35，不剥会让门禁永远红） */
+function stripComments(src) {
+  return src
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((l) => !l.trim().startsWith('//'))
+    .join('\n')
+}
+
+/** 覆盖面：任意可能承载颜色的工具类 + CSS 颜色字面量（评审 R3-4：
+ *  初稿只认白/黑两族，漏掉 bg-neutral-700 等）。只放行白名单，其余一律计入。 */
+const UTIL_RE =
+  /\b(?:text|bg|border|ring|divide|outline|fill|stroke|from|to|via)-(?!\[var\(--cbg-)[a-z][a-z0-9-]*(?:\/\d+)?\b|\b(?:text|bg|border|ring)-\[[^\]]+\]|rgba?\(|#[0-9a-fA-F]{3,8}\b/g
+
+/** 唯一白名单：裸 text-white —— 己方气泡绿底白字，沉浸/简约两模式都成立 */
+const ALLOWED = new Set(['text-white'])
+
+describe('颜色字面量残留门禁（Token 化完成度）', () => {
+  it('6 个聊天窗口相关文件无未 token 化残留', () => {
+    const offenders = []
+    for (const rel of TARGETS) {
+      const src = stripComments(
+        readFileSync(
+          fileURLToPath(new URL('../../components/character/chat_field/' + rel, import.meta.url)),
+          'utf8',
+        ),
+      )
+      const hits = (src.match(UTIL_RE) ?? []).filter((h) => !ALLOWED.has(h))
+      if (hits.length) offenders.push(rel + ': ' + [...new Set(hits)].join(', '))
+    }
+    expect(offenders).toEqual([])
+  })
+})
+```
+
+Run: `cd frontend && npx vitest run src/utils/__tests__/chatBgLiterals.test.js`
+Expected: FAIL —— 打印尚未 token 化的文件与命中字面量（此时 Task 5 尚未改完）
 
 - [ ] **Step 2: 构建并核对产物（正反两向）**
 
@@ -1010,7 +1070,7 @@ grep -c "overlay-k" *.css         # 0（砍掉项未引入）
 - [ ] **Step 3: 全量单测**
 
 Run: `cd frontend && npx vitest run`
-Expected: 4A 后基线 74 + 本批新增 24（T1 7 + T2 8 + T3 5 + T4 4）= **98 passed**，0 failed
+Expected: 4A 后基线 **75** + 本批新增 24（T1 7 + T2 8 + T3 5 + T4 4）= **99 passed**，0 failed
 
 - [ ] **Step 4: 提交**
 
@@ -1033,11 +1093,39 @@ git commit -m "feat(chat): 消息区与输入区 token 化——浅色模式全�
 
 > **背景**：用户裁决（2026-09-13）纳入本批。遮罩是 `lg` 以下的移动端独有覆盖层，属简约模式的组成部分；纯黑遮罩在浅色整页中会显得突兀。实算见设计 §3.7。
 
-> **断言归属**：本任务的源码断言**已写进 Task 2 的 `chatBgTokens.test.js` 断言块**（最后一条 `it`），此处不重复。若先做 Task 6 再做 Task 2，该条会先红——这是预期的。
+> **断言归属**：本任务的遮罩断言**单独放在本任务的 Step 里**，不塞进 `chatBgTokens.test.js`——门禁要跟它验证的改动走（评审 R3-1：把跨任务断言塞进 Task 2，会让 Task 2 Step 4 的"预期 PASS"永远红）。
+
+- [ ] **Step 1: 新建遮罩断言并确认失败**
+
+创建 `frontend/src/utils/__tests__/chatBgScrim.test.js`：
+
+```js
+// 移动端抽屉遮罩随模式反转（设计 §3.7，用户裁决纳入）
+// 用源码断言而非组件测试：遮罩位于 lg:hidden 的 Teleport 抽屉内，
+// 触发它需 mock useMediaQuery 与 Teleport 目标，成本远高于价值；
+// 本条核心风险是"人删了简约分支"，源码断言足以拦住。
+import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+
+describe('抽屉遮罩（4B T6）', () => {
+  it('遮罩类名随模式切换', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('../../views/chat/ChatIndex.vue', import.meta.url)),
+      'utf8',
+    )
+    expect(src).toContain('bg-[#1c1917]/40')   // 简约：暖深色 40%
+    expect(src).toContain('bg-black/50')       // 沉浸：现状不变
+  })
+})
+```
+
+Run: `cd frontend && npx vitest run src/utils/__tests__/chatBgScrim.test.js`
+Expected: FAIL —— `ChatIndex.vue` 中还没有 `bg-[#1c1917]/40`
 
 > **为什么用源码断言而不是组件测试**：遮罩位于 `lg:hidden` 的 Teleport 抽屉内，要触发它需 mock `useMediaQuery` 与 Teleport 目标，成本远高于价值；本条的核心风险是"人删了简约分支"，源码断言足以拦住。
 
-- [ ] **Step 1: 实现**
+- [ ] **Step 2: 实现**
 
 `ChatIndex.vue` 的 `<script setup>` 中：
 
@@ -1060,10 +1148,10 @@ const { simpleOn: simpleBg } = useChatBg(activeCharacterId)
 
 - [ ] **Step 2: 跑测试确认通过**
 
-Run: `cd frontend && npx vitest run src/utils/__tests__/chatBgTokens.test.js`
-Expected: PASS（7 个用例）
+Run: `cd frontend && npx vitest run src/utils/__tests__/chatBgScrim.test.js`
+Expected: PASS（1 个用例）
 
-- [ ] **Step 3: 提交**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add frontend/src/views/chat/ChatIndex.vue frontend/src/utils/__tests__/chatBgTokens.test.js

@@ -62,19 +62,19 @@
 
 | # | 事实 | 证据 | 影响 |
 |---|------|------|------|
-| F1 | 窗口与舞台的背景图都来自 `friend.character.background_image`，直接写在 `:style` 内联 | `ChatWindow.vue:69-71,88-90` | 简约模式必须同时接管两处 |
+| F1 | 窗口与舞台的背景图都来自 `friend.character.background_image`，直接写在 `:style` 内联 | `ChatWindow.vue:93`（舞台）与 `:100-101`（窗口） | 简约模式必须同时接管两处 |
 | F2 | `.window-scrim`（渐变蒙层）、`.stage-blur`/`.stage-dim`、`.msg-bubble-*`、`.date-capsule`、`.msg-name-pill`、`.session-active`、`.skeleton-shimmer` 全部定义在 `assets/main.css`，**值写死** | `main.css:26-114` | 需要 token 化；但**默认值必须逐字保留**，否则沉浸模式回归 |
 | F3 | 硬编码白/黑玻璃类共 **38 处**，分布在 **9** 个文件 | 实测逐文件：`InputField(9) / Message(6) / ChatWindow(5) / ChatHistory(5) / Microphone(5) / WindowHeader(3) / VoiceToggle(2) / CharacterPhotoField(2) / ChatIndex(1)`；按 token 分：`text-white(7) / text-white-90(4) / ring-white-40(4) / text-white-40(3) / bg-black-50(3) / bg-black-40(3) / bg-black-35(3) / text-white-60(2) / border-white-10(2) / bg-black-25(2) / 其余 5 种各 1` | 这是"浅色化"的真实工作量；**逐处替换为 token，不重写模板结构**。<br>⚠️ 初稿写"34 处 / 8 文件"是**错的**（漏了 `ChatIndex.vue`，且部分文件漏数）——评审实测发现 |
-| F4 | `--accent` 定义在全局 `:root`（`#10b981`），无任何地方按角色覆盖 | `main.css:9-11` | 简约与沉浸两模式**共用同一个 accent**，本批不引入提取 |
+| F4 | `--accent` 定义在全局 `:root`（`#10b981`），无任何地方按角色覆盖 | `main.css:10-12` | 简约与沉浸两模式**共用同一个 accent**，本批不引入提取 |
 | F4b | daisyUI **实际版本 5.5.18**（本机 `node -e` 读取 `node_modules/daisyui/package.json`）；spec §1 写的 5.5.17 为旧值 | 本机实测 | 仅影响引用准确性；`loading.css` 的内容（`mask-image` + SMIL、无 CSS 动画）在 5.5.18 上成立 |
-| F5 | 用户气泡底色 `color-mix(in srgb, #10b981 70%, black)` = `#0b825a`，白字对比 **4.82:1** | `main.css:60-63`；对比度实算 | 两模式下均已达标。**但**它硬编码了 `#10b981`，若日后 accent 可变就会失效 → 本批改为引用 `var(--accent)` |
+| F5 | 用户气泡底色 `color-mix(in srgb, #10b981 70%, black)` = `#0b825a`，白字对比 **4.82:1** | `main.css:76`；对比度实算 | 两模式下均已达标。**但**它硬编码了 `#10b981`，若日后 accent 可变就会失效 → 本批改为引用 `var(--accent)` |
 | F6 | 会话栏（`SessionList`/`SessionItem`）与 NavBar **已是浅色**（daisyUI 默认主题：`bg-base-200`/`bg-base-100` + 深字），`session-active` 用 accent 40% 打底 | `SessionList.vue:60`、`SessionItem.vue`、`main.css:44-49` | 简约模式窗口变浅后，**全页色调反而统一**；会话栏不改 |
-| F7 | 移动端（<1024px）窗口铺满，**无舞台** | `main.css:23-31`（媒体查询）、`ChatWindow.vue:86`（`hidden lg:block`） | 简约模式在移动端只影响窗口自身；逻辑天然兼容 |
+| F7 | 移动端（<1024px）窗口铺满，**无舞台** | `main.css:23-31`（媒体查询）、`ChatWindow.vue:91`（`hidden lg:block`） | 简约模式在移动端只影响窗口自身；逻辑天然兼容 |
 | F8 | `--user-bubble-bg` / `--overlay-k` 在 master **没有任何声明位** | `git grep -n -E "--(overlay-k|user-bubble-bg)\\s*:"` → 无输出。⚠️ 初稿写「`grep ... frontend/src` → 空」是**错的**：`main.css` 第 33/38/58 行的注释里就提到过这两个名字，grep 会命中——评审实测发现。**故 4B 计划的防蔓延断言必须只查声明位**（`/--overlay-k\s*:/`），不能只查子串 | 本版不引入（砍掉项） |
 | F9 | 头部条（`.h-14 bg-black/40 backdrop-blur`）、输入栏（`bg-black/35 backdrop-blur`）、思考中气泡、引用 chip、示例问题、日期胶囊、名字 pill 都是"深玻璃 + 白字"族 | `WindowHeader.vue:8`、`InputField.vue:406`、`ChatHistory.vue:192,204`、`Message.vue:117`、`main.css` | **浅色模式 = 这一族的整体反转**（不是个别调色） |
 | F10 | `SpeakerIcon` 内部写死 `text-white` / `text-white/40`；`MicIcon`/`SendIcon`/`StopIcon` 继承 `currentColor` | `SpeakerIcon.vue:12,26`；`InputField.vue:392-445`（按钮类名给 `text-white`） | 浅色下需把这两个来源都改为 token |
 | F11 | `localStorage` 在本项目已有先例：`useVoiceToggle`（全局布尔） | `composables/useVoiceToggle.js` | 本批新增 key，**不改** `useVoiceToggle` |
-| F12 | `Character.background_image` 为空时，`ChatWindow` 仍会渲染 `url(undefined)` | `ChatWindow.vue:69`（无 `v-if`） | 空背景图场景本批必须显式处理（§3.6 E2） |
+| F12 | `Character.background_image` 为空时，`ChatWindow` 仍会渲染 `url(undefined)` | `ChatWindow.vue:100-101`（无 `v-if`） | 空背景图场景本批必须显式处理（§3.6 E2） |
 
 ---
 
@@ -231,7 +231,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 }
 ```
 
-**舞台**同理，但作用域在窗口的**兄弟**节点上（`ChatWindow.vue:83-92`）：
+**舞台**同理，但作用域在窗口的**兄弟**节点上（`ChatWindow.vue:88-96`）：
 
 ```css
 .chat-stage-root .stage-blur { /* 保持现状：图 + blur */ }
@@ -273,7 +273,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 舞台 | 模糊图 + `rgba(0,0,0,.35)` | `#e7e5e4` 纯色 | D4B-2 |
 | 头部条 | `bg-black/40 backdrop-blur`（无边框） | `--cbg-surface` + `1px` `--cbg-surface-border` | 浅底上白条需描边才有边界（PR #37 评审 M3 同一结论） |
 | 头部图标（☰/✕） | `text-white`，hover `bg-black/20` | `--cbg-text`，hover `--cbg-hover` | |
-| 语音开关 | `bg-black/50`，图标白 | `--cbg-float`，图标 `--cbg-text` | `SpeakerIcon` 改 `currentColor`（F10） |
+| 语音开关 | `bg-black/50`，图标白 | `--cbg-float`（底）+ `--cbg-text`（图标）| `SpeakerIcon` 改 `currentColor`（F10）；实现用 `.chat-icon-btn-solid` 一个类同时给底与字色——**不要**用 `.chat-float`（其 `color: var(--cbg-text-2)` 会把图标降到白 70%，与右列不符；评审 R-4） |
 | 名字 pill | `bg-black/30` + `white/70` | `--cbg-float-strong` + `--cbg-text` | 13.93:1 |
 | AI 气泡 | `bg-black/35` + blur + 白字 | `--cbg-bubble-ai` + `1px` 描边 + `--cbg-text` | 白底白窗，靠描边分界 |
 | 用户气泡 | `#0b825a` + 白字 | **不变**（同色同字） | 4.82:1 已达标；D4B-7 |
@@ -285,14 +285,14 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | markdown 链接 | `#7dd3fc` | `#0f766e` | 深青，浅底上可读（与"深色底上亮青"同源的明度反转） |
 | 输入栏 | `bg-black/35 backdrop-blur` + 白字 | `--cbg-surface` + `1px` 描边 + `--cbg-text` | |
 | 输入占位符 | `white/40`（未显式设） | `--cbg-text-3`（4.80:1） | |
-| 麦克风/发送键 | 白图标，未激活 `bg-black/20`→`bg-neutral-700` | 图标 `--cbg-text`；未激活 `--cbg-float` | 语音聆听/发送激活态仍用 `--accent` |
+| 麦克风/发送键 | 白图标，未激活 `bg-neutral-700` | 图标 `--cbg-text`；未激活 `--cbg-hover`（`.chat-btn-idle`） | **激活态必须用 `.chat-icon-btn-active` 类**，不得在元素上写 `bg-[var(--accent)]`/`text-white` 工具类——未分层语义类会压掉 utilities，绿底会静默消失（评审 R-4） |
 | 错误横幅（语音） | `text-red-300` | `#b91c1c` | 浅底上红字可读 |
 | 骨架 shimmer | 白 8%→18% 渐变 | 深 8%→14% 渐变 | 浅底上压深 |
 | 空态 introduction | `text-white/90` | `--cbg-text-2` | 7.30:1 |
 | 示例问题胶囊 | `bg-black/25` + `white/90` | `--cbg-float` + `--cbg-text` + 描边 | |
 | 思考中气泡 | 同 AI 气泡（白点） | 同 AI 气泡（深点） | `.thinking-dot` 用 `currentColor`（4A 已引入该类） |
 | 引用浮层（`ChatWindow` 内 modal） | `bg-neutral-900/95` + 白字 | `--cbg-surface` + `--cbg-text`（浅色弹层） | 它是窗口内容的一部分 |
-| `focus-visible` 环 | `ring-white/40`（仅 `ChatHistory`/`InputField` 有；`.btn` 元素由 daisyUI 自带，不加） | `--cbg-ring`（同样只加在非 `.btn` 元素上） | |
+| `focus-visible` 环 | `ring-white/40`（**四处**：`ChatHistory`/`InputField`，加 4A 新增的 `VoiceToggle`/`CharacterPhotoField`；`.btn` 元素由 daisyUI 自带，不加） | `--cbg-ring`（同样只加在非 `.btn` 元素上；沉浸态 `rgba(255,255,255,0.40)` 与 `ring-white/40` 同色 → 零回归，简约态自动变深可见） | **必须 token 化**：保留字面量会让 4A 的无障碍收益在简约模式静默失效（评审 R3-2） |
 
 **显式不改**：会话栏全部、NavBar、消息分组间距/字号/圆角、气泡 `max-width: 75%`、窗口 3:5 几何。
 
@@ -329,7 +329,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 |---|------|------|
 | E1 | `localStorage` 不可用（隐私模式/被禁用） | `try/catch` 包裹读写，失败则退化为"内存态 + 默认关闭"，不抛错、不影响聊天 |
 | E2 | `character.background_image` 为空 | **沉浸模式**：现状渲染 `url(undefined)`（F12）→ 改为 **`.no-bg` 兜底**：不渲染背景图与 `.window-scrim`，改用**深色底 + 白色文字**（即 `.no-bg` 覆盖 `--cbg-window: #1c1917` **且**把该子树内的 `--cbg-text/-2/-3` 一并覆写为白系——**否则沿用沉浸模式的 token 会在深底上得到深字**）。**简约模式**：本就无图，不受影响 |
-| E3 | 图片加载失败（URL 有效但 404/超时） | 同 E2 走 `.no-bg` 兜底；`@error` 置 `bgFailed` → 不显示破图。**注意**：`.no-bg` 与 `.chat-simple` 可能同时存在（无图 + 简约），此时以 `.chat-simple` 的浅色为准（CSS 顺序让 `.chat-simple` 在后）——实施时需明确验证这一组合 |
+| E3 | 图片加载失败（URL 有效但 404/超时） | 同 E2 走 `.no-bg` 兜底。**检测方式必须用 `new Image()` 预探测**：`error` 事件不会为 CSS `background-image` 触发，挂在 `<div>` 上的 `@error` 是死代码（评审 R-5 实测）。**组合态**：`.no-bg` 与 `.chat-simple` 可同时存在，CSS 源顺序让 `.chat-simple` 的浅色取胜（§3.4 有说明） |
 | E4 | 切换角色 | `:key` 重建 → 新实例按新 `character_id` 读设置；**不会**继承上一个角色的状态 |
 | E5 | 移动端 | 无舞台；窗口本身按简约 token 渲染（F7），其余逻辑一致 |
 | E6 | 弹层打开时切换角色 | `:key` 重建会卸载弹层与其状态（关闭）——可接受，不需额外处理 |
@@ -394,7 +394,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 
 | 命令 | 期望 |
 |------|------|
-| `cd frontend && npx vitest run` | 现有 65 与 4A 新增 9 不回归；`useChatBg.test.js`（7 条）、`chatBgTokens.test.js`（8 条）、`ChatWindow.test.js`（5 条）、`WindowHeader.test.js`（4 条）全绿；合计 **98** |
+| `cd frontend && npx vitest run` | 现有 65 与 4A 新增 10 不回归；本批新增 24 条：`useChatBg.test.js`（7）、`chatBgTokens.test.js`（6）、`ChatWindow.test.js`（5）、`WindowHeader.test.js`（4）、`chatBgLiterals.test.js`（1，颜色字面量门禁）、`chatBgScrim.test.js`（1，抽屉遮罩）；合计 **99** |
 | `cd frontend && npm run build` | exit 0 |
 | 产物核对 | 构建产物 CSS 含 `--cbg-window` / `.chat-simple` / `.stage-simple` / `#fafaf9` / `#e7e5e4`；沉浸模式原有值（`rgba(0,0,0,.35)`、`blur(24px)`）**仍在** |
 
