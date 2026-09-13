@@ -91,16 +91,18 @@
 - **props**：`friend`
 - **emits**：`closed`（✕ → ChatIndex 执行 router.back()）
 - **state**：`history = ref([])`（D-L1 所有权）；`isStreaming = ref(false)`；`thinking = ref(false)`（发送后、首 content 前）
-- **持有**：`chatHistoryRef`、`inputFieldRef`、`headerRef`；`useBackgroundAdaptive(friend.character.background_image)` 与 `useChatSettings()`
+- **持有**：`chatHistoryRef`、`inputFieldRef`、`headerRef`；`useBackgroundAdaptive(friend.character.background_image)`（2026-09-11：本期不实施）与 `useChatSettings()`
 - **方法**：
   - `pushBackMessage(msg)` / `appendToLastMessage(delta)` / `pushFrontMessage(msg)`：现 ChatField 同名逻辑迁移（append 支持 `{citations}` 对象与 string delta 两种）
   - `sendMessage(text)`：`isStreaming=false && text.trim()` 时 `inputFieldRef.handleSend(text)`（D-L3）
   - `handleStreamState({streaming, thinking})`：InputField 上抛，驱动"■ 停止"显示与窗口级 isStreaming
   - `scrollToBottom`（rAF 节流版，LD §7）
 - **模板**：3:5 窗口容器（LD §8.1）+ flex column：WindowHeader（56px shrink-0）→ ChatHistory（flex-1 min-h-0）→ InputField（shrink-0）
-- **样式职责**：窗口背景图 + 渐变蒙层（`--overlay-k` 变量）+ 舞台背景（桌面）；`--accent`/`--overlay-k` 经 `useBackgroundAdaptive` 绑定到窗口根节点 style
+- **样式职责**：窗口背景图 + 渐变蒙层（固定 0.25→0.60）+ 舞台背景（桌面）（2026-09-11：`--overlay-k` 自适应与 `useBackgroundAdaptive` 本期不实施，见 design §3/§4）
 
 ### 3.5 `components/chat/chat_window/WindowHeader.vue`【新】
+
+> **2026-09-11 实施偏离**：不再通过 props/emits 传递设置——WindowHeader 与 InputField 均直接使用 `useChatSettings()` **模块级单例**（本文件 D-L7 本就要求二者共享同一状态，单例下 props 传递是冗余的）。因此下文的 `simpleBackground` prop 与 `toggleSimple`/`toggleAutoSend` emits **不实现**。
 
 - **props**：`character`、`simpleBackground`（useChatSettings 注入）
 - **emits**：`close`、`toggleSimple`、`toggleAutoSend`
@@ -122,6 +124,8 @@
   - 思考中：`thinking` → 列表尾部三点动画气泡
 - **分组/日期/时间渲染**：由 Message.vue + 纯函数 `groupMessages` 计算（LD §6.4），ChatHistory 只传 `showHeader`/`dateLabel` 等派生 props
 - **布局**：`flex:1 min-h-0 overflow-y-auto`，`px-4 py-3`
+
+> **2026-09-11 变更（L6）**：思考中指示器由 daisyUI `<span class="loading loading-dots">` 换为**项目自绘三点**（`.thinking-dot`）——daisyUI 的 `loading-*` 动画位于 `mask-image` 内嵌 SVG 的 SMIL 中，CSS 无法在 `prefers-reduced-motion` 下停掉（已核实 `daisyui/components/loading.css` 5.5.17）。
 
 ### 3.7 `Message.vue`【改造】
 
@@ -160,6 +164,8 @@
 - **错误映射**：`vad_init_failed` / `mic_permission_denied` / `asr_failed` → `emit('error', kind)`，由 InputField 渲染内联提示（不卡死）
 
 ### 3.10 `useBackgroundAdaptive.js`【新】
+
+> **2026-09-11 本期不实施**：本模块随 Phase 4 范围改写一并作废（主色固定 + 可读性由文字描边承托）。详见 `2026-09-11-chat-ui-phase4-readability-a11y-design.md` §3/§4。以下契约保留备查。
 
 - **签名**：`useBackgroundAdaptive(imageUrl)` → `{ overlayK, accent, userBubbleBg, ready }`（均为 ref）；`userBubbleBg = resolveUserBubble(accent)`（见 §8.2，review P0-2）
 - **流程**（S §6.5 公式）：
@@ -367,6 +373,8 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 
 ### 8.2 Tailwind 4 `@theme` 落地建议（LD §14.6 任务）
 
+> **2026-09-11 本期不实施**：`--user-bubble-bg` 与 `resolveUserBubble` 三档阶梯取消——己方气泡为固定不透明色，实测白字 4.85:1 已达标，无需按 accent 解析。
+
 在 `frontend/src/assets/main.css` 的 `@theme` 中注册语义 token，用 CSS 变量桥接运行时值：
 
 ```css
@@ -377,9 +385,9 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
   --color-bubble-user: var(--user-bubble-bg);   /* JS 解析值：resolveUserBubble(accent)，保证白字 ≥4.5:1 */
 }
 ```
-- 运行时动态值（accent/overlay/user-bubble-bg）经 ChatWindow 根节点 `:style` 注入同名 CSS 变量覆盖（CSS 变量级联天然生效于子树）。
-- 己方气泡背景由纯函数 `resolveUserBubble(accent)` 解析（review P0-2 改良方案）：mix 70%→60%→50% 三档取首个白字对比度 ≥4.5:1 的档位，全部不达标 → `#10b981`@70%（对比度 ≈4.85）。固定 mix 无法覆盖任意亮色 accent（如黄色 @70% 仅 ≈3.2:1），故必须阶梯寻档。
-- `--overlay-k` 用于两个渐变停点 `rgba(0,0,0,0.25*K) 0%, rgba(0,0,0,0.60*K) 100%` → 直接写 `linear-gradient(180deg, rgba(0,0,0,calc(0.25 * var(--overlay-k))) 0%, rgba(0,0,0,calc(0.60 * var(--overlay-k))) 100%)`（CSS calc 支持）。
+- 运行时动态值（accent/overlay/user-bubble-bg）经 ChatWindow 根节点 `:style` 注入同名 CSS 变量覆盖（CSS 变量级联天然生效于子树）。（2026-09-11：本期不实施——accent 固定 `#10b981`，无运行时动态值需要注入。）
+- 己方气泡背景由纯函数 `resolveUserBubble(accent)` 解析（review P0-2 改良方案）：mix 70%→60%→50% 三档取首个白字对比度 ≥4.5:1 的档位，全部不达标 → `#10b981`@70%（对比度 ≈4.85）。固定 mix 无法覆盖任意亮色 accent（如黄色 @70% 仅 ≈3.2:1），故必须阶梯寻档。（2026-09-11：本期不实施——accent 固定，现有 70% 档实测白字 4.85:1 已达标。）
+- `--overlay-k` 用于两个渐变停点 `rgba(0,0,0,0.25*K) 0%, rgba(0,0,0,0.60*K) 100%` → 直接写 `linear-gradient(180deg, rgba(0,0,0,calc(0.25 * var(--overlay-k))) 0%, rgba(0,0,0,calc(0.60 * var(--overlay-k))) 100%)`（CSS calc 支持）。（2026-09-11：本期不实施——蒙层固定 0.25→0.60 写死值。）
 - 舞台层：`filter: blur(24px) saturate(1.35); transform: scale(1.1);` + 叠加 `rgba(0,0,0,0.35)`（2026-09-07 实机调优值；Phase 4 自适应时以 0.35 为基准系数）。
 - 复杂度评估：全部为既有 CSS 能力（color-mix/calc/自定义属性），无需新依赖；Tailwind 4 与任意值类（`w-[min(420px,...)]`）均支持，或按 8.1 用少量自定义 class 落 `main.css`（推荐后者，可读性高）。
 
@@ -404,7 +412,7 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 | `src/utils/chatFormat.js` | `groupMessages(history)` | 同 role 连续 → 一组；role 变化 → 新组；同 role 但时间差 >5min → 新组；首条恒为组首 |
 | | `dateLabel(prev, cur)` | 同一天 → null；昨天 → "昨天"；今天 → "今天"；跨日 → "M月D日" |
 | | `formatTime(iso)` | → "HH:mm" |
-| `src/utils/backgroundAdaptive.js` | `computeOverlayK(avg)` | avg=0.9 → ≈1.32（深）；avg=0.1 → 0.6（浅）；avg=0.5 → 0.6；K 随 avg 单调递增；边界 clamp [0.6,1.5] |
+| `src/utils/backgroundAdaptive.js` | `computeOverlayK(avg)` | avg=0.9 → ≈1.32（深）；avg=0.1 → 0.6（浅）…（2026-09-11：本期不实施，与 §3.10 一并作废） |；avg=0.5 → 0.6；K 随 avg 单调递增；边界 clamp [0.6,1.5] |
 | | `extractDominantColor(pixels)` | 纯色图 → 该色；空输入 → null |
 | | `contrastRatio(fg, bg)` | 已知对数值断言（#10b981 vs 白 ≈2.54；#10b981@70% vs 白 ≈4.85） |
 | | `resolveUserBubble(accent)` | `#10b981` → 70% 档达标（≈4.8）；高亮黄（rgb(250,200,50)）→ 70% 3.18 / 60% 4.20 不达标，**50% 档达标（≈5.66，不回退）**（R6 修正）；回退分支为理论兜底；任一返回值的白字对比度断言 ≥4.5 |
@@ -462,20 +470,21 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 | 修改 | `Microphone.vue`（受控化：start/pause/destroy/retry + 音量波形 + 错误 emits；移除 KeepAlive 依赖） |
 | 验收 | spec Phase 3 断言 1~6 |
 
-### Phase 4 — 自适应与质感
+### Phase 4 — 可读性修复与无障碍（2026-09-11 目标改写）
 
 | 动作 | 文件 |
 |------|------|
-| 新增 | `frontend/src/composables/useBackgroundAdaptive.js`、`src/utils/backgroundAdaptive.js`、`src/composables/useChatSettings.js` |
-| 修改 | `ChatWindow.vue`（蒙层/accent 变量绑定、简约模式分支） |
-| 修改 | `WindowHeader.vue`（设置弹层：简约背景 + 语音自动发送） |
-| 修改 | `VoiceToggle.vue`、`CharacterPhotoField.vue`（aria-label） |
-| 修改（可选） | `views/create/character/components/BackgroundImage.vue`（聊天效果预览 + 亮度提示） |
-| 验收 | spec Phase 4 断言 1~4 |
+| 新增 | `frontend/src/utils/contrast.js`（+ 单测）、`src/composables/useChatSettings.js`（+ 单测，**模块级单例**） |
+| 修改 | `Message.vue`（文字容器挂描边、代码块排除）、`main.css`（描边变量 + 骨架 reduce）、`ChatHistory.vue`（思考中指示器换自绘三点） |
+| 修改 | `ChatWindow.vue`（简约背景分支 + 背景图缺失/加载失败兜底）、`WindowHeader.vue`（⚙ 设置弹层） |
+| 修改 | `VoiceToggle.vue`、`CharacterPhotoField.vue`（`<div>` → `<button>` + aria-label/alt） |
+| 修改 | `InputField.vue`（语音自动发送 800ms） |
+| 不做 | `useBackgroundAdaptive.js`、`utils/backgroundAdaptive.js`、创建页预览 |
+| 验收 | spec Phase 4 断言 1~6（改口径后） |
 
 ### 全局
 
-- `main.css`：§8.2/8.3 token 与类（Phase 1 先落布局类，Phase 4 补自适应）；`.no-scrollbar` 从 ChatHistory scoped 样式**迁移至 main.css 全局**（SessionList 复用，review P2-4）。
+- `main.css`：§8.2/8.3 token 与类（Phase 1 先落布局类，Phase 4 补自适应）；`.no-scrollbar` 从 ChatHistory scoped 样式**迁移至 main.css 全局**（SessionList 复用，review P2-4）。（2026-09-11：Phase 4 实际落的是文字描边变量 `--msg-text-shadow` + 骨架 reduced-motion 兜底；§8.2 的 accent/`--user-bubble-bg` 自适应部分本期不实施。）
 - 每 Phase 独立 commit；Phase 1 合入后旧弹窗路径被跳转替代，功能等价可回滚。
 
 ---
@@ -487,7 +496,7 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 | 新依赖 lock 变化 → Docker build 时 npm ci 重跑（5~6 分钟，npmmirror 已配） | Phase 2 合入时一次性引入 marked+dompurify；vitest 放 devDeps 不影响运行时镜像层缓存策略（Dockerfile 只 COPY package*.json，仍会重跑 ci，属已知成本） |
 | ChatField 下线导致漏改引用 | grep 已核实仅 2 处；Phase 1 验收含 Vue DevTools 单实例断言 |
 | 会话切换竞态（旧会话 SSE 回调晚到污染新会话 history） | `:key` 重建 + `processId` 双重防护：旧 InputField 已卸载，其闭包回调不会再触发 emits（组件实例已销毁）；新实例 processId 从 1 起 |
-| 背景采样竞态（切会话后旧图 onload 覆盖新值） | useBackgroundAdaptive `seq` 令牌（3.10） |
+| 背景采样竞态（切会话后旧图 onload 覆盖新值） | useBackgroundAdaptive `seq` 令牌（3.10）（2026-09-11：本期不实施——无背景采样，该竞态不存在） |
 | 移动端双抽屉并存（全局导航抽屉 + 会话抽屉）易混淆 | 触发位置/图标区分（全局=NavBar 汉堡，会话=页面内按钮）；会话抽屉加遮罩与标题"会话"；留待 Phase 1 手工验收确认 |
 | dev 模式背景采样跨域（`127.0.0.1:5173` 不在 CORS 白名单）→ 自适应恒为 fallback | 约定：dev 经 `http://localhost:5173` 访问；确需 127.0.0.1 则在 backend/.env 的 `DJANGO_CORS_ORIGINS` 增加 `http://127.0.0.1:5173`（review P2-2；生产 docker 同源无此问题） |
 
@@ -511,7 +520,7 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 | Q3 | ~~历史消息时间戳与引用~~ ✅ **已拍板（Q3a=A、Q3b=A）**：get_history 增加 `created_at`（ISO）；Message 增加 `citations` JSONField（migration 0022）+ chat.py 保存时写入 + get_history 返回。与 Q4-A 合并为**同一个后端批次**（一次测试、一次镜像重建、一次部署） | — | 已定稿：影响 §4.5、Phase 2 断言 3/5、后端批次范围见 §13 末 |
 | Q4 | ~~引用"展开来源文本"的数据源~~ ✅ **已拍板（方案 A）**：citations 全程携带 `content` 原文（`{index,title,chunk_index,content}` 四元组）——chat.py 提取标记行下方正文、同构落库（Message.citations）、同构下发（SSE + get_history）；前端 chips 点击浮层显示原文（限高滚动）。向后兼容（增量字段） | — | 已定稿：并入 Q3 的同一后端批次（范围见 §13 末） |
 | Q5 | ~~前端测试基建~~ ✅ **已拍板（方案 A）**：引入 vitest + jsdom（devDeps），仅为纯逻辑写单测（LD §9.2 清单）；不引入组件 E2E，交互类验收走 spec 手工清单 | — | 已定稿：影响 §9、package.json scripts、Phase 验收执行方式 |
-| Q6 | ~~语音自动发送开关的 UI 落点~~ ✅ **已拍板（方案 A）**：放 WindowHeader"⚙ 设置"弹层，与"简约背景"开关并列；localStorage 持久化（useChatSettings） | — | 已定稿：影响 §3.5 WindowHeader、§4.6 语音流程 |
+| Q6 | ~~语音自动发送开关的 UI 落点~~ ✅ **已拍板（方案 A）**：放 WindowHeader"⚙ 设置"弹层，与"简约背景"开关并列；localStorage 持久化（useChatSettings）（2026-09-11 补注：入口已按此实现；设置状态经模块级单例共享，未走 §3.5 的 props/emits） | — | 已定稿：影响 §3.5 WindowHeader、§4.6 语音流程 |
 | Q7 | ~~聊天页是否隐藏汉堡 + ChatIcon 去向~~ ✅ **已拍板**：**保留汉堡（方案 B）**，并将"聊天"作为第 5 个入口加进全局抽屉（`ChatIcon` → `/chat/`）；`/chat/` 为**静态会话中心（方案 b）**：会话列表 + 舞台空态（"从左侧选择一个好友开始聊天"，`<lg` 附"选择好友"按钮打开会话抽屉），**不自动跳转** | — | 已定稿：路由拆两条（`/chat/` + `/chat/:character_id/`）、NavBar 抽屉 +1 入口、ChatIndex 增加 `isHub` 空态 |
 | Q8（附带） | ~~停止生成后是否加标记~~ ✅ **已拍板（方案 A）**：不加标记，保留已生成文本 | — | 已定稿：影响 §4.4 停止分支 |
 
