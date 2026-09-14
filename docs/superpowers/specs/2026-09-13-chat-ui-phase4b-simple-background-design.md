@@ -151,8 +151,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 |------|-------|-----|------|
 | 舞台底 | （**不立变量**，直接字面量 `#e7e5e4`） | `#e7e5e4` | 舞台纯色（替代模糊图 + 压暗）。实现在 `.chat-stage-root.stage-simple .stage-dim { background: #e7e5e4 }`——单值且只有一个消费者，**不声明 CSS 变量**（故计划里也没有 `--cbg-stage`，这是有意的） |
 | 窗口底 | `--cbg-window` | `#fafaf9` | 角色之窗背景 |
-| 气泡底（AI） | `--cbg-bubble-ai` | `#ffffff` | AI 消息气泡 |
-| 气泡描边（AI） | `--cbg-bubble-ai-border` | `#e7e5e4` | 与窗口底区分（白底白窗时唯一分界） |
+| 气泡底（AI） | `--cbg-bubble-ai` | `#f0efee`（暖灰浮层，与窗口明度差 −0.091） | AI 消息气泡 |
 | 表面底（头部/输入/弹层） | `--cbg-surface` | `#ffffff` | 头部条、输入栏、设置弹层 |
 | 表面描边 | `--cbg-surface-border` | `#e7e5e4` | 同上（浅色下必需，见 §3.5） |
 | 浮层底（chip/pill/胶囊） | `--cbg-float` | `#f5f5f4` | 引用 chip、示例问题、日期胶囊 |
@@ -275,7 +274,9 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 
 **一处必须补偿的盒模型变更**：浅色模式下 AI 气泡需要 `1px` 描边才能与窗口底（`#ffffff` vs `#fafaf9`）区分，而沉浸模式下该描边取 `transparent`。但**加边框会改变盒模型**——`.msg-bubble` 现为 `padding: 8px 12px`（`main.css:59-68`），加 `1px` 边框后气泡外尺寸宽高各 +2px，破坏"零视觉回归"。
 
-**补偿方案**：`.msg-bubble` 统一加 `border: 1px solid transparent`，并把 `padding` 改为 `7px 11px`，使**外尺寸逐像素不变**。验收见 §6-断言 B6（截图对照）与 B8（产物核对）。
+**补偿方案**：`.msg-bubble` 统一加 `border: 1px solid transparent`，并把 `padding` 改为 `7px 11px`，使**外尺寸逐像素不变**。
+
+> ⚠️ **2026-09-14 已作废**：验收反馈"对话框扎眼"后取消了 AI 气泡描边（改暖灰浮层分层，见 §3.5.3），该补偿随之失效——`padding` 已回退为 `8px 12px`、`.msg-bubble` 的 transparent 边框已移除。**本段保留仅为记录弯路，实施以 §3.5.3 为准。**
 
 > 这是本批唯一需要动几何值的地方，**必须用截图逐项确认**，不得凭推理认为"应该没问题"。
 
@@ -302,7 +303,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 设置弹层开关（轨道/滑块） | OFF 轨道 `rgba(255,255,255,0.40)`；ON 轨道 `var(--accent)`；滑块 `#ffffff` | OFF `--cbg-switch-off`；ON `--cbg-switch-on`；滑块 `--cbg-switch-knob`（`#ffffff`，两模式同值） | **简约态必须换色**：`#f5f5f4` 轨道贴在 `#ffffff` 头部上仅 **1.09:1**，OFF 状态几乎不可见（评审 R6-1 实算）；ON 态白滑块 vs 裸 accent 仅 **2.54:1**，低于 WCAG 1.4.11 的 3:1。改用 `#78716c` / `#0b825a` 后为 **4.80:1 / 4.82:1**。**沉浸态按零回归不变**（其白滑块 vs OFF 轨道 1.78:1 亦偏低，属既有观感，本批不动） |
 | 头像 pill（`CharacterPhotoField`） | `bg-black/50`（0.50） | **`--cbg-glass-btn`**（0.50，保真） | **不得**用 `--cbg-float`(0.25)：会让头部件两个 0.50 胶囊同时变浅（评审 N5） |
 | 名字 pill | `bg-black/30` + `white/70` | `--cbg-float-strong` + `--cbg-text` | 13.93:1 |
-| AI 气泡 | `bg-black/35` + blur + 白字 | `--cbg-bubble-ai` + `1px` 描边 + `--cbg-text` | 白底白窗，靠描边分界 |
+| AI 气泡 | `bg-black/35` + blur + 白字 | `--cbg-bubble-ai`（`#f0efee`）+ `--cbg-text`，**不描边** | 验收反馈"对话框扎眼"：`#ffffff` 与窗口仅 1.0444 明度差、描边 1.2022 也几乎不可见，气泡呈贴上去的白卡片；改暖灰后靠明度差 −0.091 分层（见 §3.5.3） |
 | 用户气泡 | `#0b825a` + 白字 | **不变**（同色同字） | 4.82:1 已达标；D4B-7 |
 | 时间戳 / hover | `text-white/60` | `--cbg-text-2` | 7.30:1 |
 | 日期胶囊 | `bg-black/25` + `white/60` | `--cbg-float` + `--cbg-text-2` | |
@@ -320,6 +321,20 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 思考中气泡 | 同 AI 气泡（白点） | 同 AI 气泡（深点） | `.thinking-dot` 用 `currentColor`（4A 已引入该类） |
 | 引用浮层（`ChatWindow` 内 modal） | `bg-neutral-900/95` + `border-white/10` + 白字 | **`--cbg-modal-bg` + `--cbg-modal-border`** + `--cbg-text`/`--cbg-text-2` | 用专属 token 而**不是** `--cbg-surface`(0.40)：后者会让面板从近乎实心变成 40% 玻璃且失去描边（评审 N5） |
 | `focus-visible` 环 | `ring-white/40`（**四处**：`ChatHistory`/`InputField`，加 4A 新增的 `VoiceToggle`/`CharacterPhotoField`；`.btn` 元素由 daisyUI 自带，不加） | `--cbg-ring`（同样只加在非 `.btn` 元素上；沉浸态 `rgba(255,255,255,0.40)` 与 `ring-white/40` 同色 → 零回归，简约态自动变深可见） | **必须 token 化**：保留字面量会让 4A 的无障碍收益在简约模式静默失效（评审 R3-2） |
+
+#### 3.5.3 AI 气泡分层方式修订（2026-09-14，验收反馈"对话框特别扎眼"）
+
+**根因（实测数据）**：初版简约模式气泡底 `#ffffff`、窗口底 `#fafaf9` —— 明度差仅 **1.0444**，
+描边 `#e7e5e4` vs 窗口也仅 **1.2022**。即气泡**不是靠明度分层，而是靠一条几乎看不见的硬边**，
+观感上像"贴在纸上的一张张白卡片"。对照沉浸模式：气泡是 `rgba(0,0,0,0.35)` 深色玻璃，
+与背景图是真实明度反差，故不扎眼。
+
+**处置**：气泡改暖灰浮层 `#f0efee`（与窗口明度差 **−0.091**），**两模式都取消描边**。
+对比度不受影响：正文 vs 气泡 15.23:1（窗口底上 16.74:1），均远高于 4.5。
+
+**连带修掉一处我自己引入的回归**：初版为补偿"AI 气泡加 1px 边框"把 `.msg-bubble` 的
+`padding` 由 `8px 12px` 改成 `7px 11px`；描边取消后该补偿失效，文本区窄了 2px。
+已回退为 master 原值，并在测试里锁定「`padding: 8px 12px` + 无边框」。
 
 #### 3.5.2 验收反馈修复（2026-09-14，B 端实测）
 
