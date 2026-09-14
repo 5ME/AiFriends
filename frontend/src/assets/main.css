@@ -211,6 +211,14 @@
   color: var(--cbg-text);
   background-color: var(--cbg-hover);
 }
+
+/* 输入区图标按钮的"空托底"（未激活时的圆形底盘）。
+   与 .chat-btn-idle 同值，但语义不同：后者含 :disabled 态语义（发送键空内容时用），
+   前者用于"本身可用、只是未激活"的按钮（麦克风）。 */
+.chat-icon-btn-tray {
+  color: var(--cbg-text);
+  background-color: var(--cbg-hover);
+}
 .chat-btn-idle:disabled { opacity: 0.5; }
 
 /* VoiceToggle 专用：底色用头部胶囊族（0.50 保真），图标用**主文字**色 */

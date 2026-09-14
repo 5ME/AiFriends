@@ -391,7 +391,7 @@ defineExpose({focus, handleSend})
     <button type="button"
             class="chat-icon-btn chat-focus w-12 h-12 shrink-0 rounded-full flex items-center justify-center cursor-pointer
                    transition-colors tooltip tooltip-top"
-            :class="[VOICE_STATES.LISTENING, VOICE_STATES.TRANSCRIBING].includes(micState) ? 'chat-icon-btn-active' : ''"
+            :class="[VOICE_STATES.LISTENING, VOICE_STATES.TRANSCRIBING].includes(micState) ? 'chat-icon-btn-active' : 'chat-icon-btn-tray'"
             :disabled="micState === VOICE_STATES.TRANSCRIBING"
             :aria-label="micState === VOICE_STATES.LISTENING || micState === VOICE_STATES.TRANSCRIBING ? '取消语音输入' : '语音输入'"
             :data-tip="micState === VOICE_STATES.LISTENING || micState === VOICE_STATES.TRANSCRIBING ? '取消' : '语音输入'"

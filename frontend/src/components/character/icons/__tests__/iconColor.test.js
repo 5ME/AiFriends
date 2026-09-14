@@ -11,6 +11,8 @@
 // 若图标又写死白色，下面的断言立刻红。
 import { describe, expect, it, vi } from 'vitest'
 import { createApp, h } from 'vue'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import MicIcon from '@/components/character/icons/MicIcon.vue'
 import SendIcon from '@/components/character/icons/SendIcon.vue'
 import StopIcon from '@/components/character/icons/StopIcon.vue'
@@ -49,6 +51,17 @@ describe('输入区图标必须继承父级 color（简约模式可见性的前�
 
   it('StopIcon 不写死白色（激活态由 .chat-icon-btn-active 给白字）', () => {
     expect(classOf(mountInto(StopIcon, {}, 'chat-icon-btn-active'))).not.toContain('text-white')
+  })
+})
+
+describe('输入区按钮的托底一致性（验收反馈：麦克风裸图标、发送键有托底）', () => {
+  it('麦克风未激活态挂 .chat-icon-btn-tray（与发送键同一族）', () => {
+    const src = readFileSync(
+      path.join(process.cwd(), 'src/components/character/chat_field/input_field/InputField.vue'),
+      'utf8',
+    )
+    // 三分支：激活=绿实心、未激活=托底、二者必居其一
+    expect(src).toContain("'chat-icon-btn-active' : 'chat-icon-btn-tray'")
   })
 })
 
