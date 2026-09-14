@@ -296,6 +296,7 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 窗口阴影 | `0 24px 64px rgba(0,0,0,.45)` | `0 24px 64px rgba(28,25,23,.18)` | 浅底上重阴影显脏 |
 | 舞台 | 模糊图 + `rgba(0,0,0,.35)` | `#e7e5e4` 纯色 | D4B-2 |
 | 头部条 | `bg-black/40 backdrop-blur`（无边框） | `--cbg-surface` + `1px` `--cbg-surface-border` | 浅底上白条需描边才有边界（PR #37 评审 M3 同一结论） |
+| 头部图标（☰/✕/⚙） | 透明（无托盘） | **`.chat-icon-btn-solid`**（与语音开关/头像 pill 同一托盘） | 验收反馈：同排「喇叭有底、齿轮没有」不协调；三个按钮统一为 0.50 胶囊族，观感一致（复审追加，详见 §3.5.2） |
 | 头部图标（☰/✕） | `text-white`，hover `bg-black/20` | `--cbg-text`，hover `--cbg-hover` | |
 | 语音开关 | `bg-black/50`（0.50），图标白，hover `bg-black/60` | `--cbg-glass-btn` + `--cbg-text`；hover `--cbg-glass-btn-hover` | 实现用 `.chat-icon-btn-solid` 一个类同时给底与字色。**不得**用 `--cbg-float`(0.25)：那会让胶囊暗度减半（评审 N5）；`SpeakerIcon` 改 `currentColor`（F10） |
 | 设置弹层开关（轨道/滑块） | OFF 轨道 `rgba(255,255,255,0.40)`；ON 轨道 `var(--accent)`；滑块 `#ffffff` | OFF `--cbg-switch-off`；ON `--cbg-switch-on`；滑块 `--cbg-switch-knob`（`#ffffff`，两模式同值） | **简约态必须换色**：`#f5f5f4` 轨道贴在 `#ffffff` 头部上仅 **1.09:1**，OFF 状态几乎不可见（评审 R6-1 实算）；ON 态白滑块 vs 裸 accent 仅 **2.54:1**，低于 WCAG 1.4.11 的 3:1。改用 `#78716c` / `#0b825a` 后为 **4.80:1 / 4.82:1**。**沉浸态按零回归不变**（其白滑块 vs OFF 轨道 1.78:1 亦偏低，属既有观感，本批不动） |
@@ -319,6 +320,24 @@ ChatWindow.vue                      ← 拥有 simpleBg 状态（每个会话一
 | 思考中气泡 | 同 AI 气泡（白点） | 同 AI 气泡（深点） | `.thinking-dot` 用 `currentColor`（4A 已引入该类） |
 | 引用浮层（`ChatWindow` 内 modal） | `bg-neutral-900/95` + `border-white/10` + 白字 | **`--cbg-modal-bg` + `--cbg-modal-border`** + `--cbg-text`/`--cbg-text-2` | 用专属 token 而**不是** `--cbg-surface`(0.40)：后者会让面板从近乎实心变成 40% 玻璃且失去描边（评审 N5） |
 | `focus-visible` 环 | `ring-white/40`（**四处**：`ChatHistory`/`InputField`，加 4A 新增的 `VoiceToggle`/`CharacterPhotoField`；`.btn` 元素由 daisyUI 自带，不加） | `--cbg-ring`（同样只加在非 `.btn` 元素上；沉浸态 `rgba(255,255,255,0.40)` 与 `ring-white/40` 同色 → 零回归，简约态自动变深可见） | **必须 token 化**：保留字面量会让 4A 的无障碍收益在简约模式静默失效（评审 R3-2） |
+
+#### 3.5.2 验收反馈修复（2026-09-14，B 端实测）
+
+**① 简约模式下输入区图标几乎不可见** —— 根因是三个图标组件（`MicIcon`/`SendIcon`/`StopIcon`）
+内部写死 `class="text-white"`，**压过**父级按钮 `.chat-icon-btn/.chat-btn-idle` 的 color token；
+而 `text-white` 在颜色门禁的白名单里（依据是"己方气泡绿底白字"），**门禁因此放行**。
+
+> 教训：白名单只对"它自己的适用场景"成立。同一类名在别处可能正是缺陷根源——门禁的
+> 白名单机制天然有盲区，需配合"组件级行为断言"补位（已加 `iconColor.test.js` 四条）。
+
+处置：三个图标去掉写死的 `text-white`（改继承父级 color）；`InputField` 的发送按钮
+去掉无条件的 `text-white`（它压过 `.chat-btn-idle`）。简约模式下图标取 `--cbg-text-3`
+深灰，可见。
+
+**② 头部件图标托盘不一致** —— 语音开关与头像 pill 用 0.50 胶囊底，而 ☰/✕/⚙ 透明，
+同排观感不协调。处置：三个按钮统一改用 `.chat-icon-btn-solid` + `chat-focus`。
+- 沉浸模式：托盘同为 `rgba(0,0,0,0.50)`，与语音开关一致（**属有意变更**，非回归）
+- 简约模式：托盘 `#f5f5f4`，与头像 pill 一致
 
 #### 3.5.1 允许的观感归并清单（评审 N5 的处置）
 
