@@ -55,7 +55,7 @@ onBeforeUnmount(() => {
     <div class="flex items-center gap-2">
       <!-- 移动端会话抽屉入口（spec §4.2「头部菜单按钮」；lg:hidden = 桌面端列表常驻无需） -->
       <button type="button"
-              class="lg:hidden chat-icon-btn btn btn-sm btn-circle btn-ghost"
+              class="lg:hidden chat-icon-btn-solid chat-focus btn btn-sm btn-circle btn-ghost"
               aria-label="打开会话列表"
               data-tip="会话"
               @click="emits('openDrawer')">
@@ -66,7 +66,7 @@ onBeforeUnmount(() => {
       <div ref="gearWrapRef" class="relative">
         <button ref="gearBtnRef"
                 type="button"
-                class="chat-icon-btn btn btn-sm btn-circle btn-ghost"
+                class="chat-icon-btn-solid chat-focus btn btn-sm btn-circle btn-ghost"
                 aria-label="聊天设置"
                 :aria-expanded="settingsOpen ? 'true' : 'false'"
                 data-tip="设置"
@@ -97,7 +97,7 @@ onBeforeUnmount(() => {
 
       <VoiceToggle />
       <button type="button"
-              class="chat-icon-btn btn btn-sm btn-circle btn-ghost"
+              class="chat-icon-btn-solid chat-focus btn btn-sm btn-circle btn-ghost"
               aria-label="关闭对话"
               data-tip="关闭"
               @click="emits('close')">

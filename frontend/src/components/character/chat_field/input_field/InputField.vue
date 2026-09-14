@@ -435,7 +435,7 @@ defineExpose({focus, handleSend})
     </button>
     <button v-else
             type="submit"
-            class="chat-focus w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-white cursor-pointer
+            class="chat-focus w-12 h-12 shrink-0 rounded-full flex items-center justify-center cursor-pointer
                    transition-opacity tooltip tooltip-top"
             :class="message.trim() ? 'chat-icon-btn-active' : 'chat-btn-idle'"
             :disabled="!message.trim() || micState === VOICE_STATES.LISTENING || micState === VOICE_STATES.TRANSCRIBING"
