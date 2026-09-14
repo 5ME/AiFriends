@@ -27,7 +27,6 @@
   /* 沉浸模式（默认）：值 = 改造前原值 */
   --cbg-window: transparent;
   --cbg-bubble-ai: rgba(0, 0, 0, 0.35);
-  --cbg-bubble-ai-border: transparent;
   --cbg-text: #ffffff;
   --cbg-text-2: rgba(255, 255, 255, 0.70);
   --cbg-text-3: rgba(255, 255, 255, 0.40);
@@ -61,8 +60,7 @@
    两者同时命中时以浅色为准（E3）。 */
 .chat-window.chat-simple {
   --cbg-window: #fafaf9;
-  --cbg-bubble-ai: #ffffff;
-  --cbg-bubble-ai-border: #e7e5e4;
+  --cbg-bubble-ai: #f0efee;          /* 暖灰浮层：与窗口明度差 −0.091（拉开最多档） */
   --cbg-text: #1c1917;
   --cbg-text-2: #57534e;
   --cbg-text-3: #78716c;
@@ -137,12 +135,10 @@
   overflow-wrap: break-word;
   word-break: break-word;
   border-radius: 16px;
-  border: 1px solid transparent;
-  padding: 7px 11px;
+  padding: 8px 12px;   /* = master 原值（曾为描边补偿改 7px 11px，取消描边后必须回退） */
 }
 .msg-bubble-ai {
   background: var(--cbg-bubble-ai);
-  border: 1px solid var(--cbg-bubble-ai-border);
   backdrop-filter: blur(8px);
   color: var(--cbg-text);
   border-top-left-radius: 4px;

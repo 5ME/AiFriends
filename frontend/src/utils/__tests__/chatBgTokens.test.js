@@ -18,12 +18,25 @@ describe('4B token 家族（设计 §3.4）', () => {
 
   it('浅色覆盖块含设计 §3.3 的全部关键值', () => {
     expect(simple).toContain('#fafaf9')
-    expect(simple).toContain('#ffffff')
+    expect(simple).toContain('#f0efee')   // AI 气泡底（暖灰浮层，与窗口拉明度差）
     expect(simple).toContain('#e7e5e4')
     expect(simple).toContain('#1c1917')
     expect(simple).toContain('#57534e')
     expect(simple).toContain('#78716c')
     expect(simple).toContain('#f5f5f4')   // chip 底；其上的 --cbg-text-2 对比 6.99:1
+  })
+
+  it('AI 气泡两模式都不描边（硬边是"卡片感"来源；靠自身底色分层）', () => {
+    // 断言"不存在描边声明"，而不是"描边值为 transparent"——后者会让无用的 token 留在表里
+    expect(css).not.toMatch(/--cbg-bubble-ai-border\s*:/)
+    const ai = css.match(/\.msg-bubble-ai\s*\{[^}]*\}/s)?.[0] ?? ''
+    expect(ai).not.toMatch(/border:\s*1px/)
+  })
+
+  it('气泡盒模型 = master 原值（描边补偿已随取消描边回退）', () => {
+    const bubble = css.match(/\.msg-bubble\s*\{[^}]*\}/s)?.[0] ?? ''
+    expect(bubble).toContain('padding: 8px 12px')
+    expect(bubble).not.toContain('border: 1px solid transparent')
   })
 
   it('舞台浅色块存在且使用 #e7e5e4（舞台略深于窗口）', () => {
