@@ -6,6 +6,7 @@ import { useMediaQuery } from '@/composables/useMediaQuery.js'
 import { useToast } from '@/composables/useToast.js'
 import SessionList from '@/components/chat/SessionList.vue'
 import ChatWindow from '@/components/chat/chat_window/ChatWindow.vue'
+import { useChatBg } from '@/composables/useChatBg.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +19,9 @@ const activeCharacterId = computed(() => {
   return id ? Number(id) : null
 })
 const isHub = computed(() => activeCharacterId.value === null)
+
+// 抽屉与 ChatWindow 是兄弟节点，但 useChatBg 是模块级单例 → 两处读到同一状态
+const { simpleOn: simpleBg } = useChatBg(activeCharacterId)
 
 const friend = ref(null)
 const friendLoading = ref(false)
@@ -116,7 +120,10 @@ function handleClose() {
     <Teleport v-else to="body">
       <Transition name="fade">
         <div v-if="drawerOpen" class="fixed inset-0 z-[60]">
-          <div class="absolute inset-0 bg-black/50" @click="drawerOpen = false"></div>
+          <!-- 移动端抽屉遮罩：沉浸=黑 50%（现状不变）；简约=暖深色 40%（设计 §3.7） -->
+          <div class="absolute inset-0"
+               :class="simpleBg ? 'bg-[#1c1917]/40' : 'bg-black/50'"
+               @click="drawerOpen = false"></div>
           <div class="absolute left-0 top-0 h-full w-70 bg-base-200 border-r border-base-300 shadow-xl">
             <SessionList :active-id="activeCharacterId"
                          @select="handleSelect"
