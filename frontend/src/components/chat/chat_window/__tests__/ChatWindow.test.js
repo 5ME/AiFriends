@@ -87,6 +87,25 @@ describe('ChatWindow 简约模式接线（4B T3）', () => {
     expect(JSON.parse(localStorage.getItem('chatSimpleBg'))).toEqual({ 12: true })
   })
 
+  it('背景图加载失败时走深色兜底（E3）：Image 预探测 onerror', async () => {
+    // 用 stub 的 Image 强制触发 onerror —— 真实浏览器里"坏图地址"走的就是这条路径。
+    // 这样 E3 无需去造一个坏 URL 就能自动化验证。
+    const OriginalImage = globalThis.Image
+    globalThis.Image = class {
+      set src(_v) { queueMicrotask(() => this.onerror && this.onerror()) }
+    }
+    try {
+      const host = mount()
+      await nextTick()
+      await nextTick()   // 等 onerror 的微任务落地
+      expect(host.querySelector('.chat-window')?.className).toContain('no-bg')
+      expect(host.querySelector('.window-scrim')).toBeNull()
+      expect(host.querySelector('.chat-stage-root')?.className).toContain('no-bg')
+    } finally {
+      globalThis.Image = OriginalImage
+    }
+  })
+
   it('无背景图的角色：不渲染背景图与蒙层（E2）', async () => {
     const host = mount({ id: 4, character: { id: 21, name: '无图', background_image: '' } })
     await nextTick()

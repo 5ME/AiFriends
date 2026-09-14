@@ -67,4 +67,16 @@ describe('头部件按钮的托盘样式必须一致（验收反馈：喇叭有�
     expect(labels).toContain('聊天设置')
     expect(labels).toContain('关闭对话')
   })
+
+  it('头部件按钮尺寸一致（验收反馈：喇叭 40px 而 ⚙/✕ 32px）', () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    createApp({ render: () => h(WindowHeader, { character: CHARACTER, simpleBg: false }) }).mount(host)
+
+    // 语音开关显式 h-10 w-10（40px）；⚙/✕ 必须用默认 btn（btn-md = 40px），
+    // 不能带 btn-sm（32px）——否则同排圆钮一大一小（加托盘后尤其显眼）
+    const html = host.innerHTML
+    expect(html).not.toContain('btn-sm')
+    expect(html).toContain('h-10 w-10')
+  })
 })
