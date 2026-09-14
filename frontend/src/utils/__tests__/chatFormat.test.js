@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { dateLabel, formatTime, groupMessages } from '../chatFormat'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { dateLabel, formatTime, groupMessages, sessionTimeLabel } from '../chatFormat'
 
 /** 本地时区构造 Date，避免 ISO/UTC 时差陷阱 */
 function at(dayOffset, hour, minute) {
@@ -147,5 +147,44 @@ describe('formatTime（LD §9.2）', () => {
     expect(formatTime(null)).toBe('')
     expect(formatTime(undefined)).toBe('')
     expect(formatTime('bad')).toBe('')
+  })
+})
+
+describe('sessionTimeLabel（会话栏预览时间，M 档）', () => {
+  // 固定"现在"为本地时间 2026-03-15 12:00：分支断言与机器日期/时区无关
+  const NOW = new Date(2026, 2, 15, 12, 0, 0)
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('今天 → HH:mm（补零）', () => {
+    expect(sessionTimeLabel(new Date(2026, 2, 15, 9, 5).toISOString())).toBe('09:05')
+  })
+
+  it('昨天 → "昨天"', () => {
+    expect(sessionTimeLabel(new Date(2026, 2, 14, 23, 0).toISOString())).toBe('昨天')
+  })
+
+  it('同年更早 → "M月D日"（不补零）', () => {
+    expect(sessionTimeLabel(new Date(2026, 0, 20, 8, 0).toISOString())).toBe('1月20日')
+  })
+
+  it('跨年 → "YYYY年M月D日"', () => {
+    expect(sessionTimeLabel(new Date(2025, 11, 31, 8, 0).toISOString())).toBe('2025年12月31日')
+  })
+
+  it('接受 Date 实例', () => {
+    expect(sessionTimeLabel(new Date(2026, 2, 15, 18, 30))).toBe('18:30')
+  })
+
+  it('空/非法 → 空串（无时间则不渲染时间列）', () => {
+    expect(sessionTimeLabel(null)).toBe('')
+    expect(sessionTimeLabel(undefined)).toBe('')
+    expect(sessionTimeLabel('bad')).toBe('')
   })
 })

@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, useTemplateRef } from 'vue'
+import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import api from '@/js/http/api'
 import SessionItem from '@/components/chat/SessionItem.vue'
+import { promote, useSessionPreview } from '@/composables/useSessionPreview.js'
 
 const props = defineProps(['activeId'])
 const emits = defineEmits(['select', 'closeDrawer'])
+
+// 本地乐观预览：刚发送/刚回完的会话不必等下一次拉取就更新
+const { previews, latestId } = useSessionPreview()
 
 const listRef = useTemplateRef('list-ref')
 const sessions = ref([])
@@ -17,6 +21,12 @@ const filtered = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
   if (!kw) return sessions.value
   return sessions.value.filter(s => s.character.name.toLowerCase().includes(kw))
+})
+
+// 预览更新过的会话置顶（与服务端 last_active 排序一致，避免刷新后位置突变）
+watch(latestId, (id) => {
+  if (id == null) return
+  sessions.value = promote(sessions.value, id)
 })
 
 async function loadMore() {
@@ -70,11 +80,14 @@ onMounted(() => {
     <!-- 列表区 -->
     <div ref="list-ref" class="flex-1 min-h-0 overflow-y-auto no-scrollbar px-2 pb-2"
          @scroll="handleScroll">
-      <!-- loading 骨架 -->
+      <!-- loading 骨架（与两行条目同形：头像 + 名字行 + 预览行） -->
       <template v-if="loading && sessions.length === 0">
         <div v-for="i in 3" :key="i" class="flex items-center gap-3 px-2 h-16">
-          <div class="w-10 h-10 rounded-full skeleton-shimmer"></div>
-          <div class="h-4 w-24 rounded skeleton-shimmer"></div>
+          <div class="w-10 h-10 rounded-full skeleton-shimmer shrink-0"></div>
+          <div class="flex-1 flex flex-col gap-1.5">
+            <div class="h-4 w-24 rounded skeleton-shimmer"></div>
+            <div class="h-3 w-32 rounded skeleton-shimmer"></div>
+          </div>
         </div>
       </template>
 
@@ -83,6 +96,7 @@ onMounted(() => {
         <SessionItem v-for="s in filtered"
                      :key="s.id"
                      :session="s"
+                     :preview="previews[s.id]"
                      :active="Number(props.activeId) === s.character.id"
                      @select="handleSelect" />
         <p v-if="filtered.length === 0" class="text-center text-sm text-neutral-500 py-6">
