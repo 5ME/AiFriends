@@ -1,7 +1,7 @@
 import pytest
 from rest_framework import status
 
-from web.models.friend import Friend
+from web.models.friend import Friend, Message
 
 
 class TestGetOrCreate:
@@ -82,6 +82,47 @@ class TestGetList:
         assert data["message"] == "success"
         assert len(data["friends"]) >= 1
         assert data["friends"][0]["id"] == friend.id
+
+    def test_get_list_last_message_preview(self, auth_client, friend):
+        """最后一条消息的 output 作为预览 + isoformat 时间戳"""
+        Message.objects.create(friend=friend, user_message="你好", output="第一句回复")
+        last = Message.objects.create(friend=friend, user_message="在吗", output="第二句回复")
+
+        resp = auth_client.get("/api/friend/get_list/")
+        item = resp.json()["friends"][0]
+        assert item["last_message"] == "第二句回复"
+        assert item["last_message_at"] == last.created_at.isoformat()
+
+    def test_get_list_last_message_falls_back_to_user_message(self, auth_client, friend):
+        """output 为空/全空白（流中断/模型空回复）→ 回退 user_message"""
+        Message.objects.create(friend=friend, user_message="只有我说了话", output="")
+
+        resp = auth_client.get("/api/friend/get_list/")
+        assert resp.json()["friends"][0]["last_message"] == "只有我说了话"
+
+        # 空白字符不算内容：仍应回退到用户消息
+        Message.objects.create(friend=friend, user_message="我又说了一句", output="\n\n  ")
+        resp = auth_client.get("/api/friend/get_list/")
+        assert resp.json()["friends"][0]["last_message"] == "我又说了一句"
+
+    def test_get_list_last_message_empty_without_message(self, auth_client, friend):
+        """无消息的好友 → 预览空串 + 时间 null（前端据此显示占位文案）"""
+        resp = auth_client.get("/api/friend/get_list/")
+        item = resp.json()["friends"][0]
+        assert item["last_message"] == ""
+        assert item["last_message_at"] is None
+
+    def test_get_list_last_message_truncated_and_normalized(self, auth_client, friend):
+        """长文本截断到 60 字符；换行/连续空白归一化（防 20×5000 字符 payload）"""
+        Message.objects.create(
+            friend=friend, user_message="x", output="第一行\n\n第二行   " + "a" * 100
+        )
+
+        resp = auth_client.get("/api/friend/get_list/")
+        preview = resp.json()["friends"][0]["last_message"]
+        assert len(preview) == 60
+        assert preview.startswith("第一行 第二行 a")
+        assert "\n" not in preview
 
 
 class TestIsFriend:
