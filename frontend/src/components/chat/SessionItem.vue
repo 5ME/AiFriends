@@ -30,11 +30,11 @@ const timeLabel = computed(
           {{ session.character.name }}
         </span>
         <!-- 裸时间夹在可访问名称中间是噪音，对读屏隐藏（预览保留，它带信息量） -->
-        <span v-if="timeLabel" aria-hidden="true" class="shrink-0 text-xs text-neutral-500">
+        <span v-if="timeLabel" aria-hidden="true" class="shrink-0 text-xs text-base-content/80">
           {{ timeLabel }}
         </span>
       </div>
-      <p class="text-[13px] leading-tight line-clamp-1 break-all text-neutral-500">
+      <p class="text-[13px] leading-tight line-clamp-1 break-all text-base-content/80">
         {{ previewText || '还没有消息' }}
       </p>
     </div>

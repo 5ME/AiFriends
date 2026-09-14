@@ -99,14 +99,14 @@ onMounted(() => {
                      :preview="previews[s.id]"
                      :active="Number(props.activeId) === s.character.id"
                      @select="handleSelect" />
-        <p v-if="filtered.length === 0" class="text-center text-sm text-neutral-500 py-6">
+        <p v-if="filtered.length === 0" class="text-center text-sm text-base-content/80 py-6">
           没有匹配的好友
         </p>
       </template>
 
       <!-- 空态 -->
       <div v-else-if="!loading && !error" class="text-center py-10">
-        <p class="text-sm text-neutral-500 mb-3">还没有好友，去首页添加吧</p>
+        <p class="text-sm text-base-content/80 mb-3">还没有好友，去首页添加吧</p>
         <RouterLink :to="{ name: 'homepage-index' }" class="btn btn-sm btn-neutral">去首页</RouterLink>
       </div>
 

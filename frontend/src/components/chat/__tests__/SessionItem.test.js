@@ -111,3 +111,38 @@ describe('SessionItem 会话栏条目（M 档：最后消息预览 + 时间）',
     expect(btn.textContent).toContain('第二句回复')
   })
 })
+
+describe('SessionItem 弱化文字的颜色契约（评审 F1 修复）', () => {
+  // 底色最差的是"选中行"（accent 40% 叠在 base-200 上）：深色主题下旧写法
+  // text-neutral-500 只有 1.67:1。改用主题自适应的 base-content/80 后，
+  // 6 个场景（浅/深 × 普通/hover/选中）实测最差 5.37:1，全部过 AA 4.5:1。
+  beforeEach(() => {
+    document.body.innerHTML = ''
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('预览行与时间列用 text-base-content/80，不用 text-neutral-500', () => {
+    const btn = mount({ session: makeSession(), active: false }).querySelector('button')
+    const time = btn.querySelector('[aria-hidden="true"]')
+    const preview = btn.querySelector('p')
+
+    for (const el of [time, preview]) {
+      expect(el).toBeTruthy()
+      expect(el.className).toContain('text-base-content/80')
+      expect(el.className).not.toContain('text-neutral-500')
+    }
+  })
+
+  it('无消息占位文案与预览共用同一颜色（占位也是需要读的文字）', () => {
+    const btn = mount({
+      session: makeSession({ last_message: '', last_message_at: null }),
+      active: false,
+    }).querySelector('button')
+
+    expect(btn.querySelector('p').className).toContain('text-base-content/80')
+  })
+})

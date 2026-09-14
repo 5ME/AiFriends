@@ -28,7 +28,9 @@ async function mountWith(friends) {
   api.get.mockResolvedValue({ data: { friends } })
   const host = document.createElement('div')
   document.body.appendChild(host)
-  createApp({ render: () => h(SessionList, { activeId: null }) }).mount(host)
+  const app = createApp({ render: () => h(SessionList, { activeId: null }) })
+  app.component('RouterLink', { render: () => h('a') })   // 空态里的 RouterLink 无需真路由
+  app.mount(host)
   await settle()
   return host
 }
@@ -83,5 +85,37 @@ describe('SessionList 会话栏（M 档：预览透传 + 置顶接线）', () =>
     expect(rows[0]).toContain('龙安洋')
     expect(rows[0]).toContain('新预览')
     expect(rows[1]).toContain('安小然')
+  })
+})
+
+describe('SessionList 弱化文字的颜色契约（评审 F1 同类修复）', () => {
+  // 底栏底色为 base-200：旧写法 text-neutral-500 在浅色 4.47:1、深色 3.54:1，均未过 AA
+  beforeEach(() => {
+    document.body.innerHTML = ''
+    vi.clearAllMocks()
+    __resetSessionPreview()
+  })
+
+  const hints = (host) => [...host.querySelectorAll('p')]
+
+  it('空态提示用 text-base-content/80，不用 text-neutral-500', async () => {
+    const host = await mountWith([])
+    const hint = hints(host).find((p) => p.textContent.includes('还没有好友'))
+
+    expect(hint).toBeTruthy()
+    expect(hint.className).toContain('text-base-content/80')
+    expect(hint.className).not.toContain('text-neutral-500')
+  })
+
+  it('搜索无匹配提示用同一颜色', async () => {
+    const host = await mountWith([makeFriend(3, '龙安洋', '预览')])
+    const input = host.querySelector('input')
+    input.value = '不存在的人'
+    input.dispatchEvent(new Event('input'))
+    await settle()
+
+    const hint = hints(host).find((p) => p.textContent.includes('没有匹配的好友'))
+    expect(hint).toBeTruthy()
+    expect(hint.className).toContain('text-base-content/80')
   })
 })
