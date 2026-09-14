@@ -7,10 +7,9 @@ const { voiceEnabled, toggle } = useVoiceToggle()
 
 <template>
   <button type="button"
-          class="h-10 w-10 rounded-full bg-black/50
+          class="chat-icon-btn-solid chat-focus h-10 w-10 rounded-full
                  flex items-center justify-center cursor-pointer
-                 hover:bg-black/60 transition-colors shrink-0
-                 focus-visible:ring-2 ring-white/40 outline-none"
+                 transition-colors shrink-0 outline-none"
           :title="voiceEnabled ? '语音已开启' : '语音已关闭'"
           :aria-label="voiceEnabled ? '关闭语音播报' : '开启语音播报'"
           :aria-pressed="voiceEnabled"

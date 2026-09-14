@@ -389,10 +389,9 @@ defineExpose({focus, handleSend})
         class="shrink-0 px-2 pb-3 pt-1 flex gap-2 items-end">
     <!-- 麦克风入口（48px 圆形；listening/transcribing 高亮 accent，transcribing 禁用防并发 ASR） -->
     <button type="button"
-            class="w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-white cursor-pointer
-                   hover:bg-black/20 transition-colors focus-visible:ring-2 ring-white/40
-                   tooltip tooltip-top"
-            :class="[VOICE_STATES.LISTENING, VOICE_STATES.TRANSCRIBING].includes(micState) ? 'bg-[var(--accent)]' : ''"
+            class="chat-icon-btn chat-focus w-12 h-12 shrink-0 rounded-full flex items-center justify-center cursor-pointer
+                   transition-colors tooltip tooltip-top"
+            :class="[VOICE_STATES.LISTENING, VOICE_STATES.TRANSCRIBING].includes(micState) ? 'chat-icon-btn-active' : ''"
             :disabled="micState === VOICE_STATES.TRANSCRIBING"
             :aria-label="micState === VOICE_STATES.LISTENING || micState === VOICE_STATES.TRANSCRIBING ? '取消语音输入' : '语音输入'"
             :data-tip="micState === VOICE_STATES.LISTENING || micState === VOICE_STATES.TRANSCRIBING ? '取消' : '语音输入'"
@@ -403,8 +402,9 @@ defineExpose({focus, handleSend})
     <!-- 文字输入（idle/confirm/错误态显示；listening/transcribing 隐藏换波形区） -->
     <!-- textarea 自动增高：1 → 4 行，超过内部滚动；Enter 发送 / Shift+Enter 换行 / IME 组合中不发送 -->
     <textarea v-show="isTextMode"
-              class="flex-1 min-w-0 resize-none bg-black/35 backdrop-blur text-base text-white rounded-xl
-                      px-3 py-2.5 leading-6 outline-none"
+              class="chat-surface-2 flex-1 min-w-0 resize-none text-base chat-text rounded-xl
+                      px-3 py-2.5 leading-6 outline-none
+                      placeholder:text-[var(--cbg-text-3)]"
               placeholder="文本输入"
               aria-label="消息输入"
               ref="input-ref" v-model="message"
@@ -426,8 +426,8 @@ defineExpose({focus, handleSend})
     <!-- 发送/停止（48px 圆形；流式期间变 StopIcon 停止；空内容或语音聆听/识别中禁用） -->
     <button v-if="streaming"
             type="button"
-            class="w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-white cursor-pointer
-                   bg-[var(--accent)] focus-visible:ring-2 ring-white/40 tooltip tooltip-top"
+            class="chat-icon-btn-active chat-focus w-12 h-12 shrink-0 rounded-full flex items-center justify-center cursor-pointer
+                   tooltip tooltip-top"
             aria-label="停止生成"
             data-tip="停止"
             @click="stopGenerate">
@@ -435,9 +435,9 @@ defineExpose({focus, handleSend})
     </button>
     <button v-else
             type="submit"
-            class="w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-white cursor-pointer
-                   transition-opacity focus-visible:ring-2 ring-white/40 tooltip tooltip-top"
-            :class="message.trim() ? 'bg-[var(--accent)]' : 'bg-neutral-700 opacity-50'"
+            class="chat-focus w-12 h-12 shrink-0 rounded-full flex items-center justify-center text-white cursor-pointer
+                   transition-opacity tooltip tooltip-top"
+            :class="message.trim() ? 'chat-icon-btn-active' : 'chat-btn-idle'"
             :disabled="!message.trim() || micState === VOICE_STATES.LISTENING || micState === VOICE_STATES.TRANSCRIBING"
             aria-label="发送消息"
             data-tip="发送">
@@ -447,7 +447,7 @@ defineExpose({focus, handleSend})
 
   <!-- 错误态内联提示（spec §9：红字 + 重试；不卡死、textarea 仍可用） -->
   <div v-if="micErrorKind && isTextMode" class="shrink-0 px-4 pb-2 flex items-center gap-3">
-    <p class="text-red-300 text-xs flex-1"
+    <p class="chat-danger text-xs flex-1"
        :title="micErrorKind === 'mic_permission_denied' ? '请允许使用麦克风' : ERROR_COPY[micErrorKind]">
       {{ ERROR_COPY[micErrorKind] }}
     </p>
