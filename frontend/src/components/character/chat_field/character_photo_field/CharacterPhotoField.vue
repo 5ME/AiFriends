@@ -14,8 +14,8 @@ function handleAvatarClick() {
 <template>
   <!-- 提示：<button> 内不得再嵌套交互元素；若日后需要在 pill 内加次级按钮，必须拆分结构 -->
   <button type="button"
-          class="h-10 w-fit rounded-full bg-black/50 flex items-center gap-2 px-2 cursor-pointer
-                 focus-visible:ring-2 ring-white/40 outline-none"
+          class="chat-icon-btn-solid chat-focus h-10 w-fit rounded-full flex items-center gap-2 px-2 cursor-pointer
+                 outline-none"
           :aria-label="`查看 ${character.name} 的角色详情`"
           @click="handleAvatarClick">
     <div class="avatar">
@@ -23,7 +23,7 @@ function handleAvatarClick() {
         <img :src="character.photo" :alt="`${character.name}的头像`">
       </div>
     </div>
-    <div class="text-white text-sm line-clamp-1 break-all">
+    <div class="chat-text text-sm line-clamp-1 break-all">
       {{ character.name }}
     </div>
   </button>

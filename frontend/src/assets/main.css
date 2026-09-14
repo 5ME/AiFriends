@@ -11,14 +11,81 @@
   --accent: #10b981;
 }
 
-/* 角色之窗：3:5 竖版容器，纯 CSS 尺寸公式（LD §8.1，无需 JS resize） */
+/* 角色之窗：3:5 竖版容器，纯 CSS 尺寸公式（LD §8.1，无需 JS resize）
+   4B：本块同时是 --cbg-* token 的**默认值来源**（沉浸模式）。
+   默认值必须与 4B 之前逐字相同，否则沉浸模式回归（D4B-5）。
+   ⚠️ 全部 token 与语义类都**不套 CSS 层级**（不写 at-layer 指令）——这是它们能压过
+   Tailwind utilities（后者在 utilities 层内）的原因；一旦套上，浅色模式会静默失效。 */
 .chat-window {
   width: min(420px, calc((100vh - 64px - 48px) * 0.6));
   aspect-ratio: 3 / 5;
   max-height: calc(100vh - 64px - 48px);
   border-radius: 24px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--cbg-shadow);
   overflow: hidden;
+
+  /* 沉浸模式（默认）：值 = 改造前原值 */
+  --cbg-window: transparent;
+  --cbg-bubble-ai: rgba(0, 0, 0, 0.35);
+  --cbg-text: #ffffff;
+  --cbg-text-2: rgba(255, 255, 255, 0.70);
+  --cbg-text-3: rgba(255, 255, 255, 0.40);
+  --cbg-surface: rgba(0, 0, 0, 0.40);
+  --cbg-surface-2: rgba(0, 0, 0, 0.35);
+  --cbg-surface-border: transparent;
+  --cbg-float: rgba(0, 0, 0, 0.25);
+  --cbg-float-strong: rgba(0, 0, 0, 0.30);
+  --cbg-hover: rgba(0, 0, 0, 0.20);
+  --cbg-ring: rgba(255, 255, 255, 0.40);
+  --cbg-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+  --cbg-switch-off: rgba(255, 255, 255, 0.40);    /* 沉浸值 = Task 4 开关轨道现状字面量（保真） */
+  --cbg-switch-on: var(--accent);                 /* 沉浸值 = 现状（裸 accent） */
+  --cbg-switch-knob: #ffffff;                     /* 两模式同值 */
+  --cbg-glass-btn: rgba(0, 0, 0, 0.50);           /* 沉浸值 = VoiceToggle/CharacterPhotoField 现状字面量（保真项，见设计 §3.5.1） */
+  --cbg-glass-btn-hover: rgba(0, 0, 0, 0.60);     /* 沉浸值 = VoiceToggle 现状 hover */
+  --cbg-modal-bg: rgba(23, 23, 23, 0.95);         /* 沉浸值 = 现状 bg-neutral-900/95 */
+  --cbg-modal-border: rgba(255, 255, 255, 0.10);  /* 沉浸值 = 现状 border-white/10 */
+  --cbg-code: rgba(0, 0, 0, 0.40);
+  --cbg-code-block: rgba(0, 0, 0, 0.45);
+  --cbg-code-block-hover: rgba(0, 0, 0, 0.75);   /* 现状 Message.vue:171 原值 */
+  --cbg-skeleton-a: rgba(255, 255, 255, 0.08);
+  --cbg-skeleton-b: rgba(255, 255, 255, 0.18);
+  --cbg-danger: #fca5a5;
+  --cbg-link: #7dd3fc;
+}
+
+/* 4B 简约模式（浅色）。所有值见设计 §3.3，对比度已实算（最坏 4.80:1）。
+   注意：本块只覆盖颜色；几何、间距、字体一律不变。
+   源顺序约定：本块在 .chat-window.no-bg 之后（见文件末尾的兜底块），
+   两者同时命中时以浅色为准（E3）。 */
+.chat-window.chat-simple {
+  --cbg-window: #fafaf9;
+  --cbg-bubble-ai: #f0efee;          /* 暖灰浮层：与窗口明度差 −0.091（拉开最多档） */
+  --cbg-text: #1c1917;
+  --cbg-text-2: #57534e;
+  --cbg-text-3: #78716c;
+  --cbg-surface: #ffffff;
+  --cbg-surface-2: #ffffff;
+  --cbg-surface-border: #e7e5e4;
+  --cbg-float: #f5f5f4;
+  --cbg-float-strong: #e7e5e4;
+  --cbg-hover: rgba(28, 25, 23, 0.06);
+  --cbg-ring: rgba(28, 25, 23, 0.30);
+  --cbg-shadow: 0 24px 64px rgba(28, 25, 23, 0.18);
+  --cbg-switch-off: #78716c;                      /* 简约：白滑块 4.80:1 */
+  --cbg-switch-on: #0b825a;                       /* 简约：白滑块 4.82:1（accent 70%+黑，与己方气泡同色） */
+  --cbg-switch-knob: #ffffff;                     /* 简约同值 */
+  --cbg-glass-btn: #f5f5f4;
+  --cbg-glass-btn-hover: #e7e5e4;
+  --cbg-modal-bg: #ffffff;
+  --cbg-modal-border: #e7e5e4;
+  --cbg-code: rgba(28, 25, 23, 0.06);
+  --cbg-code-block: rgba(28, 25, 23, 0.08);
+  --cbg-code-block-hover: rgba(28, 25, 23, 0.14);
+  --cbg-skeleton-a: rgba(28, 25, 23, 0.06);
+  --cbg-skeleton-b: rgba(28, 25, 23, 0.14);
+  --cbg-danger: #b91c1c;
+  --cbg-link: #0f766e;
 }
 @media (max-width: 1023px) {
   .chat-window {
@@ -55,7 +122,11 @@
   border-left: 4px solid transparent;
 }
 
-/* 消息气泡（spec §6.1；用户气泡 Phase 4 换 --user-bubble-bg 变量） */
+/* 消息气泡（spec §6.1；4B：全部走 --cbg-* token，浅色模式自动接管）
+   ⚠️ 盒模型补偿：`.msg-bubble-ai` 在浅色下需要 1px 描边才能与窗口底区分
+   （#ffffff vs #fafaf9），但加边框会撑大外尺寸。故统一加 1px transparent 边框
+   并把 padding 由 8px 12px 调为 7px 11px —— **外尺寸逐像素不变**。
+   这是本批唯一动几何的地方，必须靠门 4 截图确认（D4B-5）。 */
 .msg-bubble {
   max-width: 75%;
   font-size: 15px;
@@ -64,37 +135,156 @@
   overflow-wrap: break-word;
   word-break: break-word;
   border-radius: 16px;
-  padding: 8px 12px;
+  padding: 8px 12px;   /* = master 原值（曾为描边补偿改 7px 11px，取消描边后必须回退） */
 }
 .msg-bubble-ai {
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--cbg-bubble-ai);
   backdrop-filter: blur(8px);
-  color: #ffffff;
+  color: var(--cbg-text);
   border-top-left-radius: 4px;
 }
 .msg-bubble-user {
-  background: color-mix(in srgb, #10b981 70%, black);
+  background: color-mix(in srgb, var(--accent) 70%, black);   /* D4B-7：改为引用 accent token，不再硬编码绿色 */
   color: #ffffff;
   border-top-right-radius: 4px;
 }
 
 /* 组首名字 pill 底衬（N1） */
 .msg-name-pill {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--cbg-float-strong);
+  color: var(--cbg-text);
   border-radius: 9999px;
   padding: 1px 8px;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
 }
 
 /* 日期分隔胶囊（N1 深色玻璃方向） */
 .date-capsule {
-  background: rgba(0, 0, 0, 0.25);
-  color: rgba(255, 255, 255, 0.6);
+  background: var(--cbg-float);
+  color: var(--cbg-text-2);
   font-size: 12px;
   border-radius: 9999px;
   padding: 2px 12px;
 }
+
+/* 4B 简约模式：舞台不显示模糊图，改用纯色（与窗口同族，舞台略深） */
+.chat-stage-root.stage-simple .stage-blur { display: none; }
+.chat-stage-root.stage-simple .stage-dim  { background: #e7e5e4; }
+
+/* ===== 4B 语义类 =====
+   模板只引用类名，颜色全部收敛到 --cbg-* token。
+   全部不套 CSS 层级（见顶部 .chat-window 的说明）。 */
+
+/* 窗口背景（沉浸：透明，由背景图铺满；简约：纯色） */
+.chat-window-bg { background-color: var(--cbg-window); }
+
+/* 玻璃/纯色表面：头部条、输入栏、弹层、语音栏 */
+.chat-surface {
+  background-color: var(--cbg-surface);
+  border: 1px solid var(--cbg-surface-border);
+}
+.chat-surface-2 {
+  background-color: var(--cbg-surface-2);
+  border: 1px solid var(--cbg-surface-border);
+}
+
+/* 图标按钮（头部件 ☰/✕/⚙、麦克风、发送）：未激活态 */
+.chat-icon-btn {
+  color: var(--cbg-text);
+  background: transparent;
+}
+.chat-icon-btn:hover { background: var(--cbg-hover); }
+
+/* 状态也必须走语义层，不能在元素上再挂 bg-[var(--accent)] / bg-neutral-700 / text-white
+   这类工具类 —— 未分层类压过 utilities 层，工具类会被上面两条规则**静默压掉**：
+   麦克风聆听/识别中与发送键激活时的绿底会在沉浸模式也消失（评审 R-4 实测）。
+   故状态一律用类切换，值在类里定义。 */
+.chat-icon-btn-active {
+  color: #ffffff;
+  background-color: var(--accent);
+}
+.chat-btn-idle {
+  color: var(--cbg-text);
+  background-color: var(--cbg-hover);
+}
+
+/* 输入区图标按钮的"空托底"（未激活时的圆形底盘）。
+   与 .chat-btn-idle 同值，但语义不同：后者含 :disabled 态语义（发送键空内容时用），
+   前者用于"本身可用、只是未激活"的按钮（麦克风）。 */
+.chat-icon-btn-tray {
+  color: var(--cbg-text);
+  background-color: var(--cbg-hover);
+}
+.chat-btn-idle:disabled { opacity: 0.5; }
+
+/* VoiceToggle 专用：底色用头部胶囊族（0.50 保真），图标用**主文字**色 */
+.chat-icon-btn-solid {
+  /* 头部两个 0.50 胶囊（语音开关、头像 pill）。**不得用 --cbg-float(0.25)**：
+     那会让胶囊暗度减半（设计 §3.5.1 列为"明确保真、不归并"项）。 */
+  color: var(--cbg-text);
+  background-color: var(--cbg-glass-btn);
+}
+.chat-icon-btn-solid:hover { background-color: var(--cbg-glass-btn-hover); }
+
+/* 文字层级 */
+.chat-text   { color: var(--cbg-text); }
+.chat-text-2 { color: var(--cbg-text-2); }
+.chat-text-3 { color: var(--cbg-text-3); }
+
+/* 浮层胶囊：引用 chip、示例问题、日期胶囊 */
+.chat-float {
+  background-color: var(--cbg-float);
+  color: var(--cbg-text-2);
+}
+.chat-float-strong {
+  background-color: var(--cbg-float-strong);
+  color: var(--cbg-text);
+}
+.chat-float-hover:hover { background-color: var(--cbg-float-strong); }
+
+/* 焦点环（浅色下白环不可见）。只加在**非 .btn** 元素上：
+   daisyUI .btn 自带 outline，叠加会出双环（4A D4A-6）。 */
+.chat-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--cbg-ring);
+}
+
+/* 危险文字（语音错误横幅） */
+.chat-danger { color: var(--cbg-danger); }
+
+/* 设置弹层开关（Task 4）。轨道/滑块都走语义 token：
+   简约模式下 OFF 用 #78716c、ON 用 #0b825a，白滑块对比 4.80 / 4.82:1（均 ≥3:1，
+   满足 WCAG 1.4.11 非文本对比）；沉浸模式保持现状字面量（零回归）。
+   ⚠️ 滑块不得写 bg-white 字面量——它是唯一被颜色门禁判红的白类。 */
+.chat-switch-track {
+  background-color: var(--cbg-switch-off);
+}
+.chat-switch-track.on {
+  background-color: var(--cbg-switch-on);
+}
+.chat-switch-knob {
+  background-color: var(--cbg-switch-knob);
+}
+
+/* 引用浮层（窗口内 modal） */
+.chat-modal {
+  /* 引用浮层面板。**不得用 --cbg-surface(0.40)**：那会让面板从近乎实心
+     变成 40% 玻璃并丢掉描边（设计 §3.5.1 的保真项）。 */
+  background-color: var(--cbg-modal-bg);
+  border-color: var(--cbg-modal-border);
+}
+
+/* 骨架（颜色随模式反转） */
+.chat-window .skeleton-shimmer {
+  background: linear-gradient(90deg,
+    var(--cbg-skeleton-a) 25%, var(--cbg-skeleton-b) 50%, var(--cbg-skeleton-a) 75%);
+  background-size: 200% 100%;
+}
+
+/* 无背景图 / 图片加载失败时的深色兜底（E2/E3）。顺序有意放在 .chat-simple 之后：
+   若该子树正好是简单模式，浅色 token 会因后者在源顺序靠后而取胜，符合 §3.6-E3 的约定。 */
+.chat-stage-root.no-bg .stage-dim { background: #1c1917; }
+.chat-window.no-bg { --cbg-window: #1c1917; }
 
 /* 隐藏滚动条（全局化，SessionList 与 ChatHistory 共用；原 ChatHistory scoped 样式迁移） */
 .no-scrollbar::-webkit-scrollbar {
