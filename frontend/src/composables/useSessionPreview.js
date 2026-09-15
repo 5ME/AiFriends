@@ -9,6 +9,16 @@ import { reactive, ref } from 'vue'
 const previews = reactive({})   // { '<friendId>': { text, at } }
 const latestId = ref(null)      // 最近一次更新的 friendId（字符串），会话栏据此置顶
 
+// 与服务端 `get_list` 的预览规则**同源**：空白归一化 + 截断 60。
+// 不做这一步的后果（评审 F7-1）：本地存的原文会压过服务端的归一化值，
+// 且预览属于会话项按钮的可访问名称 —— 一条 5000 字的消息会被读屏整条念出来。
+export const PREVIEW_MAX_LEN = 60
+
+/** @param {unknown} text @returns {string} 归一化并截断后的预览文本 */
+export function normalizePreview(text) {
+  return String(text ?? '').split(/\s+/).filter(Boolean).join(' ').slice(0, PREVIEW_MAX_LEN)
+}
+
 /** 仅供测试：清空模块状态（模块状态跨用例存活，不重置会污染下一用例） */
 export function __resetSessionPreview() {
   for (const key of Object.keys(previews)) delete previews[key]
@@ -22,7 +32,7 @@ export function __resetSessionPreview() {
  */
 export function setPreview(friendId, { text, at = new Date().toISOString() } = {}) {
   const key = String(friendId)
-  previews[key] = { text: text == null ? '' : String(text), at }
+  previews[key] = { text: normalizePreview(text), at }
   latestId.value = key
 }
 

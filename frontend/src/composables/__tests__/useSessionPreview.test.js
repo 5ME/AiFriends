@@ -32,6 +32,29 @@ describe('useSessionPreview（会话栏预览乐观更新，M 档）', () => {
     expect(at).toBeLessThanOrEqual(Date.now() + 1000)
   })
 
+  it('写入前归一化 + 截断 60 —— 与服务端 get_list 同一规则（F7-1）', () => {
+    const { previews, setPreview } = useSessionPreview()
+    setPreview(3, { text: '第一行\n\n第二行   ' + 'a'.repeat(100) })
+
+    expect(previews[3].text).toBe('第一行 第二行 ' + 'a'.repeat(52))
+    expect(previews[3].text).toHaveLength(60)
+    expect(previews[3].text).not.toContain('\n')
+  })
+
+  it('超长用户消息不会把可访问名称撑大（预览是按钮名称的一部分）', () => {
+    const { previews, setPreview } = useSessionPreview()
+    setPreview(3, { text: '啊'.repeat(800) })
+
+    expect(previews[3].text).toHaveLength(60)
+  })
+
+  it('全空白文本 → 空串（调用方的"空则不覆盖"规则因此仍然有效）', () => {
+    const { previews, setPreview } = useSessionPreview()
+    setPreview(3, { text: '  \n\t  ' })
+
+    expect(previews[3].text).toBe('')
+  })
+
   it('同一 id 再次写入 → 覆盖（发送时写用户文本，流结束时改写 AI 文本）', () => {
     const { previews, setPreview } = useSessionPreview()
     setPreview(3, { text: '我说的话', at: '2026-03-15T09:05:00+08:00' })
