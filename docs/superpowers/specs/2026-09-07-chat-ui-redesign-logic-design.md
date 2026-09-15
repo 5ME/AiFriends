@@ -84,7 +84,18 @@
 - **props**：`session`（friend 对象）、`active`（bool）
 - **emits**：`select`
 - **模板**：64px 高、rounded-xl；头像（`character.photo`）+ 名字；选中态：`background: color-mix(in srgb, var(--accent) 40%, transparent)` + 左侧 4px accent 竖条（D10）；`aria-current="true"` 当选中
-- 无预览/时间（D4）
+- 无预览/时间（D4）—— **⚠️ 2026-09-15 已变更**（PR #44）：改为两行（名字 + 时间 / 最后消息预览）；**预览 13px 按 §6.4；名字沿用改造前的 16px**（§6.4 写的是 15px/500，属既有漂移，本 PR 未动）。弱化文字用主题自适应色 `text-base-content/80`，六个场景实测对比度：
+
+  | 场景 | 底色 | `text-base-content/80` | （改造前 `text-neutral-500`） |
+  |---|---|---|---|
+  | 浅色 普通行 | `base-200` #f8f8f8 | 9.05:1 | 4.47:1 |
+  | 浅色 hover | `base-300` #eeeeee | 8.55:1 | 4.09:1 |
+  | 浅色 选中行 | accent 40% 叠底 #9bdfc9 | 7.14:1 | 3.11:1 |
+  | 深色 普通行 | `base-200` #191e24 | 10.37:1 | 3.54:1 |
+  | 深色 hover | `base-300` #15191e | 10.81:1 | 3.73:1 |
+  | 深色 选中行 | accent 40% 叠底 #155c49 | 5.37:1 | **1.67:1** |
+
+  口径：标准 WCAG 相对亮度；token 取自构建产物（oklch→sRGB）；六场景门槛均为 AA 4.5:1。深色主题由 `prefers-color-scheme:dark` 生效（仓库不设 `data-theme`），故选主题自适应色而非 `dark:` 变体。
 
 ### 3.4 `components/chat/chat_window/ChatWindow.vue`【新】
 
@@ -495,7 +506,7 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 
 ## 12. 明确不在本期范围（防蔓延）
 
-1. 会话栏最后消息预览/未读红点（D4，P2 可选后端增强）
+1. ~~会话栏最后消息预览~~ / 未读红点（D4，P2 可选后端增强）—— **预览已于 2026-09-15 实现（PR #44），从本清单移出；未读红点仍不在本期范围**
 2. 创建者自定义示例问题（D7）、宽版横幅图（D8）
 3. 多标签页实时同步（E13）、断线自动重连（E11 维持现状）
 4. 后端除 §14.2 后端批次（Q3/Q4）之外的任何改动

@@ -4,9 +4,14 @@ import WindowHeader from '@/components/chat/chat_window/WindowHeader.vue'
 import ChatHistory from '@/components/character/chat_field/chat_history/ChatHistory.vue'
 import InputField from '@/components/character/chat_field/input_field/InputField.vue'
 import { useChatBg } from '@/composables/useChatBg.js'
+import { useSessionPreview } from '@/composables/useSessionPreview.js'
 
 const props = defineProps(['friend'])
 const emits = defineEmits(['closed', 'openDrawer'])
+
+// 会话栏预览：本组件是唯一同时掌握"发送时机"（pushBackMessage）与"AI 回复落点"
+// （流结束时的最后一条消息）的地方
+const { setPreview } = useSessionPreview()
 
 // 4B：简约背景按角色记忆（D4B-3）；:key 重建保证切换角色即换状态
 const { simpleOn, toggleSimple } = useChatBg(props.friend.character.id)
@@ -60,6 +65,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 function pushBackMessage(msg) {
   history.value.push(msg)
+  // 发送即以用户文本占位（AI 回复落了再改写）：会话栏不必等下一次拉取
+  if (msg.role === 'user') setPreview(props.friend.id, { text: msg.content })
   scheduleScroll()
 }
 
@@ -88,8 +95,18 @@ function sendMessage(text) {
 
 // InputField 上抛的流式状态 → 驱动窗口级 isStreaming / thinking
 function handleStreamState({ streaming, thinking: thk }) {
+  const wasStreaming = isStreaming.value
   isStreaming.value = streaming
   thinking.value = thk
+  // 流结束（true→false）才落预览：以最后一条 AI 消息改写。
+  // 空内容不覆盖——出错/中断时保留发送时写入的用户文本，
+  // 与后端「output 为空回退 user_message」同一条规则。
+  if (wasStreaming && !streaming) {
+    const last = history.value[history.value.length - 1]
+    if (last?.role === 'ai' && last.content?.trim()) {
+      setPreview(props.friend.id, { text: last.content })
+    }
+  }
 }
 
 // rAF 节流滚动（D-L6）

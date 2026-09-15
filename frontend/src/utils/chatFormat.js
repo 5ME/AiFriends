@@ -90,3 +90,22 @@ export function formatTime(iso) {
   const mm = String(d.getMinutes()).padStart(2, '0')
   return `${hh}:${mm}`
 }
+
+/**
+ * 会话栏预览时间文案。与 dateLabel 的差别：无 prev 参数、今天精确到分钟、跨年补年份。
+ * @param {string|Date|null} iso
+ * @returns {string} 今天→HH:mm；昨天→昨天；同年更早→M月D日；跨年→YYYY年M月D日；非法/空→''
+ */
+export function sessionTimeLabel(iso) {
+  const d = parseDate(iso)
+  if (!d) return ''
+  const now = new Date()
+  if (isSameDay(now, d)) return formatTime(d)
+
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (isSameDay(yesterday, d)) return '昨天'
+
+  const ymd = `${d.getMonth() + 1}月${d.getDate()}日`
+  return d.getFullYear() === now.getFullYear() ? ymd : `${d.getFullYear()}年${ymd}`
+}

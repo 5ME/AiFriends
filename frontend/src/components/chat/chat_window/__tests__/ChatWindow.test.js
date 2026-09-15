@@ -2,12 +2,47 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createApp, h, nextTick } from 'vue'
 import { __resetChatBgState } from '@/composables/useChatBg.js'
+import { __resetSessionPreview, useSessionPreview } from '@/composables/useSessionPreview.js'
 
 vi.mock('@/components/character/chat_field/chat_history/ChatHistory.vue', () => ({
-  default: { name: 'ChatHistory', render: () => h('div') },
+  // scrollToBottom 与真实组件 defineExpose 的方法同名：否则 scheduleScroll 的 rAF
+  // 回调会抛 TypeError（噪音，会掩盖真实错误）
+  default: { name: 'ChatHistory', render: () => h('div'), methods: { scrollToBottom() {} } },
 }))
+// InputField stub：渲染真按钮，按真实时序发事件（发送 → 流开始 → 增量 → 流结束），
+// 这样"会话栏预览"这类跨组件接线由真实交互路径驱动，而不是伸手进组件实例
 vi.mock('@/components/character/chat_field/input_field/InputField.vue', () => ({
-  default: { name: 'InputField', render: () => h('div') },
+  default: {
+    name: 'InputField',
+    emits: ['pushBackMessage', 'appendToLastMessage', 'streamState'],
+    setup(_, { emit }) {
+      return () => h('div', [
+        h('button', {
+          class: 'stub-send',
+          type: 'button',
+          onClick: () => {
+            emit('pushBackMessage', { role: 'user', content: '我说的话', id: 'u1' })
+            emit('pushBackMessage', { role: 'ai', content: '', id: 'a1' })
+          },
+        }),
+        h('button', {
+          class: 'stub-stream-start',
+          type: 'button',
+          onClick: () => emit('streamState', { streaming: true, thinking: false }),
+        }),
+        h('button', {
+          class: 'stub-ai-delta',
+          type: 'button',
+          onClick: () => emit('appendToLastMessage', 'AI 回复'),
+        }),
+        h('button', {
+          class: 'stub-stream-end',
+          type: 'button',
+          onClick: () => emit('streamState', { streaming: false, thinking: false }),
+        }),
+      ])
+    },
+  },
 }))
 // stub 渲染一个真按钮：点击即 emit，测试用真实点击驱动（比 __vueParentComponent 稳，
 // 后者只在 Vue 的 dev 构建下存在）
@@ -111,5 +146,64 @@ describe('ChatWindow 简约模式接线（4B T3）', () => {
     await nextTick()
     expect(host.querySelector('.window-scrim')).toBeNull()
     expect(host.querySelector('.chat-window')?.className).toContain('no-bg')
+  })
+})
+
+describe('ChatWindow 会话栏预览接线（M 档）', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    __resetChatBgState()
+    __resetSessionPreview()
+  })
+
+  /** 走一遍真实时序：发送 → 流开始 → （可选）AI 增量 → 流结束 */
+  function runTurn(host, { withAiDelta = true } = {}) {
+    host.querySelector('.stub-send').click()
+    host.querySelector('.stub-stream-start').click()
+    if (withAiDelta) host.querySelector('.stub-ai-delta').click()
+    host.querySelector('.stub-stream-end').click()
+  }
+
+  it('发送即写入用户文本预览（不等 AI 回复），流结束后改写为 AI 回复', async () => {
+    const host = mount()
+    const { previews } = useSessionPreview()
+
+    host.querySelector('.stub-send').click()
+    await nextTick()
+    expect(previews[FRIEND.id].text).toBe('我说的话')
+
+    host.querySelector('.stub-stream-start').click()
+    host.querySelector('.stub-ai-delta').click()
+    await nextTick()
+    host.querySelector('.stub-stream-end').click()
+    await nextTick()
+    expect(previews[FRIEND.id].text).toBe('AI 回复')
+  })
+
+  it('AI 内容为空（出错/中断）→ 保留用户文本，不把预览刷成空白', async () => {
+    const host = mount()
+    const { previews } = useSessionPreview()
+
+    runTurn(host, { withAiDelta: false })
+    await nextTick()
+    expect(previews[FRIEND.id].text).toBe('我说的话')
+  })
+
+  it('从未进入 streaming 的状态变化不写预览（thinking 切换不误触发）', async () => {
+    const host = mount()
+    const { previews } = useSessionPreview()
+
+    host.querySelector('.stub-stream-end').click()
+    await nextTick()
+    expect(previews[FRIEND.id]).toBeUndefined()
+  })
+
+  it('预览时间跟随写入时刻（会话栏据此显示 HH:mm）', async () => {
+    const host = mount()
+    const { previews } = useSessionPreview()
+
+    runTurn(host)
+    await nextTick()
+    expect(Number.isNaN(new Date(previews[FRIEND.id].at).getTime())).toBe(false)
   })
 })

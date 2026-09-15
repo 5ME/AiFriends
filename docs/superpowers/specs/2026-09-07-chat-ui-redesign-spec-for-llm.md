@@ -49,7 +49,7 @@
 | D1 | 角色之窗宽度 | **420px**（封顶），高度按 3:5 比例并受视口高度约束（见 §4.3） |
 | D2 | 移动端形态 | **聊天页全屏窗口 + 会话栏抽屉化**；废弃 dialog 弹窗（ChatField 下线） |
 | D3 | 首页卡片行为 | 保留 `showDetail` 两级流程：`showDetail=true` 卡片 → 详情弹窗 → "开始聊天" → 跳转聊天页；`showDetail=false` 卡片 → 直接跳转聊天页 |
-| D4 | 会话栏预览 | **P1 仅显示头像+名字**（排序复用 get_list 的 last_active）；最后消息预览列为 P2 可选后端增强 |
+| D4 | 会话栏预览 | **P1 仅显示头像+名字**（排序复用 get_list 的 last_active）；最后消息预览列为 P2 可选后端增强 —— **✅ 2026-09-15 已实现**（PR #44：`get_list` 返回 `last_message`/`last_message_at`，条目改两行；未读红点仍未做） |
 | D5 | NavBar 搜索 | **聊天页隐藏搜索框**（通过路由 meta 标记） |
 | D6 | 语音自动发送 | **默认关闭**（识别结果回填输入栏，用户确认后发送；设置项开关可开） |
 | D7 | 示例问题 | **前端通用兜底文案**；创建者自定义示例问题列为后续增强 |
@@ -148,7 +148,8 @@ views/chat/ChatIndex.vue                     （页面壳：布局 + 会话状�
 **SessionList.vue**
 - props：`activeId`（当前高亮的 character_id，Q1）。
 - emits：`select(characterId)` → ChatIndex 执行会话切换：先 get_or_create（幂等），**成功才** `router.replace` 同步 URL；失败留在原会话（N2）。
-- 数据：复用 `GET /api/friend/get_list/?items_count=`，分页 20/次；排序已由后端 last_active 保证，前端不重排（D4）。
+- 数据：复用 `GET /api/friend/get_list/?items_count=`，分页 20/次；排序**以服务端 `last_active` 为准**（D4）。
+  - ⚠️ **2026-09-15 修订（PR #44）**：原文为「前端不重排」。实现"发送后置顶"时改为**本地乐观置顶**——`useSessionPreview.promote()` 仅把"服务端排序本就会移到首位的那一条"提前移动，不发明客户端排序键；刷新后与服务端顺序一致。详见 PR #44 的关键取舍 §2。
 - 状态：loading / empty / error / list。
 
 **ChatWindow.vue**
