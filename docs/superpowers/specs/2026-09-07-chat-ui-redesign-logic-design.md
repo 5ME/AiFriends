@@ -84,7 +84,7 @@
 - **props**：`session`（friend 对象）、`active`（bool）
 - **emits**：`select`
 - **模板**：64px 高、rounded-xl；头像（`character.photo`）+ 名字；选中态：`background: color-mix(in srgb, var(--accent) 40%, transparent)` + 左侧 4px accent 竖条（D10）；`aria-current="true"` 当选中
-- 无预览/时间（D4）
+- 无预览/时间（D4）—— **⚠️ 2026-09-15 已变更**（PR #44）：改为两行（名字 + 时间 / 最后消息预览），字号按 spec §6.4（名字沿用既有的 16px，预览 13px）；弱化文字用 `text-base-content/80`（对比度见 PR #44）
 
 ### 3.4 `components/chat/chat_window/ChatWindow.vue`【新】
 
@@ -495,7 +495,7 @@ simpleBackground=true → ChatWindow 应用简约样式（S §6.6）；InputFiel
 
 ## 12. 明确不在本期范围（防蔓延）
 
-1. 会话栏最后消息预览/未读红点（D4，P2 可选后端增强）
+1. ~~会话栏最后消息预览~~ / 未读红点（D4，P2 可选后端增强）—— **预览已于 2026-09-15 实现（PR #44），从本清单移出；未读红点仍不在本期范围**
 2. 创建者自定义示例问题（D7）、宽版横幅图（D8）
 3. 多标签页实时同步（E13）、断线自动重连（E11 维持现状）
 4. 后端除 §14.2 后端批次（Q3/Q4）之外的任何改动
