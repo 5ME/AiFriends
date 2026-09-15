@@ -12,6 +12,8 @@ from web.models.friend import Friend, Message
 logger = logging.getLogger(__name__)
 
 # 会话栏预览最大长度：前端单行截断显示，长文本不整条回传
+# ⚠️ 与前端 `useSessionPreview.normalizePreview` **同一条规则**（空白归一化 + 截断 60，
+# 且按码点而非 UTF-16 单元），改一处必须同步另一处
 PREVIEW_MAX_LEN = 60
 
 

@@ -16,7 +16,10 @@ export const PREVIEW_MAX_LEN = 60
 
 /** @param {unknown} text @returns {string} 归一化并截断后的预览文本 */
 export function normalizePreview(text) {
-  return String(text ?? '').split(/\s+/).filter(Boolean).join(' ').slice(0, PREVIEW_MAX_LEN)
+  const collapsed = String(text ?? '').split(/\s+/).filter(Boolean).join(' ')
+  // 按**码点**切，与后端 Python `[:60]` 同口径：JS 的 slice 按 UTF-16 单元切，
+  // emoji 恰好跨在边界上时会切出半个代理对（渲染成 U+FFFD），并比服务端值少一个字符
+  return Array.from(collapsed).slice(0, PREVIEW_MAX_LEN).join('')
 }
 
 /** 仅供测试：清空模块状态（模块状态跨用例存活，不重置会污染下一用例） */

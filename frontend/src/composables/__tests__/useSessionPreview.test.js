@@ -55,6 +55,16 @@ describe('useSessionPreview（会话栏预览乐观更新，M 档）', () => {
     expect(previews[3].text).toBe('')
   })
 
+  it('按码点截断（与后端 Python [:60] 同口径），不切出半个 emoji（评审 P3-4）', () => {
+    const { previews, setPreview } = useSessionPreview()
+    // 每个 emoji 在 JS 里是 2 个 UTF-16 单元、1 个码点：若用 slice(0,60) 会在边界
+    // 落进代理对，切出半个字符（渲染成 U+FFFD），且比刷新后的服务端值少一个 emoji
+    setPreview(3, { text: 'a' + '😀'.repeat(70) })
+
+    expect(previews[3].text).toBe('a' + '😀'.repeat(59))
+    expect([...previews[3].text]).toHaveLength(60)
+  })
+
   it('同一 id 再次写入 → 覆盖（发送时写用户文本，流结束时改写 AI 文本）', () => {
     const { previews, setPreview } = useSessionPreview()
     setPreview(3, { text: '我说的话', at: '2026-03-15T09:05:00+08:00' })
