@@ -23,6 +23,8 @@ from websockets.client import ClientConnection
 
 from web.models.friend import Friend, Message, SystemPrompt
 from web.utils.quota import check_quota
+from web.utils.tts import (TTS_FORMAT, TTS_MODEL, TTS_PITCH, TTS_RATE,
+                           TTS_SAMPLE_RATE, TTS_VOLUME)
 from web.utils.usage import record_api_usage
 from web.views.friend.message.chat.graph import ChatGraph
 from web.views.friend.message.memory.tasks import update_memory_task
@@ -416,15 +418,15 @@ class MessageChatView(APIView):
                         "task_group": "audio",
                         "task": "tts",
                         "function": "SpeechSynthesizer",
-                        "model": "cosyvoice-v3-flash",
+                        "model": TTS_MODEL,
                         "parameters": {
                             "text_type": "PlainText",
                             "voice": voice_id,  # 音色
-                            "format": "mp3",  # 音频格式
-                            "sample_rate": 22050,  # 采样率
-                            "volume": 50,  # 音量
-                            "rate": 1.0,  # 语速
-                            "pitch": 1  # 音调
+                            "format": TTS_FORMAT,  # 音频格式
+                            "sample_rate": TTS_SAMPLE_RATE,  # 采样率
+                            "volume": TTS_VOLUME,  # 音量
+                            "rate": TTS_RATE,  # 语速
+                            "pitch": TTS_PITCH  # 音调
                         },
                         "input": {  # input不能省去，不然会报错
                         }
@@ -546,7 +548,7 @@ class MessageChatView(APIView):
             self._tts_usage = {
                 'user_id': user_id,
                 'api_type': 'tts',
-                'model_name': 'cosyvoice-v3-flash',
+                'model_name': TTS_MODEL,
                 'token_count': total_chars,
                 'duration_ms': duration_ms,
                 'success': final_success,
