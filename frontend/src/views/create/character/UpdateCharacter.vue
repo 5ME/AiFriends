@@ -18,7 +18,7 @@ const route = useRoute()
 
 const character = ref(null)
 const voices = ref([])
-const curVoiceId = ref(null)
+const curVoice = ref(null)
 
 async function getCharacterData() {
   try {
@@ -28,7 +28,7 @@ async function getCharacterData() {
     // 200 = 获取成功
     character.value = response.data.character
     voices.value = response.data.voices
-    curVoiceId.value = response.data.character.voice_id
+    curVoice.value = response.data.character.voice
   } catch (e) {
     console.log(e)
   }
@@ -77,7 +77,7 @@ async function handleUpdate() {
     const formData = new FormData()
     formData.append('character_id', route.params.character_id as string)
     formData.append('name', name)
-    formData.append('voice_id', voice)
+    formData.append('voice', voice)
     formData.append('introduction', introduction)
     formData.append('system_prompt', systemPrompt)
     if (photo !== character.value.photo) {
@@ -112,7 +112,7 @@ async function handleUpdate() {
         </h3>
         <Photo ref="photo-ref" :photo="character.photo"/>
         <Name ref="name-ref" :name="character.name"/>
-        <Voice ref="voice-ref" :voices="voices" :curVoiceId="curVoiceId"/>
+        <Voice ref="voice-ref" :voices="voices" :curVoice="curVoice"/>
         <Profile ref="profile-ref" :profile="character.introduction"/>
         <SystemPrompt ref="system-prompt-ref" :system-prompt="character.system_prompt"/>
         <BackgroundImage ref="background-image-ref" :backgroundImage="character.background_image"/>

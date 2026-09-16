@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import {ref, watch} from "vue";
 
-const props = defineProps(["voices", "curVoiceId"])
-const myVoice = ref(props.curVoiceId)
+const props = defineProps(["voices", "curVoice"])
+const myVoice = ref(props.curVoice)
 
-watch(() => props.curVoiceId, newVal => {
+watch(() => props.curVoice, newVal => {
   myVoice.value = newVal
 })
 
