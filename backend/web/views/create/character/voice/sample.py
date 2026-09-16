@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import re
 import time
 from pathlib import Path
 
@@ -29,10 +30,18 @@ def _sample_dir():
     return Path(settings.MEDIA_ROOT) / SAMPLE_DIR_NAME
 
 
+UNSAFE_VOICE_ID_CHARS = re.compile(r'[^A-Za-z0-9_-]')
+
+
 def sample_cache_path(voice_id, text):
-    """缓存键 = 阿里云音色标识 + 样本文案 hash（文案变了就换文件名，避免被浏览器缓存误导）。"""
+    """缓存键 = 阿里云音色标识 + 样本文案 hash（文案变了就换文件名，避免被浏览器缓存误导）。
+
+    阿里云标识要先剥掉非法字符再入文件名：校验器只挡得住经表单的未来写入、不回溯存量行，
+    而 `Path('a') / '../../evil-x.mp3'` 是纯词法拼接，会真的写到缓存目录之外。
+    """
+    safe_id = UNSAFE_VOICE_ID_CHARS.sub('', voice_id or '')
     digest = hashlib.sha256(text.encode('utf-8')).hexdigest()[:8]
-    return _sample_dir() / f'{voice_id}-{digest}.mp3'
+    return _sample_dir() / f'{safe_id}-{digest}.mp3'
 
 
 def _negative_cache_active(path):

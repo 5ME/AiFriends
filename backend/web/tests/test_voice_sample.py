@@ -86,6 +86,25 @@ class TestVoiceSample:
         assert rec.call_args.kwargs['user_id'] == new_up.id
 
 
+class TestSampleCachePath:
+    """评审 P3：缓存文件名必须受控 —— 存量/异常 voice_id 不能跑出缓存目录"""
+
+    def test_strips_path_traversal(self):
+        from web.views.create.character.voice.sample import sample_cache_path
+
+        path = sample_cache_path('../../evil', '你好')
+        assert path.parent == Path(settings.MEDIA_ROOT) / 'voice_samples'
+        assert '..' not in path.name and '/' not in path.name
+
+    def test_keeps_legal_id_intact(self):
+        """pin 用例：别把合法标识也洗掉了"""
+        from web.views.create.character.voice.sample import sample_cache_path
+
+        path = sample_cache_path('longanyang', '你好')
+        assert path.name.startswith('longanyang-')
+        assert path.suffix == '.mp3'
+
+
 class TestSynthesizeOnceTimeout:
     """B5：超时纪律的守门 —— 上游挂住时必须抛 TimeoutError，不能无限等"""
 

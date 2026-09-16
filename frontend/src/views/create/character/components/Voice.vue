@@ -20,6 +20,13 @@ const playing = ref(false)
 const errorMessage = ref('')
 let audioEl = null
 
+// 用户切换下拉框时停掉正在播的试听并复位按钮：否则按钮会一直显示"停止"，
+// 点一次只停掉旧的那段、要点第二次才听到新音色 —— 状态与所见不一致。
+watch(myVoice, () => {
+  stopCurrentSample()
+  playing.value = false
+})
+
 async function toggleSample() {
   if (playing.value) {
     stopCurrentSample()

@@ -47,4 +47,21 @@ describe('Voice.vue（试听与 profile 展示）', () => {
     expect(api.get).toHaveBeenCalledWith('/api/create/character/voice/sample/',
                                          { params: { voice: 1 } })
   })
+
+  it('切换音色会停掉正在播的试听，按钮复位为「试听」', async () => {
+    api.get.mockResolvedValue({ data: { url: 'https://example.test/media/voice_samples/a.mp3' } })
+    const host = mount({ voices: VOICES, curVoice: 1 })
+    const btnText = () => host.querySelector('[data-test="voice-sample-btn"]').textContent
+
+    host.querySelector('[data-test="voice-sample-btn"]').click()
+    await Promise.resolve()
+    await nextTick()
+    expect(btnText()).toContain('停止')
+
+    const select = host.querySelector('select')
+    select.value = '2'
+    select.dispatchEvent(new Event('change'))
+    await nextTick()
+    expect(btnText()).toContain('试听')
+  })
 })
