@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from web.models.character import Voice
+from web.views.create.character.voice.serializer import serialize_voice
 
 logger = logging.getLogger(__name__)
 
@@ -15,14 +16,7 @@ class GetListVoiceView(APIView):
 
     def get(self, request):
         try:
-            voices_raw = Voice.objects.order_by('id')
-            voices = []
-            for voice in voices_raw:
-                voices.append({
-                    'id': voice.id,
-                    'name': voice.name,
-                    'profile': voice.profile,
-                })
+            voices = [serialize_voice(v) for v in Voice.objects.order_by('id')]
             return Response({"message": "success", "voices": voices})
         except Exception as e:
             logger.exception('获取音色列表异常: %s', e)

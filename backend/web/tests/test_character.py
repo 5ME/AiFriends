@@ -27,7 +27,7 @@ class TestCreate:
                 "name": "My Character",
                 "introduction": "A friendly AI",
                 "system_prompt": "You are a friendly AI character.",
-                "voice_id": voice.id,
+                "voice": voice.id,
                 "photo": _make_test_image("photo.jpg"),
                 "background_image": _make_test_image("bg.jpg"),
             },
@@ -39,7 +39,7 @@ class TestCreate:
         """无 token → 401"""
         resp = api_client.post(
             "/api/create/character/create/",
-            {"name": "X", "introduction": "X", "system_prompt": "X", "voice_id": voice.id},
+            {"name": "X", "introduction": "X", "system_prompt": "X", "voice": voice.id},
         )
         assert resp.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -51,7 +51,7 @@ class TestCreate:
                 "name": "",
                 "introduction": "Test",
                 "system_prompt": "Test",
-                "voice_id": voice.id,
+                "voice": voice.id,
                 "photo": _make_test_image("photo.jpg"),
                 "background_image": _make_test_image("bg.jpg"),
             },
@@ -66,7 +66,7 @@ class TestCreate:
                 "name": "Test",
                 "introduction": "",
                 "system_prompt": "Test",
-                "voice_id": voice.id,
+                "voice": voice.id,
                 "photo": _make_test_image("photo.jpg"),
                 "background_image": _make_test_image("bg.jpg"),
             },
@@ -81,7 +81,7 @@ class TestCreate:
                 "name": "Test",
                 "introduction": "Test",
                 "system_prompt": "",
-                "voice_id": voice.id,
+                "voice": voice.id,
                 "photo": _make_test_image("photo.jpg"),
                 "background_image": _make_test_image("bg.jpg"),
             },
@@ -123,7 +123,7 @@ class TestUpdate:
                 "name": "Updated Name",
                 "introduction": "Updated intro",
                 "system_prompt": "Updated system prompt",
-                "voice_id": voice.id,
+                "voice": voice.id,
             },
         )
         assert resp.status_code == status.HTTP_200_OK
@@ -141,7 +141,7 @@ class TestUpdate:
                 "name": "Hacked",
                 "introduction": "Hacked profile",
                 "system_prompt": "Hacked system prompt",
-                "voice_id": voice.id,
+                "voice": voice.id,
             },
         )
         assert resp.status_code == status.HTTP_404_NOT_FOUND
