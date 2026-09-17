@@ -5,8 +5,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from web.models.character import Character, Voice
+from web.models.character import Character
 from web.views.create.character.voice.serializer import serialize_voice
+from web.views.create.character.voice.visibility import visible_voices
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,8 @@ class GetSingleCharacterView(APIView):
             except Character.DoesNotExist:
                 return Response({'message': '角色不存在或无权访问'},
                                 status=status.HTTP_404_NOT_FOUND)
-            voices = [serialize_voice(v) for v in Voice.objects.order_by('id')]
+            profile = request.user.userprofile
+            voices = [serialize_voice(v, profile) for v in visible_voices(profile)]
             return Response({
                 'message': 'success',
                 'character': {

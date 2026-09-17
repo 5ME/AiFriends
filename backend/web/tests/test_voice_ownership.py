@@ -54,3 +54,52 @@ class TestDataMigration:
         mod.mark_existing_public(_FakeApps(), None)
         voice.refresh_from_db()
         assert voice.visibility == 'public'
+
+
+class TestVisibilityRule:
+    """C1 / C3：列表只回公开或自己的，且 is_mine 正确"""
+
+    def _make(self, user_profile, voice_id, **kw):
+        return Voice.objects.create(name=voice_id, voice_id=voice_id,
+                                    owner=user_profile, **kw)
+
+    def test_list_returns_public_and_own_only(self, auth_client, user_profile,
+                                             other_user, voice):
+        mine = self._make(user_profile, 'mine_1', visibility='private')
+        # other_user 夹具自身就创建了 UserProfile（conftest.py:113-118）
+        public = self._make(other_user.userprofile, 'publ_1', visibility='public')
+        others_private = Voice.objects.create(
+            name='op', voice_id='op_1',
+            owner=UserProfile.objects.create(user=User.objects.create_user('third')),
+            visibility='private')
+
+        resp = auth_client.get('/api/create/character/voice/get_list/')
+        ids = {v['id'] for v in resp.json()['voices']}
+        assert voice.id in ids                 # 夹具是 public
+        assert mine.id in ids                  # 自己的私有音色可见
+        assert public.id in ids                # 别人的公开音色可见
+        assert others_private.id not in ids    # 别人的私有音色不可见
+
+    def test_is_mine_flag(self, auth_client, user_profile, voice):
+        mine = self._make(user_profile, 'mine_2', visibility='private')
+        resp = auth_client.get('/api/create/character/voice/get_list/')
+        by_id = {v['id']: v for v in resp.json()['voices']}
+        assert by_id[mine.id]['is_mine'] is True
+        assert by_id[voice.id]['is_mine'] is False      # 平台音色
+
+    def test_status_exposed(self, auth_client, user_profile, voice):
+        rejected = self._make(user_profile, 'rej_1', status='rejected')
+        resp = auth_client.get('/api/create/character/voice/get_list/')
+        by_id = {v['id']: v for v in resp.json()['voices']}
+        assert by_id[rejected.id]['status'] == 'rejected'
+
+    def test_get_single_voices_filtered(self, auth_client, character, voice):
+        """详情页的音色下拉也走同一条可见性规则"""
+        Voice.objects.create(name='op2', voice_id='op_2',
+                             owner=UserProfile.objects.create(
+                                 user=User.objects.create_user('fourth')),
+                             visibility='private')
+        resp = auth_client.get('/api/create/character/get_single/',
+                               {'character_id': character.id})
+        names = {v['name'] for v in resp.json()['voices']}
+        assert 'op2' not in names
