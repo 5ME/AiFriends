@@ -324,3 +324,71 @@ class TestStatusRefresh:
         with patch(REFRESH) as q:
             refresh_deploying_voices()
         assert q.call_count == 0
+
+
+REMOVE = 'web.views.create.character.voice.remove'
+
+
+class TestRemoveVoice:
+    """删除音色：可见性 → 引用检查 → 删阿里云 → 删本地行（spec §7 只有两档）"""
+
+    def test_removes_own_unused_voice_and_calls_aliyun(self, auth_client, user_profile):
+        v = Voice.objects.create(name='m', voice_id='rm_1', owner=user_profile,
+                                 visibility='private')
+        with patch(f'{REMOVE}.delete_voice') as dv:
+            resp = auth_client.post('/api/create/character/voice/remove/', {'voice': v.id})
+        assert resp.status_code == status.HTTP_200_OK
+        assert not Voice.objects.filter(id=v.id).exists()
+        assert dv.call_count == 1
+
+    def test_voice_in_use_returns_400_without_calling_aliyun(self, auth_client, character):
+        with patch(f'{REMOVE}.delete_voice') as dv:
+            resp = auth_client.post('/api/create/character/voice/remove/',
+                                    {'voice': character.voice_id})
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert '角色' in resp.json()['message']
+        assert dv.call_count == 0            # 本地就能判定，不该白跑一趟上游
+
+    def test_others_voice_returns_404_same_message(self, auth_client):
+        """不可见与不存在必须回同一个 message（防存在性探测）"""
+        other = UserProfile.objects.create(user=User.objects.create_user('rm_other'))
+        v = Voice.objects.create(name='o', voice_id='rm_2', owner=other,
+                                 visibility='private')
+        r1 = auth_client.post('/api/create/character/voice/remove/', {'voice': v.id})
+        r2 = auth_client.post('/api/create/character/voice/remove/', {'voice': 999999})
+        assert r1.status_code == r2.status_code == status.HTTP_404_NOT_FOUND
+        assert r1.json()['message'] == r2.json()['message']
+
+    def test_aliyun_failure_keeps_row(self, auth_client, user_profile):
+        """上游失败/超时 → 503 且**保留本地行**（保住 voice_id 以便重试）"""
+        v = Voice.objects.create(name='m', voice_id='rm_3', owner=user_profile,
+                                 visibility='private')
+        with patch(f'{REMOVE}.delete_voice', side_effect=RuntimeError('boom')):
+            resp = auth_client.post('/api/create/character/voice/remove/', {'voice': v.id})
+        assert resp.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert Voice.objects.filter(id=v.id).exists()
+
+    def test_aliyun_not_found_still_deletes_local_row(self, auth_client, user_profile):
+        """阿里云侧已被 1 年规则清理掉的音色，本地删除应当成功（Task 1 实测的真实形状）"""
+        from web.views.create.character.voice.remove import AliyunNotFound
+
+        v = Voice.objects.create(name='m', voice_id='rm_4', owner=user_profile,
+                                 visibility='private')
+        with patch(f'{REMOVE}.delete_voice', side_effect=AliyunNotFound()):
+            resp = auth_client.post('/api/create/character/voice/remove/', {'voice': v.id})
+        assert resp.status_code == status.HTTP_200_OK
+        assert not Voice.objects.filter(id=v.id).exists()
+
+    def test_restricted_race_returns_400_not_500(self, auth_client, user_profile):
+        """预检查与真正删除之间的竞态：这中间新建了一个用它的角色 → 被 RESTRICT 拒绝
+
+        不补这层兜底，`RestrictedError` 会漏到最外面变成 500（spec §7 明确不许）。
+        """
+        v = Voice.objects.create(name='m', voice_id='rm_5', owner=user_profile,
+                                 visibility='private')
+        with patch(f'{REMOVE}.delete_voice'), \
+             patch.object(Voice, 'delete',
+                          side_effect=RestrictedError('still referenced', [])):
+            resp = auth_client.post('/api/create/character/voice/remove/', {'voice': v.id})
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert '角色' in resp.json()['message']
