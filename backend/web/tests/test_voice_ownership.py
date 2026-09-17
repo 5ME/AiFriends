@@ -54,7 +54,8 @@ class TestFields:
 class TestDataMigration:
     """C4：0024 的数据迁移必须把存量音色置为 public，否则默认值会让它们从列表里消失"""
 
-    def test_marks_existing_rows_public(self, voice):
+    @staticmethod
+    def _run_mark_existing_public():
         from web.models.character import Voice as RealVoice
 
         mod = importlib.import_module(
@@ -64,10 +65,21 @@ class TestDataMigration:
             def get_model(self, app_label, model_name):
                 return RealVoice
 
-        RealVoice.objects.filter(pk=voice.pk).update(visibility='private')
         mod.mark_existing_public(_FakeApps(), None)
+
+    def test_marks_existing_rows_public(self, voice):
+        Voice.objects.filter(pk=voice.pk).update(visibility='private')
+        self._run_mark_existing_public()
         voice.refresh_from_db()
         assert voice.visibility == 'public'
+
+    def test_does_not_touch_user_owned_voices(self, user_profile, voice):
+        """重放安全：`owner` 非空的行（用户自建音色）不该被置为公开"""
+        mine = Voice.objects.create(name='mine', voice_id='mine_1',
+                                    owner=user_profile, visibility='private')
+        self._run_mark_existing_public()
+        mine.refresh_from_db()
+        assert mine.visibility == 'private'
 
 
 class TestVisibilityRule:
@@ -147,11 +159,15 @@ class TestSelectionGuards:
         assert r1.json()['message'] == r2.json()['message']
 
     def test_update_with_others_private_voice_returns_404(self, auth_client, character):
+        """A6 的同一条防线也要落在 update 上：不可见与不存在必须回同一个 message"""
         v = self._other_private()
-        resp = auth_client.post('/api/create/character/update/', {
-            'character_id': character.id, 'name': 'n', 'introduction': 'i',
-            'system_prompt': 's', 'voice': v.id})
-        assert resp.status_code == status.HTTP_404_NOT_FOUND
+        base = {'character_id': character.id, 'name': 'n', 'introduction': 'i',
+                'system_prompt': 's'}
+        r1 = auth_client.post('/api/create/character/update/', {**base, 'voice': v.id})
+        r2 = auth_client.post('/api/create/character/update/', {**base, 'voice': 999999})
+        assert r1.status_code == status.HTTP_404_NOT_FOUND
+        assert r2.status_code == status.HTTP_404_NOT_FOUND
+        assert r1.json()['message'] == r2.json()['message']
 
     def test_update_with_not_ready_voice_returns_400(self, auth_client, character,
                                                      voice):
@@ -164,9 +180,13 @@ class TestSelectionGuards:
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_sample_of_others_private_voice_returns_404(self, auth_client):
+        """试听路径上的同一条防线：不可见与不存在必须回同一个 message"""
         v = self._other_private()
-        resp = auth_client.get('/api/create/character/voice/sample/', {'voice': v.id})
-        assert resp.status_code == status.HTTP_404_NOT_FOUND
+        r1 = auth_client.get('/api/create/character/voice/sample/', {'voice': v.id})
+        r2 = auth_client.get('/api/create/character/voice/sample/', {'voice': 999999})
+        assert r1.status_code == status.HTTP_404_NOT_FOUND
+        assert r2.status_code == status.HTTP_404_NOT_FOUND
+        assert r1.json()['message'] == r2.json()['message']
 
     def test_sample_of_not_ready_voice_returns_400(self, auth_client, voice):
         """B3 后半：没就绪就不该去打阿里云（用 mock 断言零调用）"""
