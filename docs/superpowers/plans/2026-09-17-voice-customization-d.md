@@ -362,6 +362,11 @@ def _is_config_error(e: Exception) -> bool:
     ⚠️ 不能只判 `RuntimeError`：实测 SDK 的 **24 个异常类没有一个继承 `RuntimeError`**
     （`BaseError` / `ServiceError` / `CredentialsEmptyError` 都直接继承 `Exception`），
     所以"凭据错、bucket 不存在"这类**配置事故**会漏进兜底、被当成"上游抖动"返 503。
+
+    ⚠️ 已知边界（Task 1 实测）：**桶名写错/桶不存在**时 SDK 抛的是 `OperationError`（`code=None`），
+    与"网络不可达"**同一个异常类型、无法区分** → 这类会落到 503（可重试）而不是 500。
+    白名单对"服务端带 code 的鉴权错"（如 `InvalidAccessKeyId`）仍然有效。
+    不为了对齐文档去硬拆一个拆不开的东西 —— 用"打全量 ERROR 日志给运维"补足即可。
     """
     if isinstance(e, (RuntimeError, *OSS_CONFIG_ERROR_TYPES)):
         return True
