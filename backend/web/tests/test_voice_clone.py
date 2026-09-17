@@ -392,3 +392,23 @@ class TestRemoveVoice:
             resp = auth_client.post('/api/create/character/voice/remove/', {'voice': v.id})
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
         assert '角色' in resp.json()['message']
+
+
+class TestCleanCommandGuard:
+    """`clean_dirty_characters --all` 会删音色和用户：D 批之后它从"清测试残留"
+    变成"能删真实用户数据"，所以生产（DEBUG=False）下必须拒绝执行。"""
+
+    def test_all_refused_when_not_debug(self, settings):
+        from django.core.management import call_command
+        from django.core.management.base import CommandError
+
+        settings.DEBUG = False
+        with pytest.raises(CommandError) as e:
+            call_command('clean_dirty_characters', '--all')
+        assert 'DEBUG' in str(e.value) or '生产' in str(e.value)
+
+    def test_all_allowed_when_debug(self, settings, db):
+        from django.core.management import call_command
+
+        settings.DEBUG = True
+        call_command('clean_dirty_characters', '--all')      # 不抛
