@@ -30,7 +30,7 @@ AI Friends — a full-stack web app where users create AI characters ("friends")
 cd backend
 pip install -r ../requirements.txt
 python manage.py runserver              # Dev server on :8000
-python -m pytest web/tests/ -v         # 236 tests
+python -m pytest web/tests/ -v         # 后端全量测试（当前 274，以实际输出为准）
 python manage.py clean_dirty_characters --all  # Clean test residue
 python manage.py seed_builtins           # Seed built-in voices + SystemPrompt (idempotent)
 python manage.py collectstatic          # Collect static files for production
@@ -169,7 +169,7 @@ Three layers are independent — tool rules cannot be overridden by character pe
 
 ### Celery async tasks
 
-`web/tasks.py` is the autodiscover entry point. Deeply nested task files must be explicitly imported here:
+`web/tasks/` 是 Celery 的 autodiscover 入口（**是个包**，入口是 `__init__.py`；深层任务文件必须在其中显式 import）：
 
 ```python
 from web.views.friend.message.memory.tasks import update_memory_task
@@ -303,7 +303,7 @@ The frontend uses `@microsoft/fetch-event-source` (`js/http/streamApi.js`) to PO
 
 ### Testing
 
-- 236 tests in `web/tests/`, run with `python -m pytest web/tests/ -v`
+- 后端全量测试在 `web/tests/`，跑 `python -m pytest web/tests/ -v`（当前 274 条，以实际输出为准）
 - `pytest.ini` defaults to `-m "not slow"` (skips 3 `test_tool_calling.py` tests needing real API_KEY)
 - GitHub Actions CI (`.github/workflows/test.yml`) runs on push/PR to master with pgvector service container
 - Key fixtures: `_disable_rate_limit_for_tests` (autouse), `media_root` (session, autouse), `pgvector_extension` (session, autouse), `mock_asr_ws`
