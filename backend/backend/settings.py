@@ -313,6 +313,12 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'web.tasks.cleanup_usage.cleanup_usage_task',
         'schedule': crontab(hour=2, minute=0),
     },
+    # 复刻音色的审核状态刷新（D 批）：只扫 deploying 的行，单轮上限 20 条、单条 3 秒，
+    # 不能改成"提交后长轮询"——120s/180s 的硬上限加单并发 worker 会被直接杀掉
+    'voice-status-sweep': {
+        'task': 'web.tasks.voice_status.refresh_deploying_voices',
+        'schedule': crontab(minute='*/5'),
+    },
 }
 
 # 文件上传大小限制 — 用户文档 RAG（Django 默认 2.5MB 太小）

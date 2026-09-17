@@ -1,10 +1,12 @@
 """D 批（复刻接线）测试：OSS 工具 / clone 端点 / 状态刷新 / remove。"""
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import RestrictedError
+from django.utils import timezone
 from rest_framework import status
 
 from web.models.character import Voice
@@ -244,3 +246,81 @@ class TestCloneFlow:
         assert looks_like_audio(b'this is not audio', 'mp3') is False
         assert looks_like_audio(b'RIFF' + b'\x00' * 8, 'wav') is True
         assert looks_like_audio(b'\x00\x00\x00\x20ftypM4A ', 'm4a') is True
+
+
+REFRESH = 'web.tasks.voice_status.query_status'
+
+
+class TestStatusRefresh:
+    """Beat 任务：每 5 分钟扫一批 deploying 行，用 query_voice 回写状态"""
+
+    def test_ok_becomes_ready(self, db):
+        from web.tasks.voice_status import refresh_deploying_voices
+
+        v = Voice.objects.create(name='v', voice_id='ok_1', status='deploying')
+        with patch(REFRESH, return_value='OK'):
+            refresh_deploying_voices()
+        v.refresh_from_db()
+        assert v.status == 'ready'
+
+    def test_undeployed_becomes_rejected(self, db):
+        from web.tasks.voice_status import refresh_deploying_voices
+
+        v = Voice.objects.create(name='v', voice_id='un_1', status='deploying')
+        with patch(REFRESH, return_value='UNDEPLOYED'):
+            refresh_deploying_voices()
+        v.refresh_from_db()
+        assert v.status == 'rejected'
+
+    def test_still_deploying_keeps_state(self, db):
+        from web.tasks.voice_status import refresh_deploying_voices
+
+        v = Voice.objects.create(name='v', voice_id='dg_1', status='deploying')
+        with patch(REFRESH, return_value='DEPLOYING'):
+            refresh_deploying_voices()
+        v.refresh_from_db()
+        assert v.status == 'deploying'
+
+    def test_skips_rows_older_than_24h(self, db):
+        """24 小时窗口之外的不再查询（避免长期 deploying 的行被无限重试）"""
+        from web.tasks.voice_status import refresh_deploying_voices
+
+        v = Voice.objects.create(name='v', voice_id='old_1', status='deploying')
+        Voice.objects.filter(pk=v.pk).update(
+            created_at=timezone.now() - timedelta(hours=25))
+        with patch(REFRESH) as q:
+            refresh_deploying_voices()
+        assert q.call_count == 0
+
+    def test_one_failure_does_not_block_others(self, db):
+        """单条抛异常不能影响其余行，且失败的那条 fail-open 保持原状态"""
+        from web.tasks.voice_status import refresh_deploying_voices
+
+        a = Voice.objects.create(name='a', voice_id='f_1', status='deploying')
+        b = Voice.objects.create(name='b', voice_id='f_2', status='deploying')
+        with patch(REFRESH, side_effect=[RuntimeError('boom'), 'OK']):
+            refresh_deploying_voices()
+        b.refresh_from_db()
+        assert b.status == 'ready'                    # 后面的照常处理
+        a.refresh_from_db()
+        assert a.status == 'deploying'                # fail-open
+
+    def test_batch_limit(self, db):
+        """单轮上限 20 条，避免占满单并发 worker"""
+        from web.tasks.voice_status import refresh_deploying_voices
+
+        for i in range(25):
+            Voice.objects.create(name=f'v{i}', voice_id=f'b_{i}', status='deploying')
+        with patch(REFRESH, return_value='OK') as q:
+            refresh_deploying_voices()
+        assert q.call_count == 20
+
+    def test_ready_rows_are_not_queried(self, db):
+        """只扫 deploying —— ready / rejected 的行不该被反复查询"""
+        from web.tasks.voice_status import refresh_deploying_voices
+
+        Voice.objects.create(name='r', voice_id='rd_1', status='ready')
+        Voice.objects.create(name='j', voice_id='rj_1', status='rejected')
+        with patch(REFRESH) as q:
+            refresh_deploying_voices()
+        assert q.call_count == 0
