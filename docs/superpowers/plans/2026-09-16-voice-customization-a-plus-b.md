@@ -505,8 +505,8 @@ class TestSynthesizeOnceTimeout:
 - [ ] **Step 2: 跑测试确认失败**
 
 Run: `... -m pytest web/tests/test_voice_sample.py -v`
-Expected: **除 `test_unknown_voice_returns_404` 外全部 FAIL**（URL 未注册 → import 失败 / 404）。
-⚠️ `test_unknown_voice_returns_404` 在实现前**也是绿的，但原因不同**：URL 还没注册，Django 返回的是自己的 404。实现后它绿的原因才变成"视图主动返回 404"。**Step 6 的全量通过才是它绿得对的凭据**，不要只看这一条的颜色。
+Expected: **全部 FAIL**（URL 未注册 → import 失败）。
+⚠️ 实施时的实测更正：`test_unknown_voice_returns_404` 在实现前**是真红**（实测 `assert 200 == 404`），不是"绿得原因不同"。原因：本项目有 SPA catch-all（`backend/web/urls.py:69` 的 `re_path(r'^(?!media/|static/|assets/).*$', index)`），**未注册的 `/api/` 路径会落到它、返回 200 + index.html**，而非 Django 自己的 404。所以这条用例是干净的红→绿。
 
 - [ ] **Step 3: 新建共用 TTS 工具**
 

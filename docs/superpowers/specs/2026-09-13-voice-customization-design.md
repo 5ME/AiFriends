@@ -157,8 +157,8 @@ class Voice(models.Model):
 2. 后端按 §5 的可见性规则校验；不可见 → 404；`status != 'ready'` → 400（不做无谓的合成尝试）；然后查缓存文件，命中即返回 URL
 3. 未命中：用与聊天**完全相同**的 TTS 参数（`cosyvoice-v3-flash`、mp3、22050Hz、volume 50、rate 1.0、pitch 1，见 `chat.py:419-428`）向 DashScope WS 合成固定文案 → 收集完整音频 → 写入 `MEDIA_ROOT/voice_samples/` → 返回 URL。**连接与读取超时 5 秒**，超时按失败处理（见下方超时纪律）
 4. 文案：`你好呀，我是<音色名>，很高兴认识你。`—— 遵循 `REPLY_PROMPT` 的格式约束（无 emoji、无符号、纯中文口语）。**音色名截断到 20 字符**（`Voice.name` 上限是 100，不截断等于让 TTS 成本跟用户输入走）
-5. 缓存文件名：`<阿里云voice_id>-<样本文案hash>.mp3`，hash 用 `sha256` 取前 8 位（在 plan 里定死，不要留成实现细节 —— 否则缓存键会随实现漂移）。文案或音色变化即换文件名，避免被浏览器 30 天缓存误导
-6. 前端用 `<audio>` 播放；同一时刻只允许一个试听在播 —— 用**模块级小单例**（照 `frontend/src/composables/useToast.js` 的惯例）。⚠️ **不要用 `frontend/src/utils/voiceState.js`**：那是麦克风/ASR 的状态机（`idle/listening/transcribing/confirm/vad_failed/mic_denied/asr_failed`，见该文件 `:3-11`），与音频播放无关
+5. 缓存文件名：`<阿里云voice_id>-<样本文案hash>.mp3`，hash 用 `sha256` 取前 8 位（在 plan 里定死，不要留成实现细节 —— 否则缓存键会随实现漂移）。文案或音色变化即换文件名，避免被浏览器 30 天缓存误导。**入文件名前先剥离 `[^A-Za-z0-9_-]`**：校验器只挡得住经表单的未来写入、不回溯存量行，而 `Path('a') / '../../evil.mp3'` 是纯词法拼接，会真的写到缓存目录之外
+6. 前端用 `<audio>` 播放；同一时刻只允许一个试听在播 —— 用**模块级小单例**（照 `frontend/src/composables/useToast.js` 的惯例）。⚠️ **不要用 `frontend/src/utils/voiceState.js`**：那是麦克风/ASR 的状态机（`idle/listening/transcribing/confirm/vad_failed/mic_denied/asr_failed`，见该文件 `:3-11`），与音频播放无关。**用户切换音色时要立刻停止播放并复位按钮**：否则按钮会停在"停止"，第一次点击只停掉旧的那一段、要点第二次才听到新音色 —— 状态与所见不一致（门 3 评审发现）
 7. 交付路径已确认：`nginx.conf:23-24` 的 `location /media/` 对外提供 `/app/media/`
 
 **实现方式（必须新写，不能复用现有代码）**：仓库里没有"一次性合成整句、拿回完整音频"的路径 —— `tts_sender`（`chat.py:446-575`）与 LangGraph app 硬耦合，接收侧只把分片塞进队列，没有拼接落盘的先例。因此 B 批要**新增一个一次性合成函数**，只复用 `chat.py:404-432` 的连接与首帧样板。为避免 TTS 协议参数出现两份魔法数字，把 `model / format / sample_rate / volume / rate / pitch` 抽成共用常量模块；**但不去重构 `tts_sender` 本身** —— 动聊天主链路的收益不抵风险。
@@ -298,7 +298,7 @@ cd backend && D:/MyWork/Miniconda3/envs/py312/python.exe -m pytest web/tests/ -v
 ### B 试听（A+B 批）
 
 - [ ] 创建/编辑角色页每个音色旁有播放按钮，可试听、可停止、切换音色可再听
-- [ ] 每个音色旁能看到它的 `profile` 描述（不再是只有名字）
+- [ ] **当前选中**音色的 `profile` 描述显示在下拉框下方（原生 `<select>` 无法逐个渲染选项描述，故验收按"当前选中可见"判）
 - [ ] 样音只生成一次并缓存 —— 第二次请求不产生新的 TTS 调用（mock 计数证明）
 
 ### C 归属模型（C 批）
@@ -333,7 +333,7 @@ cd backend && D:/MyWork/Miniconda3/envs/py312/python.exe -m pytest web/tests/ -v
 10. **`create_voice` 的孤儿音色**：请求发出但响应丢失时，阿里云侧可能留下一个音色而我们没有记录。已用"日志记录 `prefix`"让它可追溯，二期加 `action=list_voice` 对账任务。
 11. **`clean_dirty_characters --all` 的语义变了**：D 批之后 `_clean_orphan_voices`（`clean_dirty_characters.py:117-131`）会删掉所有"非内置且无角色引用"的音色，其中将包含真实用户创建的；`_clean_orphan_users`（`:96-115`）会删掉无角色无好友的用户，级联带走其名下音色。它从"清测试残留"变成"能删真实用户数据"。好消息是 `count() == 0` 的前置判断天然兼容 `RESTRICT`（不会抛 `RestrictedError`）。**最小修复：`--all` 在 `DEBUG=False`（生产）下直接拒绝执行** —— 已确认 `deploy/` 与 `服务器部署.md` 都不调用它，这道闸不会挡住任何流程。
 12. **阿里云侧保留了原始样本的副本**（实测发现）：`query_voice` 的响应里带一个 `resource_link`，指向 `.../orig/<voice_id>.mp3` 的签名 URL（带 `Expires` 参数）。也就是说 §8 里"复刻提交后立即删除样本"**只在我们这一侧成立**，第三方侧并未删除。后果有两条：① 给用户的隐私说明必须写准，不能暗示"全链路已删除"——样本确实被提交给了阿里云；② 它也是一个潜在的备用试听音源（本期不采用，因为对克隆者本人来说"听回自己的样本"没有信息量，且链接会过期）。
-13. **阿里云侧音色的 1 年计时以"是否被合成使用"为准**：那个复刻音色的 `gmt_modified` 停在创建后 5 秒（2026-04-19），说明元数据没有再动过，但 `gmt_modified` 反映的是元数据变更而非合成调用，**无法据此判断它是否已临近 1 年自动删除**。一期不做探活（见风险 3），二期补。
+13. **阿里云侧音色的 1 年计时以"是否被合成使用"为准**：那个复刻音色的 `gmt_modified` 停在创建后 5 秒（2026-04-19），说明元数据没有再动过，但 `gmt_modified` 反映的是元数据变更而非合成调用，**无法据此判断它是否已临近 1 年自动删除**。**实测（2026-09-16 门 4 验收）：该音色仍能正常合成** —— 试听端点生成了 76KB 的合法 MP3，所以「复刻音色在当前账号/地域可用」这条已确认，它当时也未被自动清理。1 年计时本身仍无从判断，一期不做探活（见风险 3），二期补。
 
 ---
 
