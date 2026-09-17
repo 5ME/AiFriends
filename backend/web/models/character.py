@@ -1,5 +1,6 @@
 import uuid
 
+from django.core.validators import RegexValidator
 from django.db import models
 from django.utils.timezone import now, localtime
 
@@ -18,9 +19,19 @@ def background_image_upload_to(instance, filename):
     return f'character/background_images/{instance.author.user_id}_{filename}'
 
 
+VOICE_ID_VALIDATOR = RegexValidator(
+    r'^[A-Za-z0-9][A-Za-z0-9_-]*$',
+    '音色 ID 只能是字母、数字、下划线或连字符',
+)
+
+
 class Voice(models.Model):
     name = models.CharField(max_length=100)
-    voice_id = models.CharField(max_length=100, help_text="阿里云音色ID")
+    voice_id = models.CharField(
+        max_length=100,
+        help_text="阿里云音色ID",
+        validators=[VOICE_ID_VALIDATOR],
+    )
     profile = models.TextField(max_length=500, default='')
     is_builtin = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -36,7 +47,7 @@ class Character(models.Model):
     introduction = models.TextField(max_length=500, default='')
     system_prompt = models.TextField(max_length=10000, default='')
     photo = models.ImageField(upload_to=photo_upload_to)
-    voice = models.ForeignKey(Voice, default=None, on_delete=models.CASCADE, blank=True, null=True)
+    voice = models.ForeignKey(Voice, default=None, on_delete=models.RESTRICT, blank=True, null=True)
     background_image = models.ImageField(upload_to=background_image_upload_to)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

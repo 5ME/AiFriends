@@ -28,7 +28,7 @@ class UpdateCharacterView(APIView):
             system_prompt = request.data.get('system_prompt', '').strip()
             photo = request.FILES.get('photo', None)
             background_image = request.FILES.get('background_image', None)
-            voice_id = request.data['voice_id']
+            voice_pk = request.data.get('voice')
 
             if not name:
                 return Response({'message': '角色名称不能为空'},
@@ -39,8 +39,15 @@ class UpdateCharacterView(APIView):
             if not system_prompt:
                 return Response({'message': '角色信息不能为空'},
                                 status=status.HTTP_400_BAD_REQUEST)
+            if not voice_pk:
+                return Response({'message': '角色音色不能为空'},
+                                status=status.HTTP_400_BAD_REQUEST)
 
-            voice = Voice.objects.get(id=voice_id)
+            try:
+                voice = Voice.objects.get(id=voice_pk)
+            except (Voice.DoesNotExist, ValueError, TypeError):
+                return Response({'message': '音色不存在或无权访问'},
+                                status=status.HTTP_404_NOT_FOUND)
             character.voice = voice
 
             character.name = name

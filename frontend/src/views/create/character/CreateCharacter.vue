@@ -25,14 +25,14 @@ const backgroundImageRef = useTemplateRef('background-image-ref')
 const errorMessage = ref('')
 
 const voices = ref([])
-const curVoiceId = ref(null)
+const curVoice = ref(null)
 
 onMounted(async () => {
   try {
     const response = await api.get('/api/create/character/voice/get_list/')
     // 200 = 获取成功
     voices.value = response.data.voices
-    curVoiceId.value = response.data.voices[0].id
+    curVoice.value = response.data.voices[0].id
   } catch (e) {
     console.log(e)
     // 音色列表加载失败不影响创建流程
@@ -63,7 +63,7 @@ async function handleCreate() {
   } else {
     const formData = new FormData()
     formData.append('name', name)
-    formData.append('voice_id', voice)
+    formData.append('voice', voice)
     formData.append('introduction', introduction)
     formData.append('system_prompt', systemPrompt)
     formData.append('photo', base64ToFile(photo, 'photo.png'))
@@ -94,7 +94,7 @@ async function handleCreate() {
         </h3>
         <Photo ref="photo-ref"/>
         <Name ref="name-ref"/>
-        <Voice ref="voice-ref" :voices="voices" :curVoiceId="curVoiceId"/>
+        <Voice ref="voice-ref" :voices="voices" :curVoice="curVoice"/>
         <Profile ref="profile-ref"/>
         <SystemPrompt ref="system-prompt-ref"/>
         <BackgroundImage ref="background-image-ref"/>

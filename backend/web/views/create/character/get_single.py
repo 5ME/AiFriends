@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from web.models.character import Character, Voice
+from web.views.create.character.voice.serializer import serialize_voice
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +22,7 @@ class GetSingleCharacterView(APIView):
             except Character.DoesNotExist:
                 return Response({'message': '角色不存在或无权访问'},
                                 status=status.HTTP_404_NOT_FOUND)
-            voices_raw = Voice.objects.order_by('id')
-            voices = []
-            for voice in voices_raw:
-                voices.append({
-                    'id': voice.id,
-                    'name': voice.name,
-                    'profile': voice.profile,
-                })
+            voices = [serialize_voice(v) for v in Voice.objects.order_by('id')]
             return Response({
                 'message': 'success',
                 'character': {
@@ -38,7 +32,7 @@ class GetSingleCharacterView(APIView):
                     'system_prompt': character.system_prompt,
                     'photo': character.photo_url,
                     'background_image': character.background_image_url,
-                    'voice_id': character.voice.id,
+                    'voice': character.voice.id if character.voice else None,
                 },
                 'voices': voices,
             })
