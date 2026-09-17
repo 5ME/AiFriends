@@ -112,3 +112,135 @@ class TestOssUtil:
         monkeypatch.delenv('OSS_BUCKET', raising=False)
         with pytest.raises(OssConfigError):
             upload_private(b'ID3x')
+
+
+CLONE = 'web.views.create.character.voice.clone'
+
+
+class TestCloneGuards:
+    """参数/授权/配额的闸门 —— 这些必须在碰 OSS 之前挡住"""
+
+    def test_missing_name_returns_400(self, auth_client):
+        resp = auth_client.post('/api/create/character/voice/clone/',
+                                {'file': _mp3(), 'consent': 'true'})
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_missing_consent_returns_400(self, auth_client):
+        """spec §6.2.1 / §8：授权声明必须勾选，后端也要挡住（不能只靠前端）"""
+        with patch(f'{CLONE}.upload_private') as up:
+            resp = auth_client.post('/api/create/character/voice/clone/',
+                                    {'file': _mp3(), 'name': 'n'})
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert '授权' in resp.json()['message']
+        assert up.call_count == 0
+
+    def test_oversize_returns_400(self, auth_client):
+        big = SimpleUploadedFile('s.mp3', b'ID3' + b'x' * (8 * 1024 * 1024),
+                                 content_type='audio/mpeg')
+        resp = auth_client.post('/api/create/character/voice/clone/',
+                                {'file': big, 'name': 'n', 'consent': 'true'})
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert '8' in resp.json()['message']          # 提示里要有上限
+
+    def test_bad_extension_returns_400(self, auth_client):
+        resp = auth_client.post('/api/create/character/voice/clone/',
+                                {'file': SimpleUploadedFile('s.txt', b'x'),
+                                 'name': 'n', 'consent': 'true'})
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_fake_extension_rejected_by_magic_bytes(self, auth_client):
+        """后缀是 mp3、内容不是音频 → 400，且不碰 OSS（spec §6.2.3 要求 magic byte）"""
+        fake = SimpleUploadedFile('fake.mp3', b'this is not audio', content_type='audio/mpeg')
+        with patch(f'{CLONE}.upload_private') as up:
+            resp = auth_client.post('/api/create/character/voice/clone/',
+                                    {'file': fake, 'name': 'n', 'consent': 'true'})
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert up.call_count == 0
+
+    def test_quota_exceeded_returns_400(self, auth_client, user_profile):
+        for i in range(5):
+            Voice.objects.create(name=f'v{i}', voice_id=f'q_{i}',
+                                 owner=user_profile, visibility='private')
+        with patch(f'{CLONE}.upload_private') as up:
+            resp = auth_client.post('/api/create/character/voice/clone/',
+                                    {'file': _mp3(), 'name': 'n', 'consent': 'true'})
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert up.call_count == 0                     # 配额不过就不该碰 OSS
+
+
+class TestCloneFlow:
+    def test_success_creates_deploying_row_and_deletes_sample(self, auth_client,
+                                                             user_profile):
+        # ⚠️ 不用 caplog：应用 logger 有自己的 handler 且 `propagate: False`（settings.py:253），
+        #    记录不会到 root，caplog 永远收不到。直接对模块 logger 打桩，断言的正是
+        #    spec §8 那条契约本身——"代码把授权声明写进了日志"。
+        with patch(f'{CLONE}.logger') as lg, \
+             patch(f'{CLONE}.upload_private', return_value='samples/x.mp3'), \
+             patch(f'{CLONE}.presign_get', return_value='https://signed/x'), \
+             patch(f'{CLONE}.create_voice',
+                   return_value='cosyvoice-v3-flash-new-abc') as cv, \
+             patch(f'{CLONE}.delete_object_quietly') as rm:
+            resp = auth_client.post('/api/create/character/voice/clone/',
+                                    {'file': _mp3(), 'name': '我的音色', 'profile': '温柔',
+                                     'consent': 'true'})
+        assert resp.status_code == status.HTTP_200_OK
+        v = Voice.objects.get(owner=user_profile)
+        assert v.status == 'deploying' and v.visibility == 'private'
+        assert v.voice_id == 'cosyvoice-v3-flash-new-abc'
+        assert cv.call_count == 1
+        assert rm.call_count == 1                     # 提交后立即删样本
+        assert any('consent=true' in str(c) for c in lg.info.call_args_list), \
+            f'授权声明必须落日志，实际 info 调用：{lg.info.call_args_list}'
+
+    def test_aliyun_rejection_returns_400_and_creates_no_row(self, auth_client,
+                                                            user_profile):
+        from web.views.create.character.voice.clone import AliyunRejected
+
+        with patch(f'{CLONE}.upload_private', return_value='samples/x.mp3'), \
+             patch(f'{CLONE}.presign_get', return_value='https://signed/x'), \
+             patch(f'{CLONE}.create_voice',
+                   side_effect=AliyunRejected('400 InvalidParameter')) as cv, \
+             patch(f'{CLONE}.delete_object_quietly') as rm:
+            resp = auth_client.post('/api/create/character/voice/clone/',
+                                    {'file': _mp3(), 'name': 'n', 'consent': 'true'})
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert not Voice.objects.filter(owner=user_profile).exists()
+        assert rm.call_count == 1                     # 失败路径也要删样本
+        # 措辞不能断言"样本有问题"：账号配额耗尽等也会走到这里
+        assert '未通过审核' not in resp.json()['message']
+
+    def test_upstream_unavailable_returns_503(self, auth_client, user_profile):
+        with patch(f'{CLONE}.upload_private', return_value='samples/x.mp3'), \
+             patch(f'{CLONE}.presign_get', return_value='https://signed/x'), \
+             patch(f'{CLONE}.create_voice', side_effect=TimeoutError()):
+            resp = auth_client.post('/api/create/character/voice/clone/',
+                                    {'file': _mp3(), 'name': 'n', 'consent': 'true'})
+        assert resp.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert not Voice.objects.filter(owner=user_profile).exists()
+
+    def test_oss_config_error_returns_500_not_503(self, auth_client, user_profile):
+        """OSS 配置/凭据错 → 500（给运维），与"上游不可用 → 503"分成两档（spec §7）
+
+        实测 SDK 的 24 个异常类**都不继承 RuntimeError**，所以这条走的是 `oss.py` 归一出来的
+        `OssConfigError` —— 只 catch `RuntimeError` 会把"凭据错/bucket 不存在"误判成 503。
+        """
+        from web.utils.oss import OssConfigError
+
+        with patch(f'{CLONE}.upload_private',
+                   side_effect=OssConfigError('OSS 配置缺失: OSS_BUCKET')):
+            resp = auth_client.post('/api/create/character/voice/clone/',
+                                    {'file': _mp3(), 'name': 'n', 'consent': 'true'})
+        assert resp.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert not Voice.objects.filter(owner=user_profile).exists()
+
+    def test_accepts_common_mp3_frame_syncs(self):
+        """帧同步用**位掩码**判定而不是枚举字节对：\\xff\\xfa（带 CRC）等也要收 —— 误拒合法文件
+        比误收更糟（误收最多被阿里云拒一次）"""
+        from web.views.create.character.voice.clone import looks_like_audio
+
+        for head in (b'ID3', b'\xff\xfb', b'\xff\xfa', b'\xff\xf3', b'\xff\xf2',
+                     b'\xff\xe3', b'\xff\xe2'):
+            assert looks_like_audio(head + b'\x00' * 16, 'mp3') is True
+        assert looks_like_audio(b'this is not audio', 'mp3') is False
+        assert looks_like_audio(b'RIFF' + b'\x00' * 8, 'wav') is True
+        assert looks_like_audio(b'\x00\x00\x00\x20ftypM4A ', 'm4a') is True

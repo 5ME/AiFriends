@@ -18,3 +18,11 @@ def visible_voices(profile):
 
 def is_voice_visible(voice, profile):
     return Voice.objects.filter(visibility_q(profile), pk=voice.pk).exists()
+
+
+VOICE_QUOTA_PER_USER = 5
+USER_VOICE_COUNT_WARN = 800       # 全平台水位告警（1000 是账号级上限）
+
+
+def user_voice_count(profile):
+    return Voice.objects.filter(owner=profile).count()
