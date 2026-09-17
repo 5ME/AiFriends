@@ -1,9 +1,23 @@
 import importlib
+from io import BytesIO
+from unittest.mock import patch
 
+from PIL import Image
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
+from rest_framework import status
 
 from web.models.character import Voice
 from web.models.user import UserProfile
+
+
+def _make_test_image(name="test.jpg"):
+    """创建 1x1 白色 JPEG 的内存文件（与 test_character.py / test_voice_integrity.py 同一写法）"""
+    img = Image.new("RGB", (1, 1), color="white")
+    buf = BytesIO()
+    img.save(buf, format="JPEG")
+    buf.seek(0)
+    return SimpleUploadedFile(name, buf.read(), content_type="image/jpeg")
 
 
 class TestFields:
@@ -103,3 +117,63 @@ class TestVisibilityRule:
                                {'character_id': character.id})
         names = {v['name'] for v in resp.json()['voices']}
         assert 'op2' not in names
+
+
+class TestSelectionGuards:
+    """A5 / A6 / B3 后半：选角与试听都要过可见性与可用性两道闸"""
+
+    def _other_private(self):
+        other = UserProfile.objects.create(user=User.objects.create_user('other2'))
+        return Voice.objects.create(name='私有', voice_id='priv_1',
+                                    owner=other, visibility='private')
+
+    def _payload(self, voice_value):
+        """create 的完整必填载荷。校验顺序是 name→introduction→system_prompt→
+        photo→background_image→voice（`create.py:27-45`），只传 voice 会先栽在 name 上返回 400。"""
+        return {
+            'name': 'n', 'introduction': 'i', 'system_prompt': 's',
+            'voice': voice_value,
+            'photo': _make_test_image('photo.jpg'),
+            'background_image': _make_test_image('bg.jpg'),
+        }
+
+    def test_create_with_others_private_voice_returns_404(self, auth_client):
+        """A6：404，且 message 与"不存在"逐字相同（否则 404 成了存在性探测器）"""
+        v = self._other_private()
+        r1 = auth_client.post('/api/create/character/create/', self._payload(v.id))
+        r2 = auth_client.post('/api/create/character/create/', self._payload(999999))
+        assert r1.status_code == status.HTTP_404_NOT_FOUND
+        assert r2.status_code == status.HTTP_404_NOT_FOUND
+        assert r1.json()['message'] == r2.json()['message']
+
+    def test_update_with_others_private_voice_returns_404(self, auth_client, character):
+        v = self._other_private()
+        resp = auth_client.post('/api/create/character/update/', {
+            'character_id': character.id, 'name': 'n', 'introduction': 'i',
+            'system_prompt': 's', 'voice': v.id})
+        assert resp.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_update_with_not_ready_voice_returns_400(self, auth_client, character,
+                                                     voice):
+        """A5：可见但没就绪 → 400（与 404 区分开，用户能知道该等还是该换）"""
+        voice.status = 'deploying'
+        voice.save(update_fields=['status'])
+        resp = auth_client.post('/api/create/character/update/', {
+            'character_id': character.id, 'name': 'n', 'introduction': 'i',
+            'system_prompt': 's', 'voice': voice.id})
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_sample_of_others_private_voice_returns_404(self, auth_client):
+        v = self._other_private()
+        resp = auth_client.get('/api/create/character/voice/sample/', {'voice': v.id})
+        assert resp.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_sample_of_not_ready_voice_returns_400(self, auth_client, voice):
+        """B3 后半：没就绪就不该去打阿里云（用 mock 断言零调用）"""
+        voice.status = 'rejected'
+        voice.save(update_fields=['status'])
+        with patch('web.views.create.character.voice.sample.synthesize_once') as m:
+            resp = auth_client.get('/api/create/character/voice/sample/',
+                                   {'voice': voice.id})
+        assert resp.status_code == status.HTTP_400_BAD_REQUEST
+        assert m.call_count == 0
