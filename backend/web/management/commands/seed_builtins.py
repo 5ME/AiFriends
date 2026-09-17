@@ -91,7 +91,7 @@ class Command(BaseCommand):
         for spec in BUILTIN_VOICES:
             voice = Voice.objects.filter(voice_id=spec['voice_id']).first()
             if voice is None:
-                Voice.objects.create(**spec, is_builtin=True)
+                Voice.objects.create(**spec, is_builtin=True, visibility='public')
                 self.stdout.write(self.style.SUCCESS(
                     f'创建音色: {spec["name"]} ({spec["voice_id"]})'
                 ))
@@ -101,12 +101,14 @@ class Command(BaseCommand):
                 voice.name != spec['name']
                 or voice.profile != spec['profile']
                 or not voice.is_builtin
+                or voice.visibility != 'public'
             )
             if changed:
                 voice.name = spec['name']
                 voice.profile = spec['profile']
                 voice.is_builtin = True
-                voice.save(update_fields=['name', 'profile', 'is_builtin'])
+                voice.visibility = 'public'
+                voice.save(update_fields=['name', 'profile', 'is_builtin', 'visibility'])
                 self.stdout.write(self.style.SUCCESS(
                     f'更新音色: {spec["name"]} ({spec["voice_id"]})'
                 ))
