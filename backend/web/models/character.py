@@ -34,6 +34,13 @@ class Voice(models.Model):
     )
     profile = models.TextField(max_length=500, default='')
     is_builtin = models.BooleanField(default=False)
+    owner = models.ForeignKey(UserProfile, null=True, blank=True,
+                              on_delete=models.CASCADE)
+    visibility = models.CharField(max_length=10, default='private',
+                                  choices=[('private', '私有'), ('public', '公开')])
+    status = models.CharField(max_length=12, default='ready', choices=[
+        ('ready', '可用'), ('deploying', '审核中'), ('rejected', '审核未通过'),
+    ])
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

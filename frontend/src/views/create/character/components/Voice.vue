@@ -10,10 +10,16 @@ watch(() => props.curVoice, newVal => {
   myVoice.value = newVal
 })
 
-const curProfile = computed(() => {
-  const v = props.voices.find(v => v.id === myVoice.value)
-  return v?.profile || ''
-})
+const mineVoices = computed(() => props.voices.filter(v => v.is_mine))
+const platformVoices = computed(() => props.voices.filter(v => !v.is_mine))
+
+const STATUS_LABEL = { deploying: '审核中', rejected: '审核未通过' }
+
+// 注意别叫 curVoice —— prop 已经叫 curVoice 了，同名两种含义（prop 是父组件传进来的当前值，
+// 这里算的是按 myVoice 选中的那个对象），改名避免读代码时混淆。
+const selectedVoice = computed(() => props.voices.find(v => v.id === myVoice.value))
+const curProfile = computed(() => selectedVoice.value?.profile || '')
+const curReady = computed(() => !selectedVoice.value || selectedVoice.value.status === 'ready')
 
 const loading = ref(false)
 const playing = ref(false)
@@ -65,20 +71,28 @@ defineExpose({
     <legend class="fieldset-legend">音色</legend>
     <div class="flex items-center gap-2">
       <select v-model="myVoice" class="select w-96">
-        <option v-for="voice in voices" :key="voice.id" :value="voice.id">
-          {{ voice.name }}
-        </option>
+        <optgroup v-if="mineVoices.length" label="我的音色">
+          <option v-for="v in mineVoices" :key="v.id" :value="v.id">
+            {{ v.name }}{{ STATUS_LABEL[v.status] ? '（' + STATUS_LABEL[v.status] + '）' : '' }}
+          </option>
+        </optgroup>
+        <optgroup label="平台音色">
+          <option v-for="v in platformVoices" :key="v.id" :value="v.id">
+            {{ v.name }}
+          </option>
+        </optgroup>
       </select>
       <button type="button"
               data-test="voice-sample-btn"
               class="btn btn-outline"
-              :disabled="loading || !myVoice"
-              :title="playing ? '停止试听' : '试听'"
+              :disabled="loading || !myVoice || !curReady"
+              :title="curReady ? (playing ? '停止试听' : '试听') : '该音色尚不可用'"
               @click="toggleSample">
         {{ loading ? '加载中' : (playing ? '停止' : '试听') }}
       </button>
     </div>
     <p v-if="curProfile" class="text-sm opacity-70 mt-1">{{ curProfile }}</p>
+    <p v-if="!curReady" class="text-sm opacity-70 mt-1">该音色尚不可用，暂时无法试听</p>
     <p v-if="errorMessage" class="text-sm text-red-500 mt-1">{{ errorMessage }}</p>
   </fieldset>
 </template>

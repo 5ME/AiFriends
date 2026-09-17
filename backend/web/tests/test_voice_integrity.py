@@ -124,4 +124,4 @@ class TestVoiceContract:
         resp = auth_client.get('/api/create/character/voice/get_list/')
         assert resp.status_code == status.HTTP_200_OK
         first = resp.json()['voices'][0]
-        assert set(first) == {'id', 'name', 'profile'}
+        assert set(first) == {'id', 'name', 'profile', 'status', 'is_mine'}

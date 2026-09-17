@@ -81,8 +81,9 @@ def user_profile(user):
 
 @pytest.fixture
 def voice(db):
-    """测试音色"""
-    return baker.make(Voice, name="Test Voice", voice_id="test_voice_001")
+    """测试音色：显式钉死 visibility/status —— model_bakery 对 choices 字段是随机取值的"""
+    return baker.make(Voice, name="Test Voice", voice_id="test_voice_001",
+                      visibility='public', status='ready', owner=None)
 
 
 @pytest.fixture

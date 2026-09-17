@@ -7,8 +7,9 @@ import api from '@/js/http/api'
 import Voice from '../Voice.vue'
 
 const VOICES = [
-  { id: 1, name: '龙安洋', profile: '阳光大男孩' },
-  { id: 2, name: '龙安欢', profile: '欢脱元气女' },
+  { id: 1, name: '龙安洋', profile: '阳光大男孩', is_mine: false, status: 'ready' },
+  { id: 2, name: '龙安欢', profile: '欢脱元气女', is_mine: false, status: 'ready' },
+  { id: 3, name: '我的音色', profile: '审核中的', is_mine: true, status: 'deploying' },
 ]
 
 function mount(props) {
@@ -63,5 +64,28 @@ describe('Voice.vue（试听与 profile 展示）', () => {
     select.dispatchEvent(new Event('change'))
     await nextTick()
     expect(btnText()).toContain('试听')
+  })
+
+  it('按归属分成「我的音色」与「平台音色」两组', () => {
+    const host = mount({ voices: VOICES, curVoice: 1 })
+    const labels = [...host.querySelectorAll('optgroup')].map(g => g.getAttribute('label'))
+    expect(labels).toEqual(['我的音色', '平台音色'])
+
+    const mine = host.querySelector('optgroup[label="我的音色"]')
+    const platform = host.querySelector('optgroup[label="平台音色"]')
+    expect(mine.textContent).toContain('我的音色')
+    expect(mine.textContent).toContain('（审核中）')      // 非 ready 的选项带状态标注
+    expect(mine.textContent).not.toContain('龙安洋')
+    expect(platform.textContent).toContain('龙安洋')
+    expect(platform.textContent).toContain('龙安欢')
+  })
+
+  it('非 ready 音色的试听按钮禁用，且点击不发请求', async () => {
+    const host = mount({ voices: VOICES, curVoice: 3 })
+    const btn = host.querySelector('[data-test="voice-sample-btn"]')
+    expect(btn.disabled).toBe(true)
+    btn.click()
+    await nextTick()
+    expect(api.get).not.toHaveBeenCalled()
   })
 })

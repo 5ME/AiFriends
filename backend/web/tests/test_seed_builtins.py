@@ -41,6 +41,12 @@ class TestSeedVoices:
             voice_id='custom-1', name='自定义音色', is_builtin=False
         ).exists()
 
+    def test_builtin_voices_are_public(self, db):
+        """内置音色必须是 public，否则它们会从所有人的音色选择列表里消失"""
+        call_command('seed_builtins')
+        assert all(v.visibility == 'public'
+                   for v in Voice.objects.filter(is_builtin=True))
+
 
 class TestSeedSystemPrompts:
     def test_creates_reply_and_memory(self, db):

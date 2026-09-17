@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from web.models.character import Voice
 from web.utils.tts import TTS_MODEL, synthesize_once
 from web.utils.usage import record_api_usage
+from web.views.create.character.voice.visibility import is_voice_visible
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,14 @@ class GetVoiceSampleView(APIView):
             except (Voice.DoesNotExist, ValueError, TypeError):
                 return Response({'message': '音色不存在或无权访问'},
                                 status=status.HTTP_404_NOT_FOUND)
+            if not is_voice_visible(voice, request.user.userprofile):
+                # message 必须与上面的"不存在"逐字相同 —— 否则 404 就成了存在性探测器
+                return Response({'message': '音色不存在或无权访问'},
+                                status=status.HTTP_404_NOT_FOUND)
+            if voice.status != 'ready':
+                # 没就绪就不该去打阿里云：既花钱又慢
+                return Response({'message': '该音色尚不可用（审核中 / 审核未通过）'},
+                                status=status.HTTP_400_BAD_REQUEST)
 
             text = build_sample_text(voice.name)
             path = sample_cache_path(voice.voice_id, text)
