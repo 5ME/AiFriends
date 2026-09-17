@@ -11,6 +11,7 @@ import api from "@/js/http/api";
 import {useRouter} from "vue-router";
 import {useUserStore} from "@/stores/user";
 import Voice from "@/views/create/character/components/Voice.vue";
+import MyVoiceManager from "@/views/create/character/components/MyVoiceManager.vue";
 
 const router = useRouter()
 const user = useUserStore()
@@ -27,17 +28,20 @@ const errorMessage = ref('')
 const voices = ref([])
 const curVoice = ref(null)
 
-onMounted(async () => {
+async function refreshVoices() {
   try {
     const response = await api.get('/api/create/character/voice/get_list/')
     // 200 = 获取成功
     voices.value = response.data.voices
-    curVoice.value = response.data.voices[0].id
+    // 只在还没选过时给默认值，避免复刻完刷新把用户已选的音色重置掉
+    if (!curVoice.value) curVoice.value = response.data.voices[0]?.id ?? null
   } catch (e) {
     console.log(e)
     // 音色列表加载失败不影响创建流程
   }
-})
+}
+
+onMounted(refreshVoices)
 
 async function handleCreate() {
   const photo = photoRef.value.myPhoto
@@ -95,6 +99,7 @@ async function handleCreate() {
         <Photo ref="photo-ref"/>
         <Name ref="name-ref"/>
         <Voice ref="voice-ref" :voices="voices" :curVoice="curVoice"/>
+        <MyVoiceManager :voices="voices" @changed="refreshVoices"/>
         <Profile ref="profile-ref"/>
         <SystemPrompt ref="system-prompt-ref"/>
         <BackgroundImage ref="background-image-ref"/>
