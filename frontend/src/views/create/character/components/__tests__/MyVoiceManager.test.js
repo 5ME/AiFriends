@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createApp, h, nextTick } from 'vue'
+import { createApp, h, nextTick, reactive } from 'vue'
 
 vi.mock('@/js/http/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 import api from '@/js/http/api'
@@ -18,6 +18,17 @@ function mount(props) {
   const app = createApp({ render: () => h(MyVoiceManager, props) })
   app.mount(host)
   return host
+}
+
+/** 带 emit 探针的挂载：用于观察轮询触发的 refresh 次数 */
+function mountWithSpy(voices) {
+  const changed = vi.fn()
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  createApp({
+    render: () => h(MyVoiceManager, { voices, onChanged: changed }),
+  }).mount(host)
+  return { host, changed }
 }
 
 async function openForm(host) {
@@ -112,5 +123,48 @@ describe('MyVoiceManager（我的音色：上传 / 状态 / 删除）', () => {
     expect(host.textContent).toContain('立即删除')
     expect(host.textContent).not.toContain('全链路')
     expect(host.textContent).not.toContain('已删除')
+  })
+
+  it('有审核中的音色时每 30 秒请求刷新，落地后停止', async () => {
+    // 审核实测只要约 15 秒（Beat 是 5 分钟节奏），但界面不轮询的话用户得手动刷新页面
+    // 才能看到「可用」—— spec §6.2.9 / 计划 Task 7 都要求这条
+    vi.useFakeTimers()
+    try {
+      const voices = reactive([
+        { id: 1, name: '审核中', profile: '', is_mine: true, status: 'deploying' },
+      ])
+      const { changed } = mountWithSpy(voices)
+      await nextTick()
+      expect(changed).not.toHaveBeenCalled()     // 挂载时不该立刻刷（父组件刚给过数据）
+
+      await vi.advanceTimersByTimeAsync(30000)
+      expect(changed).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(30000)
+      expect(changed).toHaveBeenCalledTimes(2)
+
+      // 全部落地 → 停止轮询
+      voices.splice(0, voices.length,
+                    { id: 1, name: '审核中', profile: '', is_mine: true, status: 'ready' })
+      await nextTick()
+      await vi.advanceTimersByTimeAsync(90000)
+      expect(changed).toHaveBeenCalledTimes(2)   // 没有新增触发
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('没有审核中的音色时不轮询', async () => {
+    vi.useFakeTimers()
+    try {
+      const { changed } = mountWithSpy([
+        { id: 1, name: '可用的', profile: '', is_mine: true, status: 'ready' },
+        { id: 2, name: '被拒的', profile: '', is_mine: true, status: 'rejected' },
+      ])
+      await nextTick()
+      await vi.advanceTimersByTimeAsync(120000)
+      expect(changed).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

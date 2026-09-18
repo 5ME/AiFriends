@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, ref} from "vue";
+import {computed, onUnmounted, ref, watch} from "vue";
 import api from "@/js/http/api";
 
 const props = defineProps(["voices"])
@@ -8,8 +8,30 @@ const emit = defineEmits(["changed"])
 const STATUS_LABEL = {deploying: '审核中', rejected: '审核未通过', ready: '可用'}
 const MAX_BYTES = 8 * 1024 * 1024
 const ALLOWED = ['mp3', 'wav', 'm4a']
+const POLL_INTERVAL_MS = 30000
 
 const myVoices = computed(() => props.voices.filter(v => v.is_mine))
+
+// 有审核中的音色就每 30 秒让父组件重拉一次列表，全部落地即停 —— 否则用户得手动刷新页面
+// 才能看到「可用」（阿里云侧实测约 15 秒出结果，而 Beat 是 5 分钟节奏，之间靠这里兜住）。
+let pollTimer = null
+
+const deployingCount = computed(
+  () => myVoices.value.filter(v => v.status === 'deploying').length)
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+watch(deployingCount, (n) => {
+  stopPolling()
+  if (n > 0) pollTimer = setInterval(() => emit('changed'), POLL_INTERVAL_MS)
+}, {immediate: true})
+
+onUnmounted(stopPolling)
 
 const open = ref(false)
 const sampleFile = ref(null)
