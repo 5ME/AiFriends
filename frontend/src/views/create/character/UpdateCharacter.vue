@@ -11,6 +11,7 @@ import api from "@/js/http/api";
 import {useRoute, useRouter} from "vue-router";
 import {useUserStore} from "@/stores/user";
 import Voice from "@/views/create/character/components/Voice.vue";
+import MyVoiceManager from "@/views/create/character/components/MyVoiceManager.vue";
 
 const router = useRouter()
 const user = useUserStore()
@@ -113,6 +114,7 @@ async function handleUpdate() {
         <Photo ref="photo-ref" :photo="character.photo"/>
         <Name ref="name-ref" :name="character.name"/>
         <Voice ref="voice-ref" :voices="voices" :curVoice="curVoice"/>
+        <MyVoiceManager :voices="voices" @changed="getCharacterData"/>
         <Profile ref="profile-ref" :profile="character.introduction"/>
         <SystemPrompt ref="system-prompt-ref" :system-prompt="character.system_prompt"/>
         <BackgroundImage ref="background-image-ref" :backgroundImage="character.background_image"/>

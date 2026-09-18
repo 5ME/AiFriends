@@ -2,7 +2,7 @@ import os
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from web.models.character import Character, Voice
 from web.models.friend import Friend
@@ -32,6 +32,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options['dry_run']
         clean_all = options['all']
+
+        # D 批之后用户能自建音色，本命令的 --all 就从"清测试残留"变成"能删真实用户数据"
+        # （音色 / 用户都算）。部署脚本不调用它，所以这道闸不会挡住任何流程。
+        if clean_all and not settings.DEBUG:
+            raise CommandError(
+                '--all 会删除真实用户数据（音色 / 用户），已禁止在生产执行；'
+                '如需清理测试残留请在 DEBUG=True 下运行')
 
         # 1. Characters with missing files
         dirty_ids = []

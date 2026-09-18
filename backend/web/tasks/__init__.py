@@ -2,3 +2,4 @@
 from web.views.friend.message.memory.tasks import update_memory_task  # noqa: F401
 from web.views.document.tasks import process_document_task  # noqa: F401
 from web.tasks.cleanup_usage import cleanup_usage_task  # noqa: F401
+from web.tasks.voice_status import refresh_deploying_voices  # noqa: F401

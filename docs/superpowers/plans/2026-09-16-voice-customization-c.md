@@ -717,4 +717,4 @@ EOF
 
 **Type 一致性**：`visibility_q` / `visible_voices` / `is_voice_visible` 在 Task 2 定义、Task 3 使用；`serialize_voice(voice, profile)` 的签名在 Task 2 定义并被 `get_list` / `get_single` 调用（**A+B 里它是单参数，C 批改成双参数**，两个调用点都在 Task 2 内改完）；前端 `STATUS_LABEL` / `curReady` 在 Task 5 内自洽。
 
-**未决/转 D 批**：复刻接线（`clone` 端点、OSS、Celery Beat 状态刷新、配额）、`clean_dirty_characters` 的 DEBUG 闸、删除音色时同步删阿里云侧。D 批计划等 OSS 凭据备妥后再写 —— 现在写会与 D 批前置条件（bucket/AccessKey 尚不存在）脱节。
+**未决/转 D 批**：复刻接线（`clone` 端点、OSS、Celery Beat 状态刷新、配额）、`clean_dirty_characters` 的 DEBUG 闸、删除音色时同步删阿里云侧。D 批计划等 A+B/C 落地后再写 —— 这样它要改的那几个文件已经定型，计划不会与真实代码漂移。~~等 OSS 凭据备妥~~ **（2026-09-17 更正：OSS 凭据与 SDK 一直存在于 `backend/.env` 与 `requirements.txt`，D 批不存在这个前置条件；详见 spec §11 风险 2 与风险 14。）**

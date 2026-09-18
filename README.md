@@ -167,7 +167,7 @@ AiFriends/
 │   │   │   ├── user/account/             #   登录、注册、登出、刷新令牌、获取用户信息
 │   │   │   ├── user/profile/             #   个人资料更新
 │   │   │   ├── create/character/         #   角色 CRUD + 音色列表
-│   │   │   │   └── voice/custom/         #   自定义音色（阿里云 API）
+│   │   │   │   └── voice/                #   音色：列表 / 试听 / 复刻 / 删除
 │   │   │   ├── homepage/                 #   首页角色列表
 │   │   │   ├── friend/                   #   好友关系管理 + is_friend 检查
 │   │   │   │   └── message/
