@@ -69,6 +69,50 @@ class TestOssUtil:
         for n in _CONFIG_ERROR_TYPE_NAMES:
             assert hasattr(ex, n), f'SDK 里已没有 {n}，软取的分类会静默失效'
 
+    def test_unwraps_operation_error_before_classifying(self):
+        """SDK 在请求边界把所有异常包成 `OperationError`（`_client.py:332`），
+        分类前必须先 `unwrap()` —— 否则类型白名单永远不命中（等于死代码）。
+
+        实测三种情形的内层：桶不存在 → ServiceError(NoSuchBucket)；桶名非法 →
+        BucketNameInvalidError；网络不可达 → RequestError。
+        """
+        import alibabacloud_oss_v2.exceptions as ex
+        from web.utils.oss import OssConfigError, OssUnavailableError, _wrap
+
+        def _new(cls, **attrs):
+            # 这些异常类的构造要一串 kwarg（实测），用 __new__ 绕开，让用例只关心分类
+            obj = cls.__new__(cls)
+            for k, v in attrs.items():
+                setattr(obj, k, v)
+            return obj
+
+        def _wrapped(inner):
+            # `exceptions.py:157-169`：OperationError 用 `_error` 存内层、`unwrap()` 取出来
+            op = _new(ex.OperationError, _error=inner)
+            assert op.unwrap() is inner, 'SDK 的 unwrap 语义变了，本用例的前提失效'
+            return lambda: (_ for _ in ()).throw(op)
+
+        svc = _new(ex.ServiceError, code='NoSuchBucket')
+        with pytest.raises(OssConfigError):
+            _wrap(_wrapped(svc))                       # 桶不存在 → 500（配置错）
+
+        with pytest.raises(OssConfigError):
+            _wrap(_wrapped(_new(ex.BucketNameInvalidError)))   # 桶名非法 → 500（配置错）
+
+        with pytest.raises(OssUnavailableError):
+            _wrap(_wrapped(_new(ex.RequestError)))     # 网络不可达 → 503（上游错）
+
+    def test_error_message_carries_inner_type(self):
+        """日志要带**内层**类型：外层永远是 OperationError，光看它没有诊断价值"""
+        import alibabacloud_oss_v2.exceptions as ex
+        from web.utils.oss import OssUnavailableError, _wrap
+
+        op = ex.OperationError.__new__(ex.OperationError)
+        op._error = ex.RequestError.__new__(ex.RequestError)
+        with pytest.raises(OssUnavailableError) as e:
+            _wrap(lambda: (_ for _ in ()).throw(op))
+        assert 'RequestError' in str(e.value)
+
     def test_upload_sets_object_private_and_returns_key(self, monkeypatch):
         """对象级 ACL 必须是 private —— 桶是 public-read，不能依赖桶设置"""
         from web.utils import oss as oss_util
@@ -341,10 +385,19 @@ class TestRemoveVoice:
         assert not Voice.objects.filter(id=v.id).exists()
         assert dv.call_count == 1
 
-    def test_voice_in_use_returns_400_without_calling_aliyun(self, auth_client, character):
+    def test_voice_in_use_returns_400_without_calling_aliyun(self, auth_client,
+                                                             user_profile, character):
+        """被自己的角色引用 → 400，且本地就能判定、不该白跑一趟上游
+
+        注意要用**自己的**音色：`character` 夹具默认引用的是平台音色，而那条路径会先被
+        归属检查挡成 404（见 `test_platform_voice_cannot_be_removed`），测不到引用检查。
+        """
+        v = Voice.objects.create(name='在用', voice_id='in_use_1', owner=user_profile,
+                                 visibility='private')
+        character.voice = v
+        character.save(update_fields=['voice'])
         with patch(f'{REMOVE}.delete_voice') as dv:
-            resp = auth_client.post('/api/create/character/voice/remove/',
-                                    {'voice': character.voice_id})
+            resp = auth_client.post('/api/create/character/voice/remove/', {'voice': v.id})
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
         assert '角色' in resp.json()['message']
         assert dv.call_count == 0            # 本地就能判定，不该白跑一趟上游
@@ -375,6 +428,40 @@ class TestRemoveVoice:
         v = Voice.objects.create(name='m', voice_id='rm_4', owner=user_profile,
                                  visibility='private')
         with patch(f'{REMOVE}.delete_voice', side_effect=AliyunNotFound()):
+            resp = auth_client.post('/api/create/character/voice/remove/', {'voice': v.id})
+        assert resp.status_code == status.HTTP_200_OK
+        assert not Voice.objects.filter(id=v.id).exists()
+
+    def test_platform_voice_cannot_be_removed(self, auth_client, voice):
+        """平台音色（owner=None）不该被任何用户删掉 —— spec §5：只能删**自己的**音色
+
+        守卫必须是"归属"而不是"可见性"：可见性对平台音色恒为真（`public`），
+        拿可见性当准入条件 = 任何登录用户都能删龙安洋 / 龙安欢 / 管理员手工录入的音色
+        （前两者能被 seed 补回来，手工录入的那个不能）。
+        """
+        with patch(f'{REMOVE}.delete_voice') as dv:
+            resp = auth_client.post('/api/create/character/voice/remove/',
+                                    {'voice': voice.id})
+        assert resp.status_code == status.HTTP_404_NOT_FOUND
+        assert Voice.objects.filter(id=voice.id).exists()   # 本地行必须还在
+        assert dv.call_count == 0                           # 更不该去动阿里云侧
+
+    def test_others_public_voice_cannot_be_removed(self, auth_client):
+        """别人的**公开**音色同样不可删（二期开放共享后这条会变得更要紧）"""
+        other = UserProfile.objects.create(user=User.objects.create_user('rm_pub'))
+        v = Voice.objects.create(name='公开的', voice_id='rm_pub_1', owner=other,
+                                 visibility='public')
+        with patch(f'{REMOVE}.delete_voice') as dv:
+            resp = auth_client.post('/api/create/character/voice/remove/', {'voice': v.id})
+        assert resp.status_code == status.HTTP_404_NOT_FOUND
+        assert Voice.objects.filter(id=v.id).exists()
+        assert dv.call_count == 0
+
+    def test_own_voice_is_still_removable(self, auth_client, user_profile):
+        """pin 用例：归属校验不能把"删自己的"也一起挡掉"""
+        v = Voice.objects.create(name='我的', voice_id='rm_own_1', owner=user_profile,
+                                 visibility='private')
+        with patch(f'{REMOVE}.delete_voice'):
             resp = auth_client.post('/api/create/character/voice/remove/', {'voice': v.id})
         assert resp.status_code == status.HTTP_200_OK
         assert not Voice.objects.filter(id=v.id).exists()

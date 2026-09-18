@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from web.models.character import Character, Voice
-from web.views.create.character.voice.visibility import is_voice_visible
+from web.views.create.character.voice.visibility import is_voice_owned_by
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +68,10 @@ class RemoveVoiceView(APIView):
             except (Voice.DoesNotExist, ValueError, TypeError):
                 return Response({'message': NOT_FOUND_MESSAGE},
                                 status=status.HTTP_404_NOT_FOUND)
-            if not is_voice_visible(voice, request.user.userprofile):
-                # message 必须与上面的"不存在"逐字相同 —— 否则 404 就成了存在性探测器
+            if not is_voice_owned_by(voice, request.user.userprofile):
+                # ⚠️ 必须校验**归属**而不是可见性：可见性对平台音色恒为真，
+                # 用可见性做准入 = 任何登录用户都能删平台音色（spec §5：只能删自己的）。
+                # message 与上面的"不存在"逐字相同 —— 否则 404 就成了存在性探测器。
                 return Response({'message': NOT_FOUND_MESSAGE},
                                 status=status.HTTP_404_NOT_FOUND)
 
