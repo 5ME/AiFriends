@@ -30,7 +30,7 @@ AI Friends — a full-stack web app where users create AI characters ("friends")
 cd backend
 pip install -r ../requirements.txt
 python manage.py runserver              # Dev server on :8000
-python -m pytest web/tests/ -v         # 后端全量测试（当前 274，以实际输出为准）
+python -m pytest web/tests/ -v         # 后端全量测试（当前 311，以实际输出为准）
 python manage.py clean_dirty_characters --all  # Clean test residue
 python manage.py seed_builtins           # Seed built-in voices + SystemPrompt (idempotent)
 python manage.py collectstatic          # Collect static files for production
@@ -303,7 +303,7 @@ The frontend uses `@microsoft/fetch-event-source` (`js/http/streamApi.js`) to PO
 
 ### Testing
 
-- 后端全量测试在 `web/tests/`，跑 `python -m pytest web/tests/ -v`（当前 274 条，以实际输出为准）
+- 后端全量测试在 `web/tests/`，跑 `python -m pytest web/tests/ -v`（当前 311 条，以实际输出为准）
 - `pytest.ini` defaults to `-m "not slow"` (skips 3 `test_tool_calling.py` tests needing real API_KEY)
 - GitHub Actions CI (`.github/workflows/test.yml`) runs on push/PR to master with pgvector service container
 - Key fixtures: `_disable_rate_limit_for_tests` (autouse), `media_root` (session, autouse), `pgvector_extension` (session, autouse), `mock_asr_ws`
