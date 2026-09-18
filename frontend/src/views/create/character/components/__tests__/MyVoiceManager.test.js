@@ -167,4 +167,30 @@ describe('MyVoiceManager（我的音色：上传 / 状态 / 删除）', () => {
       vi.useRealTimers()
     }
   })
+
+  it('轮询有上限：长期停在同一状态时停手，并提示用户自己刷新', async () => {
+    // 先例 useDocumentPolling 有 MAX_POLLS + 超时提示；spec 风险 9 也描述过
+    // "音色长期停在 deploying"（Beat 只扫 24 小时内的行）—— 没有上限就会无限轮询且不给提示
+    vi.useFakeTimers()
+    try {
+      const voices = reactive([
+        { id: 1, name: '卡住的', profile: '', is_mine: true, status: 'deploying' },
+      ])
+      const { host, changed } = mountWithSpy(voices)
+      await nextTick()
+
+      await vi.advanceTimersByTimeAsync(30000 * 25)
+      expect(changed).toHaveBeenCalledTimes(20)      // 到上限即停
+      expect(host.textContent).toContain('刷新')      // 并告诉用户该怎么办
+
+      // 新的复刻进来（计数变化）→ 重新开始轮询、提示消失
+      voices.push({ id: 2, name: '新提交的', profile: '', is_mine: true, status: 'deploying' })
+      await nextTick()
+      await vi.advanceTimersByTimeAsync(30000)
+      expect(changed).toHaveBeenCalledTimes(21)
+      expect(host.textContent).not.toContain('刷新')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
