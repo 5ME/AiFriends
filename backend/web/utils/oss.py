@@ -40,18 +40,37 @@ class OssUnavailableError(Exception):
     """OSS 上游不可用/超时 —— 调用方应转 **503**。"""
 
 
+def _unwrap(e: Exception) -> Exception:
+    """SDK 在请求边界把**所有**异常都包成 `OperationError`（`_client.py:332`），
+    真正的分类信息在里面，要用 `unwrap()` 取出来。
+
+    ⚠️ 不拆这层的话，下面那个类型白名单**永远不会命中**（等于死代码）：实测三种情形的内层是
+    `ServiceError(NoSuchBucket)` / `BucketNameInvalidError` / `RequestError`，
+    而外层统统是 `OperationError`。
+    """
+    unwrap = getattr(e, 'unwrap', None)
+    if callable(unwrap):
+        try:
+            inner = unwrap()
+        except Exception:
+            return e
+        if isinstance(inner, BaseException):
+            return inner
+    return e
+
+
 def _is_config_error(e: Exception) -> bool:
     """把 SDK 的异常体系收敛成"配置错 / 上游错"两类。
 
-    ⚠️ 不能只判 `RuntimeError`：实测 SDK 的 **24 个异常类没有一个继承 `RuntimeError`**
-    （`BaseError` / `ServiceError` / `CredentialsEmptyError` 都直接继承 `Exception`），
-    所以"凭据错、bucket 不存在"这类**配置事故**会漏进兜底、被当成"上游抖动"返 503。
+    实测（2026-09-17/18，真实账号）：
+    - 桶格式合法但不存在 → `unwrap()` 得到 `ServiceError(code='NoSuchBucket')` → **配置错（500）**
+    - 桶名非法 → `unwrap()` 得到 `BucketNameInvalidError` → **配置错（500）**
+    - 网络不可达 → `unwrap()` 得到 `RequestError` → **上游错（503）**
 
-    ⚠️ 已知边界（Task 1 实测）：**桶名写错/桶不存在**时 SDK 抛的是 `OperationError`（`code=None`），
-    与"网络不可达"**同一个异常类型、无法区分** → 这类会落到 503（可重试）而不是 500。
-    白名单对"服务端带 code 的鉴权错"（如 `InvalidAccessKeyId`）仍然有效。
-    不为了对齐文档去硬拆一个拆不开的东西 —— 用"打全量 ERROR 日志给运维"补足即可。
+    ⚠️ 不能只判 `RuntimeError`：SDK 的 24 个异常类**没有一个继承 `RuntimeError`**
+    （`BaseError` / `ServiceError` / `CredentialsEmptyError` 都直接继承 `Exception`）。
     """
+    e = _unwrap(e)
     if isinstance(e, (RuntimeError, *OSS_CONFIG_ERROR_TYPES)):
         return True
     if isinstance(e, oss.exceptions.ServiceError):
@@ -71,9 +90,11 @@ def _wrap(fn):
     except (OssConfigError, OssUnavailableError):
         raise
     except Exception as e:
+        detail = _unwrap(e)
+        # 日志里带上**内层**类型：外层永远是 OperationError，光看它没有诊断价值
         if _is_config_error(e):
-            raise OssConfigError(str(e)) from e
-        raise OssUnavailableError(str(e)) from e
+            raise OssConfigError(f'{type(detail).__name__}: {detail}') from e
+        raise OssUnavailableError(f'{type(detail).__name__}: {detail}') from e
 
 
 def _client():

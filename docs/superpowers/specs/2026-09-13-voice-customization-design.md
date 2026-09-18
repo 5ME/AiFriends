@@ -203,7 +203,15 @@ class Voice(models.Model):
 | `delete_voice` 之后再 `query_voice` | **最终一致**：刚删完的短时间内仍可能查到旧记录，约 1 分钟后才稳定返回 `ResourceNotExist` → **不要**用"删完立刻回查"判定成功，信任 `delete_voice` 的 200 即可 |
 | `prefix` 与 `voice_id` 的生成规律 | `voice_id = <target_model>-<prefix>-<32位hash>`（本次为 `cosyvoice-v3-flash-spke629-866aa…`）—— 与线上「观音菩萨」的 id 形状一致，先前对它的推断至此**确证** |
 
-**一处已知例外（probe 顺带发现，别为对齐文档去硬拆）**：用**不存在的桶名**调 OSS 时，SDK 抛的是 `OperationError`（`code = None`）而**不是** `ServiceError` —— "桶名写错/桶不存在"在 SDK 层与"网络不可达"**是同一个异常类型、无法区分**。因此这类会落到 503（可重试语义）而不是 §7 所说的 500；`OSS_CONFIG_ERROR_CODES` 白名单仍对**服务端返回带 code 的鉴权错误**（如 `InvalidAccessKeyId`）有效。实现里以"打全量 ERROR 日志给运维"补足。
+**OSS 异常要拆一层 `OperationError` 再分类（2026-09-18 更正，推翻了上一版写的"已知例外"）**：SDK 在请求边界把**所有**异常都包成 `OperationError`（`_client.py:332`），真正的分类信息在 `unwrap()` 里。上一版据此写成"桶不存在与网络不可达无法区分、只能落 503"——**那是错的**，只是没拆包。实测三种情形的内层分别是：
+
+| 情形 | 外层 | `unwrap()` 内层 | 正确归类 |
+|---|---|---|---|
+| 桶格式合法但不存在 | `OperationError` | `ServiceError(code='NoSuchBucket')` | **500**（配置错，§7 成立） |
+| 桶名非法 | `OperationError` | `BucketNameInvalidError` | **500**（配置错） |
+| 网络不可达 | `OperationError` | `RequestError` | **503**（上游错） |
+
+所以 `web/utils/oss.py` 的 `_is_config_error` 必须**先 `unwrap()` 再判定**——不拆这层，那个类型白名单**永远不命中**（等于死代码，实测确认过）。这同时把"账号配额/权限"这类带 code 的服务端错也拉回了 §7 的 500 档。
 
 ---
 
